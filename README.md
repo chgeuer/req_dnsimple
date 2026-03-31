@@ -1,21 +1,206 @@
 # ReqDnsimple
 
-**TODO: Add description**
+[![Hex version badge](https://img.shields.io/hexpm/v/req_dnsimple.svg)](https://hex.pm/packages/req_dnsimple)
+
+A lightweight [DNSimple](https://dnsimple.com) API v2 client for Elixir, built on [Req](https://hexdocs.pm/req).
+
+No framework dependencies — just Req, NimbleOptions, and straightforward Elixir structs.
 
 ## Installation
-
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `req_dnsimple` to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:req_dnsimple, "~> 0.1.0"}
+    {:req_dnsimple, github: "chgeuer/req_dnsimple"}
   ]
 end
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at <https://hexdocs.pm/req_dnsimple>.
+## Quick Start
+
+### Create a client
+
+```elixir
+client = ReqDnsimple.new_client("dnsimple_u_your_token_here")
+```
+
+You can also pass a zero-arity function for dynamic token resolution:
+
+```elixir
+client = ReqDnsimple.new_client(fn ->
+  System.fetch_env!("DNSIMPLE_TOKEN")
+end)
+```
+
+### Identify yourself
+
+```elixir
+{:user, user} = ReqDnsimple.whoami(client)
+# => {:user, %{"id" => 12345, "email" => "you@example.com", ...}}
+```
+
+### List accounts
+
+```elixir
+accounts = ReqDnsimple.Account.list(client)
+# => [%ReqDnsimple.Account{id: 12345, email: "you@example.com", ...}]
+```
+
+### List zones
+
+```elixir
+{:ok, zones} = ReqDnsimple.Zone.list(client, account_id)
+# => {:ok, [%ReqDnsimple.Zone{name: "example.com", ...}, ...]}
+```
+
+Filter and sort:
+
+```elixir
+{:ok, zones} = ReqDnsimple.Zone.list(client, account_id,
+  name_like: "example",
+  sort: [name: :asc]
+)
+```
+
+### Manage DNS records
+
+**List records for a zone:**
+
+```elixir
+{:ok, {records, pagination}} = ReqDnsimple.ZoneRecord.list(
+  client, account_id, "example.com",
+  type: "A",
+  sort: [name: :asc]
+)
+```
+
+**Create a record:**
+
+```elixir
+{:ok, record} = ReqDnsimple.ZoneRecord.create(
+  client, account_id, "example.com",
+  name: "www", type: "A", content: "93.184.215.14", ttl: 3600
+)
+```
+
+**Update a record:**
+
+```elixir
+{:ok, record} = ReqDnsimple.ZoneRecord.update(
+  client, account_id, "example.com", record_id,
+  content: "93.184.215.15", ttl: 1800
+)
+```
+
+**Delete a record:**
+
+```elixir
+:ok = ReqDnsimple.ZoneRecord.delete(client, account_id, "example.com", record_id)
+```
+
+### Get a zone file
+
+```elixir
+{:ok, zone_file} = ReqDnsimple.Zone.get_zone_file(client, account_id, "example.com")
+# => {:ok, "$ORIGIN example.com.\n$TTL 3600\n..."}
+```
+
+### Check zone distribution
+
+```elixir
+{:ok, true} = ReqDnsimple.Zone.check_zone_distribution(client, account_id, "example.com")
+```
+
+### Billing charges
+
+```elixir
+{:ok, charges} = ReqDnsimple.BillingCharge.list(client, account_id,
+  start_date: "2024-01-01",
+  end_date: "2024-12-31",
+  sort: [invoiced: :desc]
+)
+```
+
+### Contacts
+
+```elixir
+{:ok, contacts} = ReqDnsimple.Contact.list(client, account_id, sort: [label: :asc])
+{:ok, contact}  = ReqDnsimple.Contact.get(client, account_id, contact_id)
+```
+
+## Convenience Delegates
+
+The top-level `ReqDnsimple` module provides shorthand delegates for common operations:
+
+```elixir
+# These are equivalent:
+ReqDnsimple.list_zones(client, account_id)
+ReqDnsimple.Zone.list(client, account_id)
+
+ReqDnsimple.create_zone_record(client, account_id, "example.com", attrs)
+ReqDnsimple.ZoneRecord.create(client, account_id, "example.com", attrs)
+```
+
+## API Modules
+
+| Module | DNSimple API | Operations |
+|--------|-------------|------------|
+| `ReqDnsimple` | Client, `/whoami`, NS records | `new_client/1`, `whoami/1`, `token_type/1`, `ns_records/3` |
+| `ReqDnsimple.Account` | `/accounts` | `list/1` |
+| `ReqDnsimple.Zone` | `/zones` | `list/3`, `get_zone_file/3`, `check_zone_distribution/3` |
+| `ReqDnsimple.ZoneRecord` | `/zones/:zone/records` | `list/4`, `get/4`, `create/4`, `update/5`, `delete/4` |
+| `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/3` |
+| `ReqDnsimple.Contact` | `/contacts` | `list/3`, `get/3` |
+| `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |
+| `ReqDnsimple.Helper` | Req utilities | `append/2` (URL/param merging) |
+
+## Return Value Conventions
+
+- **Account.list/1** returns `[%Account{}]` directly (no tuple wrapper)
+- **Most list operations** return `{:ok, results}` or `{:ok, {results, pagination}}`
+- **Single-item gets** return `{:ok, struct}` or `{:error, :not_found}`
+- **Create/Update** return `{:ok, struct}` or `{:error, reason}`
+- **Delete** returns `:ok` or `{:error, reason}`
+- **Validation errors** return `{:error, %NimbleOptions.ValidationError{}}`
+
+## Sorting and Filtering
+
+List operations accept keyword options validated by NimbleOptions:
+
+```elixir
+# Sort ascending by name
+ReqDnsimple.Zone.list(client, account_id, sort: [name: :asc])
+
+# Sort descending, multiple fields
+ReqDnsimple.ZoneRecord.list(client, account_id, "example.com",
+  sort: [type: :asc, name: :desc]
+)
+
+# Filter by name pattern
+ReqDnsimple.ZoneRecord.list(client, account_id, "example.com",
+  name_like: "www",
+  type: "A"
+)
+
+# Pagination
+ReqDnsimple.Zone.list(client, account_id, page: 2, per_page: 50)
+```
+
+## Token Types
+
+DNSimple uses prefixed tokens. `ReqDnsimple.token_type/1` detects them:
+
+```elixir
+ReqDnsimple.token_type("dnsimple_u_abc")  # => :user_token
+ReqDnsimple.token_type("dnsimple_a_abc")  # => :account_token
+ReqDnsimple.token_type("other")           # => :unknown_token
+```
+
+## DNSimple API Reference
+
+This library wraps the [DNSimple API v2](https://developer.dnsimple.com/v2/).
+
+## License
+
+MIT
 

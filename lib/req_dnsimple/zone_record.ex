@@ -44,7 +44,8 @@ defmodule ReqDnsimple.ZoneRecord do
   ]
 
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), binary(), keyword()) ::
-          {:ok, {[ReqDnsimple.ZoneRecord.t()], map()}} | {:error, NimbleOptions.ValidationError.t()}
+          {:ok, {[ReqDnsimple.ZoneRecord.t()], map()}}
+          | {:error, NimbleOptions.ValidationError.t()}
   def list(req, account_id, zone_id, opts \\ []) do
     # https://developer.dnsimple.com/v2/zones/records/#listZoneRecords
 
