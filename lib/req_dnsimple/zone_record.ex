@@ -137,8 +137,8 @@ defmodule ReqDnsimple.ZoneRecord do
     name: [type: :string, required: true, doc: "Record name without domain"],
     type: [type: :string, required: true, doc: "Record type (A, AAAA, CNAME, MX, etc.)"],
     content: [type: :string, required: true, doc: "Record content"],
-    ttl: [type: :pos_integer, doc: "Time-to-live in seconds"],
-    priority: [type: :pos_integer, doc: "Priority (for MX records)"],
+    ttl: [type: :non_neg_integer, doc: "Time-to-live in seconds"],
+    priority: [type: :non_neg_integer, doc: "Priority (for MX records)"],
     regions: [type: {:list, :string}, doc: "Geographical regions"],
     integrated_zones: [type: {:list, :any}, doc: "Zone IDs for record creation"]
   ]
@@ -221,8 +221,8 @@ defmodule ReqDnsimple.ZoneRecord do
   @update_zone_record_schema [
     name: [type: :string, doc: "Record name without domain"],
     content: [type: :string, doc: "Record content"],
-    ttl: [type: :pos_integer, doc: "Time-to-live in seconds"],
-    priority: [type: :pos_integer, doc: "Priority (for MX records)"],
+    ttl: [type: :non_neg_integer, doc: "Time-to-live in seconds"],
+    priority: [type: :non_neg_integer, doc: "Priority (for MX records)"],
     regions: [type: {:list, :string}, doc: "Geographical regions"]
   ]
 

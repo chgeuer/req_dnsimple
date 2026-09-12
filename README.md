@@ -107,6 +107,9 @@ enumeration always begins at page one.
 )
 ```
 
+`ttl` and `priority` accept non-negative integers. Explicit zero values are
+sent unchanged; omitted fields remain absent from the request.
+
 **Delete a record:**
 
 ```elixir

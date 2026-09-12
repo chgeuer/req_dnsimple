@@ -97,6 +97,9 @@ by `ReqDnsimple.convert_sort_to_string/1`.
 :ok = ReqDnsimple.ZoneRecord.delete(client, account_id, "example.com", record_id)
 ```
 
+Record `ttl` and `priority` values are non-negative integers. Explicit zero
+values are transmitted unchanged, while omitted fields remain omitted.
+
 ### Typical Account Discovery Flow
 
 ```elixir
