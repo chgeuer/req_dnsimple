@@ -196,6 +196,17 @@ domain's registrar delegation.
   ReqDnsimple.ZoneRecord.check_distribution(client, account_id, "example.com", record_id)
 ```
 
+### Download a certificate
+
+```elixir
+{:ok, %ReqDnsimple.Certificate.Download{} = bundle} =
+  ReqDnsimple.Certificate.download(client, account_id, "example.com", certificate_id)
+```
+
+The bundle contains the server certificate, nullable root certificate, and
+ordered intermediate certificate chain as PEM strings. The strings are
+preserved exactly and are not parsed or written to files.
+
 ### Billing charges
 
 ```elixir

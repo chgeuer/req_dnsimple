@@ -2258,7 +2258,7 @@
       "method": "GET",
       "path": "/{account}/domains/{domain}/certificates/{certificate}/download",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-036",
       "br_issue_id": "bd-2af",
       "proposed_interfaces": [
@@ -2310,8 +2310,12 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.Certificate.download/4"
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/certificate_test.exs: downloadCertificate"
+      ]
     },
     {
       "operation_id": "enableDomainAutoRenewal",

@@ -67,6 +67,7 @@ Different modules use slightly different return conventions:
 | `EmailForward.delete/4` | `:ok` | `{:error, reason}` |
 | `DomainPush.accept/4` | `:ok` | `{:error, reason}` |
 | `DomainPush.reject/3` | `:ok` | `{:error, reason}` |
+| `Certificate.download/4` | `{:ok, %Certificate.Download{}}` | `{:error, reason}` |
 | `Registrar.check/3` | `{:ok, %Registrar.CheckResult{}}` | `{:error, reason}` |
 | `Registrar.get_prices/3` | `{:ok, %Registrar.Prices{}}` | `{:error, reason}` |
 | `Registrar.get_transfer_lock/3` | `{:ok, %Registrar.TransferLock{}}` | `{:error, reason}` |
@@ -233,6 +234,9 @@ The update does not change registrar delegation.
   does not send mail or modify MX records.
 - `ReqDnsimple.DomainPush` — Accept a pending push with an explicit target-account
   contact, or reject it without deleting the source domain.
+- `ReqDnsimple.Certificate` — Download a certificate's server, nullable root,
+  and ordered intermediate chain as byte-preserved PEM strings without writing
+  files.
 - `ReqDnsimple.RegistrantChange` — Typed retrieval of one registrar
   contact-change request by integer ID. Registry extended attributes retain
   string keys and values, and the registry lock-lift date may be `nil`.
