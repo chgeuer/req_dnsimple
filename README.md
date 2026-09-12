@@ -227,6 +227,16 @@ arbitrary-precision decimal library.
 Accepting a push sends exactly one request using the selected target-account
 contact. It does not create a contact, fetch the domain, or preflight ownership.
 
+### DNSSEC
+
+```elixir
+:ok = ReqDnsimple.Dnssec.disable(client, account_id, "example.com")
+```
+
+For hosted-only domains, remove registry delegation-signer records before
+disabling DNSSEC. This operation does not remove those records or prompt for
+confirmation.
+
 ### Delegation-signer records
 
 ```elixir

@@ -57,6 +57,7 @@ Different modules use slightly different return conventions:
 | `Contact.list/3` | `{:ok, [%Contact{}, ...]}` | `{:error, reason}` |
 | `Contact.get/3` | `{:ok, %Contact{}}` | `{:error, :not_found}` |
 | `Contact.delete/3` | `:ok` | `{:error, reason}` |
+| `Dnssec.disable/3` | `:ok` | `{:error, reason}` |
 | `DelegationSignerRecord.delete/4` | `:ok` | `{:error, reason}` |
 | `EmailForward.delete/4` | `:ok` | `{:error, reason}` |
 | `DomainPush.accept/4` | `:ok` | `{:error, reason}` |
@@ -195,6 +196,9 @@ The update does not change registrar delegation.
 - `ReqDnsimple.Domain` — Explicit domain deletion by name or ID. Deletion is
   irreversible within the account, but does not delete a registration at the
   registry or produce a refund.
+- `ReqDnsimple.Dnssec` — Explicitly disables DNSSEC by domain name or ID. For
+  hosted-only domains, registry delegation-signer records must be removed first;
+  this operation does not remove them or prompt for confirmation.
 - `ReqDnsimple.DelegationSignerRecord` — Explicit deletion of one registry
   delegation-signer record by domain name or ID and record ID. It does not
   disable DNSSEC or delete hosted-zone records.
