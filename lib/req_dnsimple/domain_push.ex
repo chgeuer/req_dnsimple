@@ -94,15 +94,7 @@ defmodule ReqDnsimple.DomainPush do
     end
   end
 
-  defp validate_attrs(attrs) when is_list(attrs) do
-    NimbleOptions.validate(attrs, @accept_schema)
-  end
-
   defp validate_attrs(attrs) do
-    {:error,
-     %NimbleOptions.ValidationError{
-       message: "expected a keyword list",
-       value: attrs
-     }}
+    ReqDnsimple.validate_options(attrs, @accept_schema)
   end
 end

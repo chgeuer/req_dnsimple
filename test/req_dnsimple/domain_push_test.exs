@@ -46,6 +46,8 @@ defmodule ReqDnsimple.DomainPushTest do
         {2020, 1, [contact_id: []]},
         {2020, 1, [contact_id: %{}]},
         {2020, 1, [contact_id: 11, unknown: true]},
+        {2020, 1, [:invalid]},
+        {2020, 1, [{:name}]},
         {2020, 1, %{contact_id: 11}}
       ]
 

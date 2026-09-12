@@ -74,7 +74,10 @@
         }
       ],
       "contract_tests": [
-        "test/req_dnsimple/domain_push_test.exs"
+        {
+          "file": "test/req_dnsimple/domain_push_test.exs",
+          "describe": "accept/4"
+        }
       ]
     },
     {
