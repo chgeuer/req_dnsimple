@@ -268,6 +268,23 @@ The period is optional and otherwise selected by the TLD. A supplied premium
 price remains an exact string. Both immediate and asynchronous responses return
 the typed renewal job and preserve its state.
 
+Submit an expired-domain restore without a price lookup or eligibility preflight:
+
+```elixir
+{:ok, %ReqDnsimple.Registrar.Restore{} = restore} =
+  ReqDnsimple.Registrar.restore(
+    client,
+    account_id,
+    "example.com",
+    premium_price: "109.00"
+  )
+```
+
+The premium price is optional and remains an exact string when supplied. Both
+immediate and asynchronous responses return the typed restore job. DNSimple
+determines restore charges and eligibility; payment and registry refusals are
+returned as explicit errors without an automatic renewal, purchase, or poll.
+
 ```elixir
 {:ok, name_servers} =
   ReqDnsimple.Registrar.change_delegation(
@@ -410,7 +427,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records/:ds_record` | `get/4`, `delete/4` |
 | `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards/:email_forward` | `get/4`, `delete/4` |
 | `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4`, `reject/3` |
-| `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `renew/3`, `renew/4`, `change_delegation/4` |
+| `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `renew/3`, `renew/4`, `restore/3`, `restore/4`, `change_delegation/4` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries/:primary_server` | `get/3`, `delete/3`, `from_json/1` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |
 | `ReqDnsimple.Helper` | Req utilities | `append/2` (URL/param merging) |

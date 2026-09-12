@@ -2185,7 +2185,7 @@
       "method": "POST",
       "path": "/{account}/registrar/domains/{domain}/restores",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-035",
       "br_issue_id": "bd-3qa",
       "proposed_interfaces": [
@@ -2245,8 +2245,13 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.Registrar.restore/3",
+        "ReqDnsimple.Registrar.restore/4"
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/registrar_test.exs: domainRestore"
+      ]
     },
     {
       "operation_id": "downloadCertificate",

@@ -598,6 +598,212 @@ defmodule ReqDnsimple.RegistrarTest do
     end
   end
 
+  describe "restore/3 and restore/4" do
+    test "domainRestore sends the premium price once and returns the typed 201 payload" do
+      body = %{
+        "data" => %{
+          "id" => 1,
+          "domain_id" => 100,
+          "state" => "restored",
+          "created_at" => "2026-09-01T10:00:00+02:00",
+          "updated_at" => "2026-09-01T10:01:00+02:00"
+        }
+      }
+
+      assert {:ok,
+              %ReqDnsimple.Registrar.Restore{
+                id: 1,
+                domain_id: 100,
+                state: "restored",
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:01:00Z]
+              }} =
+               ReqDnsimple.Registrar.restore(
+                 client(201, body),
+                 1010,
+                 "example.test",
+                 premium_price: "109.00"
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/registrar/domains/example.test/restores",
+        %{},
+        %{premium_price: "109.00"}
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "domainRestore permits an omitted body and returns the typed 202 payload" do
+      body = %{
+        "data" => %{
+          "id" => 2,
+          "domain_id" => 101,
+          "state" => "restoring",
+          "created_at" => "2026-09-01T10:00:00Z",
+          "updated_at" => "2026-09-01T10:00:00Z"
+        }
+      }
+
+      assert {:ok, %ReqDnsimple.Registrar.Restore{state: "restoring"}} =
+               ReqDnsimple.Registrar.restore(client(202, body), 0, "")
+
+      assert_request(:post, "/v2/0/registrar/domains//restores", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "domainRestore preserves an empty premium price and all documented states" do
+      for {state, status} <- [
+            {"new", 201},
+            {"restoring", 202},
+            {"restored", 201},
+            {"cancelled", 202}
+          ] do
+        body = %{
+          "data" => %{
+            "id" => 3,
+            "domain_id" => 102,
+            "state" => state,
+            "created_at" => "2026-09-01T10:00:00Z",
+            "updated_at" => "2026-09-01T10:00:00Z"
+          }
+        }
+
+        assert {:ok, %ReqDnsimple.Registrar.Restore{state: ^state}} =
+                 ReqDnsimple.Registrar.restore(
+                   client(status, body),
+                   1010,
+                   "example.test",
+                   premium_price: ""
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/registrar/domains/example.test/restores",
+          %{},
+          %{premium_price: ""}
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "domainRestore rejects invalid inputs before HTTP" do
+      request =
+        client(201, %{
+          "data" => %{
+            "id" => 1,
+            "domain_id" => 100,
+            "state" => "restored",
+            "created_at" => "2026-09-01T10:00:00Z",
+            "updated_at" => "2026-09-01T10:00:00Z"
+          }
+        })
+
+      invalid_calls = [
+        {"1010", "example.test", []},
+        {nil, "example.test", []},
+        {1010, nil, []},
+        {1010, 42, []},
+        {1010, "example.test", [unknown: true]},
+        {1010, "example.test", [period: 1]},
+        {1010, "example.test", [premium_price: nil]},
+        {1010, "example.test", [premium_price: 0]},
+        {1010, "example.test", [premium_price: false]},
+        {1010, "example.test", [premium_price: []]},
+        {1010, "example.test", %{"premium_price" => "109.00"}}
+      ]
+
+      for {account_id, domain_name, attrs} <- invalid_calls do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Registrar.restore(request, account_id, domain_name, attrs)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "domainRestore preserves documented and shared HTTP failures" do
+      for status <- [400, 402, 404, 401, 403, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"premium_price" => ["does not match"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Registrar.restore(
+                   client(status, body),
+                   1010,
+                   "example.test",
+                   premium_price: "109.00"
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/registrar/domains/example.test/restores",
+          %{},
+          %{premium_price: "109.00"}
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "domainRestore disables retries for the mutation" do
+      body = %{"message" => "Fake offline request failure"}
+      request = client(500, body) |> Req.merge(retry: :transient)
+
+      assert {:error, %{status: 500, response: ^body}} =
+               ReqDnsimple.Registrar.restore(request, 1010, "example.test")
+
+      assert_request(:post, "/v2/1010/registrar/domains/example.test/restores", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "domainRestore returns explicit errors for malformed successful responses" do
+      valid_data = %{
+        "id" => 1,
+        "domain_id" => 100,
+        "state" => "restored",
+        "created_at" => "2026-09-01T10:00:00Z",
+        "updated_at" => "2026-09-01T10:00:00Z"
+      }
+
+      malformed_payloads = [
+        %{},
+        %{"data" => nil},
+        %{"data" => Map.delete(valid_data, "id")},
+        %{"data" => Map.put(valid_data, "id", "1")},
+        %{"data" => Map.put(valid_data, "domain_id", nil)},
+        %{"data" => Map.put(valid_data, "state", "unknown")},
+        %{"data" => Map.put(valid_data, "created_at", nil)},
+        %{"data" => Map.put(valid_data, "created_at", "not-a-timestamp")},
+        %{"data" => Map.put(valid_data, "updated_at", 0)}
+      ]
+
+      for status <- [201, 202], body <- malformed_payloads do
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Registrar.restore(
+                   client(status, body),
+                   1010,
+                   "example.test"
+                 )
+
+        assert_request(:post, "/v2/1010/registrar/domains/example.test/restores", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "domainRestore preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Registrar.restore(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test"
+               )
+    end
+  end
+
   describe "change_delegation/4" do
     test "changeDomainDelegation sends the root name-server array once and returns it" do
       name_servers = ["ns1.example.test", "ns2.example.test"]
