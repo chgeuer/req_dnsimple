@@ -93,6 +93,9 @@ including dependencies:
   its adapter, auth, base URL, and other configured behavior.
 - Honor omitted versus explicitly supplied fields, including empty apex names,
   empty lists where supported, false booleans, and numeric zero.
+- Treat response-field requiredness and nullability independently. An optional
+  field may become `nil` when absent without permitting an explicit JSON null.
+  Distinguish presence from value before decoding optional fields.
 - Validate API attribute/option containers with `Keyword.keyword?/1` before
   passing them to NimbleOptions or Keyword helpers. `is_list/1` alone accepts
   malformed lists. Return the standard validation-error tuple without an
@@ -209,6 +212,9 @@ All gates are required before closure:
 - For keyword attributes/options, cover `[:invalid]` and `[{:name}]` alongside
   a valid-container control. Invalid containers must return a validation-error
   tuple without invoking the adapter.
+- For optional response fields, cover omission and explicit null separately,
+  including nested fields. For constrained numeric strings, cover valid digit
+  strings and malformed signed or trailing-content forms against the contract.
 - Run the focused tests for the change, then:
 
 ```sh
