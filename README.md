@@ -6,6 +6,20 @@ A lightweight [DNSimple](https://dnsimple.com) API v2 client for Elixir, built o
 
 No framework dependencies — just Req, NimbleOptions, and straightforward Elixir structs.
 
+ReqDnsimple intentionally exposes a documented subset of the published DNSimple
+API rather than claiming complete endpoint coverage. The versioned
+[operation inventory](docs/audit/operation-inventory.json) is the source of truth
+for that boundary:
+
+- `existing` marks operations available before the API-parity campaign.
+- `implemented` marks operations added and contract-tested during the campaign.
+- `pending` marks approved campaign operations that are not implemented yet.
+- `out-of-scope` marks published DNSimple operations deliberately excluded from
+  the campaign.
+
+The inventory records implementation and test evidence; the repository's `br`
+tracker remains the authority for live campaign progress.
+
 ## Installation
 
 ```elixir
@@ -199,6 +213,9 @@ records describe the zone apex; they are distinct from registrar delegation and
 from the separate API that explicitly replaces a zone's NS records.
 
 ## API Modules
+
+This catalog describes the currently exported modules and operations; it is not
+a claim that every published DNSimple endpoint is wrapped.
 
 | Module | DNSimple API | Operations |
 |--------|-------------|------------|

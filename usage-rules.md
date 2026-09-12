@@ -3,8 +3,25 @@
 ## Overview
 
 ReqDnsimple is a lightweight DNSimple API v2 client for Elixir built on Req.
-It provides typed structs and validated options for all DNSimple API operations.
+It provides typed structs and validated options for its documented subset of
+DNSimple API operations.
 No framework dependencies — just `req` and `nimble_options`.
+
+## API Coverage
+
+Use the versioned
+[operation inventory](docs/audit/operation-inventory.json) to determine whether
+an operation is part of the library's supported surface:
+
+- `existing` marks operations available before the API-parity campaign.
+- `implemented` marks operations added and contract-tested during the campaign.
+- `pending` marks approved campaign operations that are not implemented yet.
+- `out-of-scope` marks published DNSimple operations deliberately excluded from
+  the campaign.
+
+The inventory describes the bounded implementation target and its evidence, not
+live issue state. The repository's `br` tracker is the authority for campaign
+progress. An operation absent from the inventory is not implicitly supported.
 
 ## Client Creation
 
