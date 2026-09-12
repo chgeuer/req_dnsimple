@@ -66,6 +66,7 @@ Different modules use slightly different return conventions:
 | `EmailForward.get/4` | `{:ok, %EmailForward{}}` | `{:error, reason}` |
 | `EmailForward.delete/4` | `:ok` | `{:error, reason}` |
 | `DomainPush.accept/4` | `:ok` | `{:error, reason}` |
+| `DomainPush.reject/3` | `:ok` | `{:error, reason}` |
 | `BillingCharge.list/3` | `{:ok, [%BillingCharge{}, ...]}` | `{:error, reason}` |
 | `Zone.get_zone_file/3` | `{:ok, binary()}` | `{:error, reason}` |
 | `Zone.check_zone_distribution/3` | `{:ok, boolean()}` | `{:error, reason}` |
@@ -220,7 +221,8 @@ The update does not change registrar delegation.
   domain email forward by domain name or ID and forward ID. Retrieval preserves
   the full alias email, destination, activation state, and timestamps. Deletion
   does not send mail or modify MX records.
-- `ReqDnsimple.DomainPush` — Accept a pending push with an explicit target-account contact.
+- `ReqDnsimple.DomainPush` — Accept a pending push with an explicit target-account
+  contact, or reject it without deleting the source domain.
 - `ReqDnsimple.PrimaryServer` — Secondary-DNS primary server retrieval and
   explicit deletion. Struct: `id`, `account_id`, `name`, `ip`, integer `port`,
   ordered `linked_secondary_zones`, and timestamps. Deletion does not unlink

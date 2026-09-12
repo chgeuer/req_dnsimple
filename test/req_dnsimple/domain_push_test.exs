@@ -102,4 +102,66 @@ defmodule ReqDnsimple.DomainPushTest do
                )
     end
   end
+
+  describe "reject/3" do
+    test "rejectPush sends one bodyless request and returns :ok" do
+      assert :ok = ReqDnsimple.DomainPush.reject(client(204, ""), 2020, 1)
+
+      assert_request(:delete, "/v2/2020/pushes/1", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "rejectPush preserves explicit zero identifiers" do
+      assert :ok = ReqDnsimple.DomainPush.reject(client(204, nil), 0, 0)
+
+      assert_request(:delete, "/v2/0/pushes/0", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "rejectPush rejects invalid path parameters before HTTP" do
+      request = client(204, "")
+
+      for {account_id, push_id} <- [
+            {"2020", 1},
+            {nil, 1},
+            {2020, "1"},
+            {2020, nil}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.DomainPush.reject(request, account_id, push_id)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "rejectPush preserves documented and shared HTTP failures" do
+      for status <- [400, 401, 403, 404, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"push" => ["cannot be rejected"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.DomainPush.reject(client(status, body), 2020, 1)
+
+        assert_request(:delete, "/v2/2020/pushes/1", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "rejectPush rejects non-204 successful responses" do
+      for {status, body} <- [{200, %{}}, {200, nil}, {201, %{"data" => %{}}}] do
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.DomainPush.reject(client(status, body), 2020, 1)
+
+        assert_request(:delete, "/v2/2020/pushes/1", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "rejectPush preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.DomainPush.reject(transport_error_client(:timeout), 2020, 1)
+    end
+  end
 end

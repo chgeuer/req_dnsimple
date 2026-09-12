@@ -245,10 +245,12 @@ endpoint and does not fall back to a registrar availability check.
 
 ```elixir
 :ok = ReqDnsimple.DomainPush.accept(client, account_id, push_id, contact_id: contact_id)
+:ok = ReqDnsimple.DomainPush.reject(client, account_id, push_id)
 ```
 
 Accepting a push sends exactly one request using the selected target-account
-contact. It does not create a contact, fetch the domain, or preflight ownership.
+contact. Rejecting a push sends a bodyless request and does not delete the source
+domain. Neither operation performs a preflight request.
 
 ### DNSSEC
 
@@ -351,7 +353,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.DomainResearch` | `/domains/research/status` | `get_status/3` |
 | `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records/:ds_record` | `get/4`, `delete/4` |
 | `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards/:email_forward` | `get/4`, `delete/4` |
-| `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4` |
+| `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4`, `reject/3` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries/:primary_server` | `get/3`, `delete/3`, `from_json/1` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |
 | `ReqDnsimple.Helper` | Req utilities | `append/2` (URL/param merging) |
