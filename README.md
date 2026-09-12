@@ -41,6 +41,11 @@ end)
 # => {:user, %{"id" => 12345, "email" => "you@example.com", ...}}
 ```
 
+`whoami/1` selects `{:user, user}` or `{:account, account}` from the non-null
+identity in the successful response, independently of token spelling or the
+client's authentication configuration. If both identities are present or both
+are absent, it returns `{:unknown_token, full_response_body}`.
+
 ### List accounts
 
 ```elixir
@@ -226,7 +231,8 @@ ReqDnsimple.Zone.list(client, account_id, page: 2, per_page: 50)
 
 ## Token Types
 
-DNSimple uses prefixed tokens. `ReqDnsimple.token_type/1` detects them:
+DNSimple uses prefixed tokens. `ReqDnsimple.token_type/1` inspects those prefixes
+as a standalone utility; `whoami/1` determines identity from the API response:
 
 ```elixir
 ReqDnsimple.token_type("dnsimple_u_abc")  # => :user_token

@@ -48,6 +48,14 @@ defmodule ReqDnsimple do
   def token_type("dnsimple_a_" <> _), do: :account_token
   def token_type(x) when is_binary(x), do: :unknown_token
 
+  @doc """
+  Returns the authenticated identity reported by DNSimple.
+
+  A response containing exactly one non-null user or account returns the
+  corresponding `{:user, user}` or `{:account, account}` tuple. If both
+  identities are present or absent, the full response body is returned as
+  `{:unknown_token, body}`.
+  """
   @spec whoami(Req.Request.t()) ::
           {:account, any()} | {:unknown_token, map()} | {:user, any()} | {:error, term()}
   def whoami(req) do
@@ -63,10 +71,10 @@ defmodule ReqDnsimple do
          status: 200,
          body: body = %{"data" => %{"user" => user, "account" => account}}
        }} ->
-        case token_type(req) do
-          :user_token -> {:user, user}
-          :account_token -> {:account, account}
-          :unknown_token -> {:unknown_token, body}
+        case {user, account} do
+          {user, nil} when not is_nil(user) -> {:user, user}
+          {nil, account} when not is_nil(account) -> {:account, account}
+          _ -> {:unknown_token, body}
         end
 
       {:ok, response} ->

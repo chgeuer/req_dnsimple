@@ -41,6 +41,11 @@ Different modules use slightly different return conventions:
 | `Zone.get_zone_file/3` | `{:ok, binary()}` | `{:error, reason}` |
 | `Zone.check_zone_distribution/3` | `{:ok, boolean()}` | `{:error, reason}` |
 
+`whoami/1` returns `{:user, user}` or `{:account, account}` according to the
+single non-null identity in the successful response, regardless of token prefix
+or custom Req authentication. If both identities are present or absent, it
+preserves the complete response body in `{:unknown_token, body}`.
+
 Note that `Account.list/1` returns a bare list, not an `{:ok, list}` tuple.
 For `Zone`, `Contact`, and `BillingCharge`, `list_page/3` returns
 `{:ok, {items, pagination}}` and `list_all/3` returns every item as
@@ -123,7 +128,8 @@ domain's registrar delegation and from the explicit zone-NS-update API.
 
 ## Module Reference
 
-- `ReqDnsimple` — Client creation (`new_client/1`), `whoami/1`, `token_type/1`,
+- `ReqDnsimple` — Client creation (`new_client/1`), response-based identity
+  discovery (`whoami/1`), token-prefix inspection (`token_type/1`),
   `ns_records/3`, convenience delegates, and `from_json/3` for JSON→struct conversion.
 - `ReqDnsimple.Account` — Account listing. Struct: `id`, `email`, optional `name`,
   `plan_identifier`, `created_at`, `updated_at`. DNSimple's examples and official
