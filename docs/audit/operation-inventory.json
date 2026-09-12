@@ -6164,7 +6164,7 @@
       "method": "POST",
       "path": "/oauth/access_token",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-078",
       "br_issue_id": "bd-21n",
       "proposed_interfaces": [
@@ -6206,8 +6206,19 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.OAuth",
+          "function": "exchange_code",
+          "arity": 2
+        }
+      ],
+      "contract_tests": [
+        {
+          "file": "test/req_dnsimple/oauth_test.exs",
+          "describe": "exchange_code/2"
+        }
+      ]
     },
     {
       "operation_id": "purchaseLetsencryptCertificate",

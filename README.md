@@ -48,6 +48,27 @@ client = ReqDnsimple.new_client(fn ->
 end)
 ```
 
+### Exchange an OAuth authorization code
+
+Use the same client as a transport configuration; token exchange strips its
+inherited Authorization header and does not evaluate a dynamic bearer callback.
+Public clients provide a PKCE verifier:
+
+```elixir
+{:ok, token} =
+  ReqDnsimple.OAuth.exchange_code(client,
+    client_id: "your-client-id",
+    code: "authorization-code",
+    grant_type: "authorization_code",
+    code_verifier: String.duplicate("a", 43),
+    redirect_uri: "http://127.0.0.1:54321/callback",
+    state: "authorization-state"
+  )
+```
+
+Confidential clients provide `:client_secret` instead of `:code_verifier`.
+The result is `{:ok, %ReqDnsimple.OAuth.Token{}}`; `scope` may be `nil`.
+
 ### Identify yourself
 
 ```elixir
@@ -664,6 +685,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | Module | DNSimple API | Operations |
 |--------|-------------|------------|
 | `ReqDnsimple` | Client, `/whoami`, apex NS record enumeration | `new_client/1`, `whoami/1`, `token_type/1`, `ns_records/3` |
+| `ReqDnsimple.OAuth` | `/oauth/access_token` | `exchange_code/2` |
 | `ReqDnsimple.Account` | `/accounts` | `list/1` |
 | `ReqDnsimple.Zone` | `/zones` | `list/3`, `update_ns_records/4`, `get_zone_file/3`, `check_zone_distribution/3` |
 | `ReqDnsimple.ZoneRecord` | `/zones/:zone/records`, `/zones/:zone/batch` | `list/4`, `get/4`, `create/4`, `update/5`, `delete/4`, `check_distribution/4`, `batch_change/4` |

@@ -37,7 +37,9 @@ client = ReqDnsimple.new_client(fn -> System.fetch_env!("DNSIMPLE_TOKEN") end)
 
 Dynamic token functions are evaluated lazily for every request. The client is a
 `Req.Request` struct pre-configured with the DNSimple base URL and auth. Pass it
-as the first argument to every API call.
+as the first argument to every API call. `OAuth.exchange_code/2` is the
+exception: it retains the client's transport and base URL but removes inherited
+authorization without evaluating a dynamic token callback.
 
 ## Return Value Patterns
 
@@ -45,6 +47,7 @@ Different modules use slightly different return conventions:
 
 | Module | Success | Failure |
 |--------|---------|---------|
+| `OAuth.exchange_code/2` | `{:ok, %OAuth.Token{}}` | `{:error, reason}` |
 | `Account.list/1` | `[%Account{}, ...]` | `{:error, reason}` |
 | `Zone.list/3` | `{:ok, [%Zone{}, ...]}` | `{:error, reason}` |
 | `ZoneRecord.list/4` | `{:ok, {[%ZoneRecord{}, ...], pagination}}` | `{:error, reason}` |
@@ -227,6 +230,10 @@ not contact the callback URL, inspect deliveries, or list registrations first.
 - `ReqDnsimple` — Client creation (`new_client/1`), response-based identity
   discovery (`whoami/1`), token-prefix inspection (`token_type/1`),
   `ns_records/3`, convenience delegates, and `from_json/3` for JSON→struct conversion.
+- `ReqDnsimple.OAuth` — Unauthenticated authorization-code exchange for
+  confidential clients or public clients using a 43-128 character RFC 7636
+  verifier. It returns an unenveloped typed token with nullable `scope` and
+  never invokes inherited bearer authentication.
 - `ReqDnsimple.Account` — Account listing. Struct: `id`, `email`, optional `name`,
   `plan_identifier`, `created_at`, `updated_at`. DNSimple's examples and official
   SDK include `name` even though its OpenAPI schema omits it.
