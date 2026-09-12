@@ -45,8 +45,12 @@ end)
 
 ```elixir
 accounts = ReqDnsimple.Account.list(client)
-# => [%ReqDnsimple.Account{id: 12345, email: "you@example.com", ...}]
+# => [%ReqDnsimple.Account{id: 12345, email: "you@example.com", name: "Example Team", ...}]
 ```
+
+`Account.name` is optional because older responses may omit it. DNSimple's
+account examples and official SDK include the field even though its OpenAPI
+schema does not.
 
 ### List zones
 

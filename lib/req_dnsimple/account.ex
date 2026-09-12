@@ -2,21 +2,26 @@ defmodule ReqDnsimple.Account do
   @moduledoc """
   DNSimple Account API functionality.
   Provides account listing and management operations.
+
+  Account responses may include `name`, as documented in the Accounts API
+  examples and official SDK, even though the field is absent from the OpenAPI
+  schema. Older responses may omit it.
   """
   @type t :: %__MODULE__{
           id: integer(),
           email: binary(),
+          name: binary() | nil,
           plan_identifier: binary(),
           created_at: DateTime.t(),
           updated_at: DateTime.t()
         }
 
-  defstruct ~w(id email plan_identifier created_at updated_at)a
+  defstruct ~w(id email name plan_identifier created_at updated_at)a
 
   @spec from_json(map()) :: t()
   def from_json(json) do
     ReqDnsimple.from_json(json, __MODULE__,
-      regular: ~w[id email plan_identifier],
+      regular: ~w[id email name plan_identifier],
       datetime: ~w[created_at updated_at]
     )
   end

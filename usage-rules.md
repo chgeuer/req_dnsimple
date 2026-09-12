@@ -120,8 +120,9 @@ domain's registrar delegation and from the explicit zone-NS-update API.
 
 - `ReqDnsimple` — Client creation (`new_client/1`), `whoami/1`, `token_type/1`,
   `ns_records/3`, convenience delegates, and `from_json/3` for JSON→struct conversion.
-- `ReqDnsimple.Account` — Account listing. Struct: `id`, `email`, `plan_identifier`,
-  `created_at`, `updated_at`.
+- `ReqDnsimple.Account` — Account listing. Struct: `id`, `email`, optional `name`,
+  `plan_identifier`, `created_at`, `updated_at`. DNSimple's examples and official
+  SDK include `name` even though its OpenAPI schema omits it.
 - `ReqDnsimple.Zone` — Zone listing, zone file retrieval, distribution checks.
   Struct: `id`, `account_id`, `name`, `active`, `reverse`, `secondary`, timestamps.
 - `ReqDnsimple.ZoneRecord` — Full CRUD for DNS records. Struct: `id`, `zone_id`,
