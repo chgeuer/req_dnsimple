@@ -68,6 +68,7 @@ Different modules use slightly different return conventions:
 | `DomainPush.accept/4` | `:ok` | `{:error, reason}` |
 | `DomainPush.reject/3` | `:ok` | `{:error, reason}` |
 | `Registrar.check/3` | `{:ok, %Registrar.CheckResult{}}` | `{:error, reason}` |
+| `Registrar.enable_whois_privacy/3` | `{:ok, %Registrar.WhoisPrivacy{}}` | `{:error, reason}` |
 | `Registrar.renew/3,4` | `{:ok, %Registrar.Renewal{}}` | `{:error, reason}` |
 | `Registrar.restore/3,4` | `{:ok, %Registrar.Restore{}}` | `{:error, reason}` |
 | `BillingCharge.list/3` | `{:ok, [%BillingCharge{}, ...]}` | `{:error, reason}` |
@@ -228,8 +229,8 @@ The update does not change registrar delegation.
   contact, or reject it without deleting the source domain.
 - `ReqDnsimple.Registrar` — Check domain availability by name, explicitly
   authorize transfer-out by name, enable or disable automatic renewal by name
-  or ID, submit a renewal or expired-domain restore by name, or replace
-  registrar delegation by name or ID.
+  or ID, enable WHOIS privacy by name or ID, submit a renewal or expired-domain
+  restore by name, or replace registrar delegation by name or ID.
   The low-volume check preserves availability, premium, and optional trustee
   flags without using paid Domain Research, registering the domain, or retrying
   rate limits. Changing auto-renewal is a single bodyless request and preserves

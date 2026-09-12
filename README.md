@@ -253,6 +253,18 @@ modifying the domain:
 Both operations accept a domain name or integer ID, send one bodyless request,
 and return registry or TLD refusal responses as explicit errors.
 
+Enable WHOIS privacy without a price lookup or purchase preflight:
+
+```elixir
+{:ok, %ReqDnsimple.Registrar.WhoisPrivacy{} = privacy} =
+  ReqDnsimple.Registrar.enable_whois_privacy(client, account_id, "example.com")
+```
+
+The operation accepts a domain name or integer ID and returns the typed privacy
+state for modern HTTP 200 and legacy HTTP 201 responses. It sends one bodyless
+request and does not promise or initiate a separate one-year purchase. Legacy
+payment failures, including HTTP 402, are returned as explicit errors.
+
 Submit a renewal without a price lookup or follow-up polling:
 
 ```elixir
@@ -429,7 +441,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records/:ds_record` | `get/4`, `delete/4` |
 | `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards/:email_forward` | `get/4`, `delete/4` |
 | `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4`, `reject/3` |
-| `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `enable_auto_renewal/3`, `renew/3`, `renew/4`, `restore/3`, `restore/4`, `change_delegation/4` |
+| `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `enable_auto_renewal/3`, `enable_whois_privacy/3`, `renew/3`, `renew/4`, `restore/3`, `restore/4`, `change_delegation/4` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries/:primary_server` | `get/3`, `delete/3`, `from_json/1` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |
 | `ReqDnsimple.Helper` | Req utilities | `append/2` (URL/param merging) |

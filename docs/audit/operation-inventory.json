@@ -2542,7 +2542,7 @@
       "method": "PUT",
       "path": "/{account}/registrar/domains/{domain}/whois_privacy",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-041",
       "br_issue_id": "bd-zkj",
       "proposed_interfaces": [
@@ -2595,8 +2595,12 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.Registrar.enable_whois_privacy/3"
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/registrar_test.exs: enable_whois_privacy/3"
+      ]
     },
     {
       "operation_id": "getCertificate",

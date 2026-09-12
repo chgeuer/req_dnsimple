@@ -16,6 +16,9 @@ defmodule ReqDnsimple.Registrar do
       ReqDnsimple.Registrar.enable_auto_renewal(req, 1010, "example.test")
       #=> :ok
 
+      ReqDnsimple.Registrar.enable_whois_privacy(req, 1010, "example.test")
+      #=> {:ok, %ReqDnsimple.Registrar.WhoisPrivacy{}}
+
       ReqDnsimple.Registrar.renew(req, 1010, "example.test",
         period: 2,
         premium_price: "20.00"
@@ -85,10 +88,28 @@ defmodule ReqDnsimple.Registrar do
     defstruct [:id, :domain_id, :state, :created_at, :updated_at]
   end
 
+  defmodule WhoisPrivacy do
+    @moduledoc """
+    WHOIS privacy state returned by the registrar API.
+    """
+
+    @type t :: %__MODULE__{
+            id: integer(),
+            domain_id: integer(),
+            enabled: boolean(),
+            expires_on: Date.t(),
+            created_at: DateTime.t(),
+            updated_at: DateTime.t()
+          }
+
+    defstruct [:id, :domain_id, :enabled, :expires_on, :created_at, :updated_at]
+  end
+
   # https://developer.dnsimple.com/v2/registrar/#checkDomain
   # https://developer.dnsimple.com/v2/registrar/#authorizeDomainTransferOut
   # https://developer.dnsimple.com/v2/registrar/auto-renewal/#disableDomainAutoRenewal
   # https://developer.dnsimple.com/v2/registrar/auto-renewal/#enableDomainAutoRenewal
+  # https://developer.dnsimple.com/v2/registrar/whois-privacy/#enableWhoisPrivacy
   # https://developer.dnsimple.com/v2/registrar/#renewDomain
   # https://developer.dnsimple.com/v2/registrar/#restoreDomain
 
@@ -276,6 +297,55 @@ defmodule ReqDnsimple.Registrar do
       case Req.request(req) do
         {:ok, %Req.Response{status: 204}} ->
           :ok
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Enables WHOIS privacy for a domain.
+
+  This function sends exactly one bodyless request and does not look up the
+  domain, check pricing, or perform a separate purchase. Modern responses use
+  HTTP 200; legacy enablement can return HTTP 201. Legacy payment failures,
+  registry or TLD refusals, other HTTP responses, validation failures, and
+  transport failures are returned as explicit error tuples.
+
+  Returns the resulting privacy state as a typed `WhoisPrivacy` resource.
+  """
+  @spec enable_whois_privacy(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer()
+        ) ::
+          {:ok, WhoisPrivacy.t()} | {:error, term()}
+  def enable_whois_privacy(req, account_id, domain) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain],
+             @delegation_path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :put,
+          url: "/:account_id/registrar/domains/:domain/whois_privacy",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain: domain],
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: status, body: %{"data" => data}} = response}
+        when status in [200, 201] ->
+          case decode_whois_privacy(data) do
+            {:ok, whois_privacy} -> {:ok, whois_privacy}
+            :error -> ReqDnsimple.response_error(response)
+          end
 
         {:ok, response} ->
           ReqDnsimple.response_error(response)
@@ -543,6 +613,32 @@ defmodule ReqDnsimple.Registrar do
 
   defp decode_restore(_data), do: :error
 
+  defp decode_whois_privacy(%{
+         "id" => id,
+         "domain_id" => domain_id,
+         "enabled" => enabled,
+         "expires_on" => expires_on,
+         "created_at" => created_at,
+         "updated_at" => updated_at
+       })
+       when is_integer(id) and is_integer(domain_id) and is_boolean(enabled) do
+    with {:ok, expires_on} <- parse_date(expires_on),
+         {:ok, created_at} <- parse_datetime(created_at),
+         {:ok, updated_at} <- parse_datetime(updated_at) do
+      {:ok,
+       %WhoisPrivacy{
+         id: id,
+         domain_id: domain_id,
+         enabled: enabled,
+         expires_on: expires_on,
+         created_at: created_at,
+         updated_at: updated_at
+       }}
+    end
+  end
+
+  defp decode_whois_privacy(_data), do: :error
+
   defp decode_name_servers(name_servers) when is_list(name_servers) do
     if Enum.all?(name_servers, &is_binary/1), do: {:ok, name_servers}, else: :error
   end
@@ -591,4 +687,13 @@ defmodule ReqDnsimple.Registrar do
   end
 
   defp parse_datetime(_value), do: :error
+
+  defp parse_date(value) when is_binary(value) do
+    case Date.from_iso8601(value) do
+      {:ok, date} -> {:ok, date}
+      {:error, _reason} -> :error
+    end
+  end
+
+  defp parse_date(_value), do: :error
 end
