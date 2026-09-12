@@ -264,7 +264,7 @@
       "method": "POST",
       "path": "/{account}/registrar/domains/{domain}/authorize_transfer_out",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-005",
       "br_issue_id": "bd-212",
       "proposed_interfaces": [
@@ -311,8 +311,20 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "authorize_transfer_out",
+          "arity": 3,
+          "signature": "ReqDnsimple.Registrar.authorize_transfer_out(req, account_id, domain_name)"
+        }
+      ],
+      "contract_tests": [
+        {
+          "file": "test/req_dnsimple/registrar_test.exs",
+          "describe": "authorize_transfer_out/3"
+        }
+      ]
     },
     {
       "operation_id": "batchChangeZoneRecords",
