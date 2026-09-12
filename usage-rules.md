@@ -58,6 +58,7 @@ Different modules use slightly different return conventions:
 | `Contact.get/3` | `{:ok, %Contact{}}` | `{:error, :not_found}` |
 | `Contact.delete/3` | `:ok` | `{:error, reason}` |
 | `DelegationSignerRecord.delete/4` | `:ok` | `{:error, reason}` |
+| `EmailForward.delete/4` | `:ok` | `{:error, reason}` |
 | `DomainPush.accept/4` | `:ok` | `{:error, reason}` |
 | `BillingCharge.list/3` | `{:ok, [%BillingCharge{}, ...]}` | `{:error, reason}` |
 | `Zone.get_zone_file/3` | `{:ok, binary()}` | `{:error, reason}` |
@@ -197,6 +198,8 @@ The update does not change registrar delegation.
 - `ReqDnsimple.DelegationSignerRecord` — Explicit deletion of one registry
   delegation-signer record by domain name or ID and record ID. It does not
   disable DNSSEC or delete hosted-zone records.
+- `ReqDnsimple.EmailForward` — Explicit deletion of one domain email forward by
+  domain name or ID and forward ID. It does not send mail or modify MX records.
 - `ReqDnsimple.DomainPush` — Accept a pending push with an explicit target-account contact.
 - `ReqDnsimple.PrimaryServer` — Secondary-DNS primary server retrieval and
   explicit deletion. Struct: `id`, `account_id`, `name`, `ip`, integer `port`,

@@ -242,6 +242,15 @@ contact. It does not create a contact, fetch the domain, or preflight ownership.
 Deletion removes only the selected registry delegation-signer record. It does
 not disable DNSSEC or delete hosted-zone records.
 
+### Email forwards
+
+```elixir
+:ok = ReqDnsimple.EmailForward.delete(client, account_id, "example.com", email_forward_id)
+```
+
+Deletion removes only the selected email forward. It does not send mail or
+modify the domain's MX records.
+
 ### Secondary-DNS primary servers
 
 ```elixir
@@ -287,6 +296,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.Contact` | `/contacts` | `list/3`, `get/3`, `delete/3` |
 | `ReqDnsimple.Domain` | `/domains/:domain` | `delete/3` |
 | `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records/:ds_record` | `delete/4` |
+| `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards/:email_forward` | `delete/4` |
 | `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries/:primary_server` | `get/3`, `delete/3`, `from_json/1` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |
