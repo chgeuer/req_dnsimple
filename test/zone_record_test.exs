@@ -459,6 +459,26 @@ defmodule ReqDnsimple.ZoneRecordTest do
       refute_received {:request, _request}
     end
 
+    test "rejects malformed attribute containers before HTTP" do
+      request = client(200, %{})
+
+      for malformed <- [[:invalid], [{:name}]] do
+        assert {:error,
+                %NimbleOptions.ValidationError{
+                  message: "expected a keyword list",
+                  value: ^malformed
+                }} =
+                 ReqDnsimple.ZoneRecord.batch_change(
+                   request,
+                   1010,
+                   "example.test",
+                   malformed
+                 )
+      end
+
+      refute_received {:request, _request}
+    end
+
     test "rejects invalid path parameter types before HTTP" do
       request =
         client(200, %{

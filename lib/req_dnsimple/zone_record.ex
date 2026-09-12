@@ -389,8 +389,9 @@ defmodule ReqDnsimple.ZoneRecord do
           keyword()
         ) ::
           {:ok, BatchResult.t()} | {:error, term()}
-  def batch_change(req, account_id, zone_name, attrs) when is_list(attrs) do
-    with {:ok, _validated_path} <-
+  def batch_change(req, account_id, zone_name, attrs) do
+    with {:ok, attrs} <- ReqDnsimple.validate_keyword_list(attrs),
+         {:ok, _validated_path} <-
            NimbleOptions.validate(
              [account_id: account_id, zone_name: zone_name],
              @batch_change_path_schema
