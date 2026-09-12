@@ -7,7 +7,11 @@ defmodule ReqDnsimple do
 
   @type account_id :: integer()
   @type contact_id :: integer()
-  @type http_error :: %{status: non_neg_integer(), response: any()}
+  @type http_error :: %{
+          required(:status) => non_neg_integer(),
+          required(:response) => any(),
+          optional(:retry_after) => binary()
+        }
   @type record_id :: integer()
   @type sort :: [atom() | {atom(), :asc | :desc}]
   @type token_callback :: (-> binary() | {:bearer, binary()})
@@ -129,8 +133,13 @@ defmodule ReqDnsimple do
 
   @doc false
   @spec response_error(Req.Response.t()) :: {:error, http_error()}
-  def response_error(%Req.Response{status: status, body: body}) do
-    {:error, %{status: status, response: body}}
+  def response_error(%Req.Response{status: status, body: body} = response) do
+    error = %{status: status, response: body}
+
+    case Req.Response.get_header(response, "retry-after") do
+      [retry_after | _] -> {:error, Map.put(error, :retry_after, retry_after)}
+      [] -> {:error, error}
+    end
   end
 
   @spec from_json(map(), module(), keyword()) :: struct()

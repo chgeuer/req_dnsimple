@@ -228,6 +228,19 @@ Domain retrieval accepts a name or integer ID and returns registration state,
 privacy, renewal, and nullable expiry metadata in a typed
 `ReqDnsimple.Domain` struct.
 
+### Domain Research
+
+```elixir
+{:ok, research} =
+  ReqDnsimple.DomainResearch.get_status(client, account_id, domain: "example.com")
+```
+
+Domain Research is a paid service requiring the `domain_research_read` OAuth
+scope. It returns the request ID, researched domain, availability
+(`"available"`, `"unavailable"`, or `"unknown"`), and any research errors in a
+typed `ReqDnsimple.DomainResearch` struct. It uses the dedicated research
+endpoint and does not fall back to a registrar availability check.
+
 ### Domain pushes
 
 ```elixir
@@ -329,6 +342,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/3` |
 | `ReqDnsimple.Contact` | `/contacts` | `list/3`, `get/3`, `delete/3` |
 | `ReqDnsimple.Domain` | `/domains/:domain` | `get/3`, `delete/3` |
+| `ReqDnsimple.DomainResearch` | `/domains/research/status` | `get_status/3` |
 | `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records/:ds_record` | `get/4`, `delete/4` |
 | `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards/:email_forward` | `delete/4` |
 | `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4` |
@@ -347,7 +361,8 @@ a claim that every published DNSimple endpoint is wrapped.
 - **Delete** returns `:ok` or `{:error, reason}`
 - **Validation errors** return `{:error, %NimbleOptions.ValidationError{}}`
 - **Generic HTTP errors** return
-  `{:error, %{status: status, response: response_body}}`; endpoint-specific
+  `{:error, %{status: status, response: response_body}}`; responses with a
+  `Retry-After` header also include `retry_after: value`. Endpoint-specific
   errors such as `:not_found`, `:unauthorized`, and `:timeout` remain atoms
 
 ## Sorting and Filtering

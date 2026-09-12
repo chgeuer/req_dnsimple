@@ -3107,7 +3107,7 @@
       "method": "GET",
       "path": "/{account}/domains/research/status",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-050",
       "br_issue_id": "bd-3br",
       "proposed_interfaces": [
@@ -3154,8 +3154,12 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.DomainResearch.get_status/3"
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/domain_research_test.exs"
+      ]
     },
     {
       "operation_id": "getEmailForward",

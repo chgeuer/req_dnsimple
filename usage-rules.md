@@ -58,6 +58,7 @@ Different modules use slightly different return conventions:
 | `Contact.get/3` | `{:ok, %Contact{}}` | `{:error, :not_found}` |
 | `Contact.delete/3` | `:ok` | `{:error, reason}` |
 | `Domain.get/3` | `{:ok, %Domain{}}` | `{:error, reason}` |
+| `DomainResearch.get_status/3` | `{:ok, %DomainResearch{}}` | `{:error, reason}` |
 | `Dnssec.get/3` | `{:ok, %Dnssec{}}` | `{:error, reason}` |
 | `Dnssec.disable/3` | `:ok` | `{:error, reason}` |
 | `DelegationSignerRecord.get/4` | `{:ok, %DelegationSignerRecord{}}` | `{:error, reason}` |
@@ -83,7 +84,8 @@ filters and pagination size, and rejects an explicit `page` option.
 Ordinary HTTP failures return
 `{:error, %{status: status, response: response_body}}`. Existing
 endpoint-specific mappings such as `:not_found`, `:unauthorized`, and `:timeout`
-take precedence.
+take precedence. If a response includes `Retry-After`, the generic error map
+also includes `retry_after: value`.
 
 ## Common Patterns
 
@@ -200,6 +202,10 @@ The update does not change registrar delegation.
   Retrieval returns registration state, privacy, renewal, and nullable expiry
   metadata. Deletion is irreversible within the account, but does not delete a
   registration at the registry or produce a refund.
+- `ReqDnsimple.DomainResearch` — Paid domain-availability research through the
+  dedicated endpoint. Requires the `domain_research_read` OAuth scope and
+  returns request ID, domain, availability, and research errors without falling
+  back to a registrar availability check.
 - `ReqDnsimple.Dnssec` — Typed DNSSEC status retrieval and explicit disablement
   by domain name or ID. Retrieval keeps enabled and active as separate states
   and parses creation/update timestamps. For hosted-only domains, registry
