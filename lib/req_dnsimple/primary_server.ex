@@ -4,6 +4,15 @@ defmodule ReqDnsimple.PrimaryServer do
 
   ## Example
 
+      ReqDnsimple.PrimaryServer.create(
+        req,
+        1010,
+        name: "Offline primary",
+        ip: "192.0.2.1",
+        port: 5353
+      )
+      #=> {:ok, %ReqDnsimple.PrimaryServer{}}
+
       ReqDnsimple.PrimaryServer.get(req, 1010, 1)
       #=> {:ok, %ReqDnsimple.PrimaryServer{}}
 
@@ -11,6 +20,7 @@ defmodule ReqDnsimple.PrimaryServer do
       #=> :ok
   """
 
+  # https://developer.dnsimple.com/v2/secondary-dns/#createPrimaryServer
   # https://developer.dnsimple.com/v2/secondary-dns/#getPrimaryServer
   # https://developer.dnsimple.com/v2/secondary-dns/#removePrimaryServer
 
@@ -31,6 +41,64 @@ defmodule ReqDnsimple.PrimaryServer do
     account_id: [type: :integer, required: true],
     primary_server_id: [type: :integer, required: true]
   ]
+
+  @create_path_schema [
+    account_id: [type: :integer, required: true]
+  ]
+
+  @create_schema [
+    name: [type: :string, required: true],
+    ip: [type: :string, required: true],
+    port: [type: :integer]
+  ]
+
+  @doc """
+  Creates a secondary-DNS primary server.
+
+  `name` and `ip` are required. A supplied integer `port` is sent unchanged;
+  when omitted, the API chooses its default.
+
+  ## Example
+
+      ReqDnsimple.PrimaryServer.create(
+        req,
+        1010,
+        name: "Offline primary",
+        ip: "192.0.2.1",
+        port: 5353
+      )
+      #=> {:ok, %ReqDnsimple.PrimaryServer{}}
+  """
+  @spec create(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
+          {:ok, t()} | {:error, term()}
+  def create(req, account_id, attrs) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate([account_id: account_id], @create_path_schema),
+         {:ok, validated_attrs} <- ReqDnsimple.validate_options(attrs, @create_schema) do
+      req =
+        Req.merge(req,
+          method: :post,
+          url: "/:account_id/secondary_dns/primaries",
+          path_params_style: :colon,
+          path_params: [account_id: account_id],
+          json: Map.new(validated_attrs)
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
+          case decode(data) do
+            {:ok, primary_server} -> {:ok, primary_server}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
 
   @doc """
   Retrieves one secondary-DNS primary server.

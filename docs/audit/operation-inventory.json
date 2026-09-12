@@ -919,7 +919,7 @@
       "method": "POST",
       "path": "/{account}/secondary_dns/primaries",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-014",
       "br_issue_id": "bd-22q",
       "proposed_interfaces": [
@@ -966,8 +966,20 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "create",
+          "arity": 3,
+          "signature": "ReqDnsimple.PrimaryServer.create(req, account_id, attrs)"
+        }
+      ],
+      "contract_tests": [
+        {
+          "file": "test/primary_server_test.exs",
+          "describe": "create/3"
+        }
+      ]
     },
     {
       "operation_id": "createRegistrantChange",

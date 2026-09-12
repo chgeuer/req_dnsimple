@@ -123,6 +123,183 @@ defmodule ReqDnsimple.PrimaryServerTest do
     end
   end
 
+  describe "create/3" do
+    test "createPrimaryServer sends every supplied field once and returns a typed response" do
+      assert {:ok,
+              %ReqDnsimple.PrimaryServer{
+                id: 1,
+                account_id: 1010,
+                name: "Offline primary",
+                ip: "192.0.2.1",
+                port: 5353,
+                linked_secondary_zones: [],
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:30:00Z]
+              }} =
+               ReqDnsimple.PrimaryServer.create(
+                 client(201, %{"data" => @primary_server_data}),
+                 1010,
+                 name: "Offline primary",
+                 ip: "192.0.2.1",
+                 port: 5353
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/secondary_dns/primaries",
+        %{},
+        %{"name" => "Offline primary", "ip" => "192.0.2.1", "port" => 5353}
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "createPrimaryServer omits an absent port and preserves zero and empty strings" do
+      request = client(201, %{"data" => @primary_server_data})
+
+      assert {:ok, %ReqDnsimple.PrimaryServer{}} =
+               ReqDnsimple.PrimaryServer.create(request, 1010, name: "", ip: "")
+
+      assert_request(
+        :post,
+        "/v2/1010/secondary_dns/primaries",
+        %{},
+        %{"name" => "", "ip" => ""}
+      )
+
+      zero_port_data = Map.put(@primary_server_data, "port", 0)
+
+      assert {:ok, %ReqDnsimple.PrimaryServer{port: 0}} =
+               ReqDnsimple.PrimaryServer.create(
+                 client(201, %{"data" => zero_port_data}),
+                 0,
+                 name: "Zero port",
+                 ip: "192.0.2.2",
+                 port: 0
+               )
+
+      assert_request(
+        :post,
+        "/v2/0/secondary_dns/primaries",
+        %{},
+        %{"name" => "Zero port", "ip" => "192.0.2.2", "port" => 0}
+      )
+    end
+
+    test "createPrimaryServer rejects invalid attributes before HTTP" do
+      request = client(201, %{"data" => @primary_server_data})
+
+      for {account_id, attrs} <- [
+            {"1010", [name: "Primary", ip: "192.0.2.1"]},
+            {nil, [name: "Primary", ip: "192.0.2.1"]},
+            {1010, [:invalid]},
+            {1010, [{:name}]},
+            {1010, []},
+            {1010, [name: "Primary"]},
+            {1010, [ip: "192.0.2.1"]},
+            {1010, [name: nil, ip: "192.0.2.1"]},
+            {1010, [name: "Primary", ip: nil]},
+            {1010, [name: false, ip: "192.0.2.1"]},
+            {1010, [name: "Primary", ip: "192.0.2.1", port: nil]},
+            {1010, [name: "Primary", ip: "192.0.2.1", port: "5353"]},
+            {1010, [name: "Primary", ip: "192.0.2.1", port: []]},
+            {1010, [name: "Primary", ip: "192.0.2.1", port: %{}]},
+            {1010, [name: "Primary", ip: "192.0.2.1", unknown: true]}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.PrimaryServer.create(request, account_id, attrs)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "createPrimaryServer preserves documented and shared HTTP failures" do
+      for status <- [400, 401, 403, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"ip" => ["is invalid"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.PrimaryServer.create(
+                   client(status, body),
+                   1010,
+                   name: "Primary",
+                   ip: "192.0.2.1"
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/secondary_dns/primaries",
+          %{},
+          %{"name" => "Primary", "ip" => "192.0.2.1"}
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "createPrimaryServer returns explicit errors for malformed successful responses" do
+      malformed_payloads = [
+        %{},
+        %{"data" => nil},
+        %{"data" => Map.delete(@primary_server_data, "linked_secondary_zones")},
+        %{"data" => Map.put(@primary_server_data, "linked_secondary_zones", nil)},
+        %{"data" => Map.put(@primary_server_data, "updated_at", nil)}
+      ]
+
+      for body <- malformed_payloads do
+        assert {:error, %{status: 201, response: ^body}} =
+                 ReqDnsimple.PrimaryServer.create(
+                   client(201, body),
+                   1010,
+                   name: "Primary",
+                   ip: "192.0.2.1"
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/secondary_dns/primaries",
+          %{},
+          %{"name" => "Primary", "ip" => "192.0.2.1"}
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "createPrimaryServer rejects an unexpected success status" do
+      body = %{"data" => @primary_server_data}
+
+      assert {:error, %{status: 200, response: ^body}} =
+               ReqDnsimple.PrimaryServer.create(
+                 client(200, body),
+                 1010,
+                 name: "Primary",
+                 ip: "192.0.2.1"
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/secondary_dns/primaries",
+        %{},
+        %{"name" => "Primary", "ip" => "192.0.2.1"}
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "createPrimaryServer preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.PrimaryServer.create(
+                 transport_error_client(:timeout),
+                 1010,
+                 name: "Primary",
+                 ip: "192.0.2.1"
+               )
+    end
+  end
+
   describe "delete/3" do
     test "removePrimaryServer sends one bodyless request and returns :ok" do
       assert :ok = ReqDnsimple.PrimaryServer.delete(client(204, ""), 1010, 1)
