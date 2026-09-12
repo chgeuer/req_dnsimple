@@ -576,11 +576,16 @@ domain. Neither operation performs a preflight request.
 
 ```elixir
 {:ok, dnssec} = ReqDnsimple.Dnssec.get(client, account_id, "example.com")
+{:ok, dnssec} = ReqDnsimple.Dnssec.enable(client, account_id, "example.com")
 :ok = ReqDnsimple.Dnssec.disable(client, account_id, "example.com")
 ```
 
 Retrieval returns the enabled and active states separately, with typed creation
 and update timestamps.
+
+For domains registered with DNSimple, enabling DNSSEC includes registry
+delegation-signer submission. Hosted-only domains require the caller to
+coordinate delegation-signer records with the registrar.
 
 For hosted-only domains, remove registry delegation-signer records before
 disabling DNSSEC. This operation does not remove those records or prompt for

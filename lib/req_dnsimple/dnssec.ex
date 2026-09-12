@@ -6,9 +6,17 @@ defmodule ReqDnsimple.Dnssec do
 
       {:ok, dnssec} = ReqDnsimple.Dnssec.get(client, 1010, "example.test")
 
+  Enable DNSSEC for a domain:
+
+      {:ok, dnssec} = ReqDnsimple.Dnssec.enable(client, 1010, "example.test")
+
   Disable DNSSEC for a domain:
 
       :ok = ReqDnsimple.Dnssec.disable(client, 1010, "example.test")
+
+  For domains registered with DNSimple, DNSimple submits the delegation-signer
+  records to the registry. Hosted-only domains require the caller to coordinate
+  delegation-signer records with the registrar.
 
   For hosted-only domains, remove registry delegation-signer records before
   disabling DNSSEC. This operation does not remove those records automatically.
@@ -50,6 +58,42 @@ defmodule ReqDnsimple.Dnssec do
 
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
+          case decode(data) do
+            {:ok, dnssec} -> {:ok, dnssec}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Enables DNSSEC for a domain.
+
+  Returns the DNSSEC state immediately after DNSimple accepts the request. For
+  domains registered with DNSimple, DNSimple handles registry delegation-signer
+  submission. Hosted-only domains require caller-managed registrar coordination.
+  """
+  @spec enable(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer()) ::
+          {:ok, t()} | {:error, term()}
+  def enable(req, account_id, domain) do
+    with {:ok, _validated_params} <-
+           NimbleOptions.validate([account_id: account_id, domain: domain], @path_schema) do
+      req =
+        Req.merge(req,
+          method: :post,
+          url: "/:account_id/domains/:domain/dnssec",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain: domain]
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
           case decode(data) do
             {:ok, dnssec} -> {:ok, dnssec}
             :error -> ReqDnsimple.response_error(response)

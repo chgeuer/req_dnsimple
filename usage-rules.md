@@ -64,6 +64,7 @@ Different modules use slightly different return conventions:
 | `Domain.get/3` | `{:ok, %Domain{}}` | `{:error, reason}` |
 | `DomainResearch.get_status/3` | `{:ok, %DomainResearch{}}` | `{:error, reason}` |
 | `Dnssec.get/3` | `{:ok, %Dnssec{}}` | `{:error, reason}` |
+| `Dnssec.enable/3` | `{:ok, %Dnssec{}}` | `{:error, reason}` |
 | `Dnssec.disable/3` | `:ok` | `{:error, reason}` |
 | `Service.get/2` | `{:ok, %Service{}}` | `{:error, reason}` |
 | `Service.apply/4,5` | `:ok` | `{:error, reason}` |
@@ -274,11 +275,14 @@ not contact the callback URL, inspect deliveries, or list registrations first.
   dedicated endpoint. Requires the `domain_research_read` OAuth scope and
   returns request ID, domain, availability, and research errors without falling
   back to a registrar availability check.
-- `ReqDnsimple.Dnssec` — Typed DNSSEC status retrieval and explicit disablement
-  by domain name or ID. Retrieval keeps enabled and active as separate states
-  and parses creation/update timestamps. For hosted-only domains, registry
-  delegation-signer records must be removed first; disablement does not remove
-  them or prompt for confirmation.
+- `ReqDnsimple.Dnssec` — Typed DNSSEC status retrieval, enablement, and explicit
+  disablement by domain name or ID. Retrieval and enablement keep enabled and
+  active as separate states and parse creation/update timestamps. DNSimple
+  handles registry delegation-signer submission for domains registered with
+  DNSimple; hosted-only domains require caller-managed registrar coordination.
+  For hosted-only domains, registry delegation-signer records must be removed
+  before disablement; disablement does not remove them or prompt for
+  confirmation.
 - `ReqDnsimple.DelegationSignerRecord` — Typed creation, retrieval, and explicit
   deletion of registry delegation-signer records by domain name or ID. Creation
   accepts a string algorithm with either a complete DS tuple or KEY public key.

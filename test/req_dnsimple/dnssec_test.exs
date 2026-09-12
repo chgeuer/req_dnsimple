@@ -125,6 +125,125 @@ defmodule ReqDnsimple.DnssecTest do
     end
   end
 
+  describe "enable/3" do
+    test "enableDomainDnssec sends one bodyless request and returns typed DNSSEC status" do
+      assert {:ok,
+              %ReqDnsimple.Dnssec{
+                enabled: true,
+                active: false,
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:30:00Z]
+              }} =
+               ReqDnsimple.Dnssec.enable(
+                 client(201, %{"data" => @dnssec_data}),
+                 1010,
+                 "example.test"
+               )
+
+      assert_request(:post, "/v2/1010/domains/example.test/dnssec", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "enableDomainDnssec permits omitted active and rejects explicit null" do
+      omitted_active = %{"data" => Map.delete(@dnssec_data, "active")}
+
+      assert {:ok, %ReqDnsimple.Dnssec{active: nil}} =
+               ReqDnsimple.Dnssec.enable(client(201, omitted_active), 1010, 42)
+
+      assert_request(:post, "/v2/1010/domains/42/dnssec", %{}, nil)
+      refute_received {:request, _request}
+
+      null_active = %{"data" => Map.put(@dnssec_data, "active", nil)}
+
+      assert {:error, %{status: 201, response: ^null_active}} =
+               ReqDnsimple.Dnssec.enable(client(201, null_active), 1010, "example.test")
+
+      assert_request(:post, "/v2/1010/domains/example.test/dnssec", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "enableDomainDnssec rejects invalid path parameters before HTTP" do
+      request = client(201, %{"data" => @dnssec_data})
+
+      for {account_id, domain} <- [
+            {"1010", "example.test"},
+            {nil, "example.test"},
+            {1010, nil},
+            {1010, 1.5},
+            {1010, []}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Dnssec.enable(request, account_id, domain)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "enableDomainDnssec preserves explicit zero and empty identifiers" do
+      for {account_id, domain} <- [{0, 0}, {1010, ""}] do
+        assert {:ok, %ReqDnsimple.Dnssec{}} =
+                 ReqDnsimple.Dnssec.enable(
+                   client(201, %{"data" => @dnssec_data}),
+                   account_id,
+                   domain
+                 )
+
+        assert_request(:post, "/v2/#{account_id}/domains/#{domain}/dnssec", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "enableDomainDnssec preserves documented and shared HTTP failures" do
+      for status <- [400, 401, 403, 404, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"dnssec" => ["cannot be enabled"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Dnssec.enable(client(status, body), 1010, "example.test")
+
+        assert_request(:post, "/v2/1010/domains/example.test/dnssec", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "enableDomainDnssec returns explicit errors for malformed success" do
+      malformed_payloads = [
+        %{},
+        %{"data" => nil},
+        %{"data" => Map.delete(@dnssec_data, "enabled")},
+        %{"data" => Map.put(@dnssec_data, "enabled", 1)},
+        %{"data" => Map.put(@dnssec_data, "created_at", "not-a-timestamp")}
+      ]
+
+      for body <- malformed_payloads do
+        assert {:error, %{status: 201, response: ^body}} =
+                 ReqDnsimple.Dnssec.enable(client(201, body), 1010, "example.test")
+
+        assert_request(:post, "/v2/1010/domains/example.test/dnssec", %{}, nil)
+        refute_received {:request, _request}
+      end
+
+      for {status, body} <- [{200, %{"data" => @dnssec_data}}, {204, nil}] do
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Dnssec.enable(client(status, body), 1010, "example.test")
+
+        assert_request(:post, "/v2/1010/domains/example.test/dnssec", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "enableDomainDnssec preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Dnssec.enable(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test"
+               )
+    end
+  end
+
   describe "disable/3" do
     test "disableDomainDnssec sends one bodyless request and returns :ok" do
       assert :ok = ReqDnsimple.Dnssec.disable(client(204, ""), 1010, "example.test")
