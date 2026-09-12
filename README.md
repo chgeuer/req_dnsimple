@@ -227,6 +227,21 @@ arbitrary-precision decimal library.
 Accepting a push sends exactly one request using the selected target-account
 contact. It does not create a contact, fetch the domain, or preflight ownership.
 
+### Delegation-signer records
+
+```elixir
+:ok =
+  ReqDnsimple.DelegationSignerRecord.delete(
+    client,
+    account_id,
+    "example.com",
+    ds_record_id
+  )
+```
+
+Deletion removes only the selected registry delegation-signer record. It does
+not disable DNSSEC or delete hosted-zone records.
+
 ### Secondary-DNS primary servers
 
 ```elixir
@@ -271,6 +286,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/3` |
 | `ReqDnsimple.Contact` | `/contacts` | `list/3`, `get/3`, `delete/3` |
 | `ReqDnsimple.Domain` | `/domains/:domain` | `delete/3` |
+| `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records/:ds_record` | `delete/4` |
 | `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries/:primary_server` | `get/3`, `delete/3`, `from_json/1` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |

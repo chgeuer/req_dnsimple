@@ -1406,7 +1406,7 @@
       "method": "DELETE",
       "path": "/{account}/domains/{domain}/ds_records/{ds}",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-023",
       "br_issue_id": "bd-fcp",
       "proposed_interfaces": [
@@ -1458,8 +1458,15 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.DelegationSignerRecord.delete/4"
+      ],
+      "contract_tests": [
+        {
+          "file": "test/req_dnsimple/delegation_signer_record_test.exs",
+          "describe": "delete/4"
+        }
+      ]
     },
     {
       "operation_id": "deleteEmailForward",
