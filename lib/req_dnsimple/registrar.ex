@@ -7,6 +7,9 @@ defmodule ReqDnsimple.Registrar do
       ReqDnsimple.Registrar.check(req, 1010, "example.test")
       #=> {:ok, %ReqDnsimple.Registrar.CheckResult{}}
 
+      ReqDnsimple.Registrar.get_prices(req, 1010, "example.test")
+      #=> {:ok, %ReqDnsimple.Registrar.Prices{}}
+
       ReqDnsimple.Registrar.authorize_transfer_out(req, 1010, "example.test")
       #=> :ok
 
@@ -52,6 +55,32 @@ defmodule ReqDnsimple.Registrar do
           }
 
     defstruct [:domain, :available, :premium, :trustee]
+  end
+
+  defmodule Prices do
+    @moduledoc """
+    Domain registration and lifecycle prices returned by the registrar API.
+    """
+
+    @type t :: %__MODULE__{
+            domain: String.t(),
+            premium: boolean(),
+            registration_price: number(),
+            renewal_price: number(),
+            transfer_price: number() | nil,
+            restore_price: number(),
+            trustee_price: number() | nil
+          }
+
+    defstruct [
+      :domain,
+      :premium,
+      :registration_price,
+      :renewal_price,
+      :transfer_price,
+      :restore_price,
+      :trustee_price
+    ]
   end
 
   defmodule Renewal do
@@ -109,6 +138,7 @@ defmodule ReqDnsimple.Registrar do
   end
 
   # https://developer.dnsimple.com/v2/registrar/#checkDomain
+  # https://developer.dnsimple.com/v2/registrar/#getDomainPrices
   # https://developer.dnsimple.com/v2/registrar/#authorizeDomainTransferOut
   # https://developer.dnsimple.com/v2/registrar/auto-renewal/#disableDomainAutoRenewal
   # https://developer.dnsimple.com/v2/registrar/auto-renewal/#enableDomainAutoRenewal
@@ -171,6 +201,47 @@ defmodule ReqDnsimple.Registrar do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode_check_result(data) do
             {:ok, result} -> {:ok, result}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Retrieves registration and lifecycle prices for a domain name.
+
+  Prices are returned as JSON numbers in a `Prices` struct. The transfer and
+  trustee prices are optional and are `nil` when DNSimple omits them. This
+  function sends exactly one bodyless request and does not register, renew,
+  transfer, restore, or otherwise modify the domain.
+  """
+  @spec get_prices(Req.Request.t(), ReqDnsimple.account_id(), String.t()) ::
+          {:ok, Prices.t()} | {:error, term()}
+  def get_prices(req, account_id, domain_name) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain_name: domain_name],
+             @path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :get,
+          url: "/:account_id/registrar/domains/:domain_name/prices",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain_name: domain_name],
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
+          case decode_prices(data) do
+            {:ok, prices} -> {:ok, prices}
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -694,6 +765,44 @@ defmodule ReqDnsimple.Registrar do
   end
 
   defp decode_name_servers(_name_servers), do: :error
+
+  defp decode_prices(
+         %{
+           "domain" => domain,
+           "premium" => premium,
+           "registration_price" => registration_price,
+           "renewal_price" => renewal_price,
+           "restore_price" => restore_price
+         } = data
+       )
+       when is_binary(domain) and is_boolean(premium) and is_number(registration_price) and
+              is_number(renewal_price) and is_number(restore_price) do
+    with {:ok, transfer_price} <- decode_optional_price(data, "transfer_price"),
+         {:ok, trustee_price} <- decode_optional_price(data, "trustee_price") do
+      {:ok,
+       %Prices{
+         domain: domain,
+         premium: premium,
+         registration_price: registration_price,
+         renewal_price: renewal_price,
+         transfer_price: transfer_price,
+         restore_price: restore_price,
+         trustee_price: trustee_price
+       }}
+    else
+      :error -> :error
+    end
+  end
+
+  defp decode_prices(_data), do: :error
+
+  defp decode_optional_price(data, key) do
+    case Map.fetch(data, key) do
+      :error -> {:ok, nil}
+      {:ok, price} when is_number(price) -> {:ok, price}
+      {:ok, _price} -> :error
+    end
+  end
 
   defp decode_check_result(
          %{

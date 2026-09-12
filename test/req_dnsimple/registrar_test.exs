@@ -1128,6 +1128,140 @@ defmodule ReqDnsimple.RegistrarTest do
     end
   end
 
+  describe "get_prices/3" do
+    test "getDomainPrices sends one bodyless request and returns typed numeric prices" do
+      body = %{
+        "data" => %{
+          "domain" => "example.test",
+          "premium" => true,
+          "registration_price" => 20.0,
+          "renewal_price" => 21.0,
+          "transfer_price" => 22.0,
+          "restore_price" => 109.0,
+          "trustee_price" => 3.0,
+          "ignored" => "field"
+        }
+      }
+
+      assert {:ok,
+              %ReqDnsimple.Registrar.Prices{
+                domain: "example.test",
+                premium: true,
+                registration_price: 20.0,
+                renewal_price: 21.0,
+                transfer_price: 22.0,
+                restore_price: 109.0,
+                trustee_price: 3.0
+              }} = ReqDnsimple.Registrar.get_prices(client(200, body), 1010, "example.test")
+
+      assert_request(:get, "/v2/1010/registrar/domains/example.test/prices", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "getDomainPrices preserves false, zero, and omitted optional prices" do
+      zero_float = 0.0
+
+      body = %{
+        "data" => %{
+          "domain" => "",
+          "premium" => false,
+          "registration_price" => 0,
+          "renewal_price" => 0.0,
+          "restore_price" => 0
+        }
+      }
+
+      assert {:ok,
+              %ReqDnsimple.Registrar.Prices{
+                domain: "",
+                premium: false,
+                registration_price: 0,
+                renewal_price: ^zero_float,
+                transfer_price: nil,
+                restore_price: 0,
+                trustee_price: nil
+              }} = ReqDnsimple.Registrar.get_prices(client(200, body), 0, "")
+
+      assert_request(:get, "/v2/0/registrar/domains//prices", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "getDomainPrices rejects invalid path parameters before HTTP" do
+      request = client(200, %{})
+
+      for {account_id, domain_name} <- [
+            {"1010", "example.test"},
+            {nil, "example.test"},
+            {1010, nil},
+            {1010, 42},
+            {1010, []}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Registrar.get_prices(request, account_id, domain_name)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "getDomainPrices preserves documented and shared HTTP failures" do
+      for status <- [400, 401, 403, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"domain" => ["is unavailable"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Registrar.get_prices(
+                   client(status, body),
+                   1010,
+                   "example.test"
+                 )
+
+        assert_request(:get, "/v2/1010/registrar/domains/example.test/prices", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "getDomainPrices returns explicit errors for malformed successful responses" do
+      valid = %{
+        "domain" => "example.test",
+        "premium" => false,
+        "registration_price" => 20.0,
+        "renewal_price" => 21.0,
+        "restore_price" => 109.0
+      }
+
+      for body <- [
+            %{},
+            %{"data" => nil},
+            %{"data" => Map.delete(valid, "restore_price")},
+            %{"data" => Map.put(valid, "premium", "false")},
+            %{"data" => Map.put(valid, "registration_price", "20.0")},
+            %{"data" => Map.put(valid, "transfer_price", nil)},
+            %{"data" => Map.put(valid, "trustee_price", "3.0")}
+          ] do
+        assert {:error, %{status: 200, response: ^body}} =
+                 ReqDnsimple.Registrar.get_prices(
+                   client(200, body),
+                   1010,
+                   "example.test"
+                 )
+
+        assert_request(:get, "/v2/1010/registrar/domains/example.test/prices", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "getDomainPrices preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Registrar.get_prices(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test"
+               )
+    end
+  end
+
   describe "get_delegation/3" do
     test "getDomainDelegation sends one bodyless request and preserves ordered hostnames" do
       name_servers = [
