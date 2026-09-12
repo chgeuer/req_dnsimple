@@ -2204,6 +2204,33 @@ defmodule ReqDnsimple.RegistrarTest do
       refute_received {:request, _request}
     end
 
+    test "changeDomainDelegation rejects malformed keyword containers before HTTP" do
+      request = client(200, %{"data" => []})
+
+      assert {:ok, []} =
+               ReqDnsimple.Registrar.change_delegation(
+                 request,
+                 1010,
+                 "example.test",
+                 name_servers: []
+               )
+
+      assert_request(:put, "/v2/1010/registrar/domains/example.test/delegation", %{}, [])
+      refute_received {:request, _request}
+
+      for attrs <- [[:invalid], [{:name}]] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Registrar.change_delegation(
+                   request,
+                   1010,
+                   "example.test",
+                   attrs
+                 )
+
+        refute_received {:request, _request}
+      end
+    end
+
     test "changeDomainDelegation preserves documented and shared HTTP failures" do
       for status <- [400, 401, 403, 404, 429, 500, 418] do
         body = %{
