@@ -223,9 +223,9 @@ The update does not change registrar delegation.
   library when arithmetic is required. Manual-charge item product identifiers and
   references may be `nil`.
 - `ReqDnsimple.Contact` — Contact listing and retrieval. 14 contact fields + timestamps.
-- `ReqDnsimple.Template` — Applying an account template to a domain or deleting
-  an account template, each with one bodyless request. Domain and template
-  identifiers accept short names or integer IDs.
+- `ReqDnsimple.Template` — Retrieving, applying, or deleting an account template,
+  each with one bodyless request. Retrieval returns a typed template with parsed
+  timestamps. Domain and template identifiers accept short names or integer IDs.
 - `ReqDnsimple.TemplateRecord` — Deleting one record from an account template by
   template short name or ID and record ID. Deletion does not remove the template
   or records previously applied to domains.

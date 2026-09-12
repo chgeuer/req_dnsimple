@@ -3563,7 +3563,7 @@
       "method": "GET",
       "path": "/{account}/templates/{template}",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-055",
       "br_issue_id": "bd-cdm",
       "proposed_interfaces": [
@@ -3610,8 +3610,12 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.Template.get/3"
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/template_test.exs: get/3"
+      ]
     },
     {
       "operation_id": "getTemplateRecord",
