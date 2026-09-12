@@ -218,6 +218,15 @@ arbitrary-precision decimal library.
 :ok = ReqDnsimple.Contact.delete(client, account_id, contact_id)
 ```
 
+### Domain pushes
+
+```elixir
+:ok = ReqDnsimple.DomainPush.accept(client, account_id, push_id, contact_id: contact_id)
+```
+
+Accepting a push sends exactly one request using the selected target-account
+contact. It does not create a contact, fetch the domain, or preflight ownership.
+
 ### Secondary-DNS primary servers
 
 ```elixir
@@ -261,6 +270,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.ZoneRecord` | `/zones/:zone/records`, `/zones/:zone/batch` | `list/4`, `get/4`, `create/4`, `update/5`, `delete/4`, `check_distribution/4`, `batch_change/4` |
 | `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/3` |
 | `ReqDnsimple.Contact` | `/contacts` | `list/3`, `get/3`, `delete/3` |
+| `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries/:primary_server` | `get/3`, `delete/3`, `from_json/1` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |
 | `ReqDnsimple.Helper` | Req utilities | `append/2` (URL/param merging) |
