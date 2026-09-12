@@ -183,6 +183,8 @@ from the separate API that explicitly replaces a zone's NS records.
 
 ## Return Value Conventions
 
+- Response timestamps are parsed as `DateTime` values and normalized to UTC,
+  including valid ISO 8601 timestamps with nonzero offsets.
 - **Account.list/1** returns `[%Account{}]` directly (no tuple wrapper)
 - **Most list operations** return `{:ok, results}` or `{:ok, {results, pagination}}`
 - **Single-item gets** return `{:ok, struct}` or `{:error, :not_found}`

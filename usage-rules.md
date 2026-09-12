@@ -144,3 +144,5 @@ domain's registrar delegation and from the explicit zone-NS-update API.
   `{:error, %NimbleOptions.ValidationError{}}`
 - The `create` and `update` functions for ZoneRecord take keyword lists, not maps
 - `from_json/3` is a shared utility for converting DNSimple JSON responses to Elixir structs
+- Valid ISO 8601 response timestamps, including nonzero offsets, are normalized
+  to UTC `DateTime` values; missing and null timestamps remain `nil`

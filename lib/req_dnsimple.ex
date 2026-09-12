@@ -213,7 +213,7 @@ defmodule ReqDnsimple do
   end
 
   defp parse_datetime!(timestamp) do
-    {:ok, datetime, 0} = DateTime.from_iso8601(timestamp)
+    {:ok, datetime, _utc_offset} = DateTime.from_iso8601(timestamp)
     datetime
   end
 end
