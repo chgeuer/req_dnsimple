@@ -242,14 +242,16 @@ stricter rate limit than most DNSimple endpoints. It reports availability,
 premium status, and the optional trustee flag without using the paid Domain
 Research API, registering the domain, or retrying a rate-limited request.
 
-Disable future automatic renewal without modifying the domain otherwise:
+Enable or disable future automatic renewal without renewing or otherwise
+modifying the domain:
 
 ```elixir
+:ok = ReqDnsimple.Registrar.enable_auto_renewal(client, account_id, "example.com")
 :ok = ReqDnsimple.Registrar.disable_auto_renewal(client, account_id, "example.com")
 ```
 
-The operation accepts a domain name or integer ID, sends one bodyless request,
-and returns registry or TLD refusal responses as explicit errors.
+Both operations accept a domain name or integer ID, send one bodyless request,
+and return registry or TLD refusal responses as explicit errors.
 
 Submit a renewal without a price lookup or follow-up polling:
 
@@ -427,7 +429,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records/:ds_record` | `get/4`, `delete/4` |
 | `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards/:email_forward` | `get/4`, `delete/4` |
 | `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4`, `reject/3` |
-| `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `renew/3`, `renew/4`, `restore/3`, `restore/4`, `change_delegation/4` |
+| `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `enable_auto_renewal/3`, `renew/3`, `renew/4`, `restore/3`, `restore/4`, `change_delegation/4` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries/:primary_server` | `get/3`, `delete/3`, `from_json/1` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |
 | `ReqDnsimple.Helper` | Req utilities | `append/2` (URL/param merging) |

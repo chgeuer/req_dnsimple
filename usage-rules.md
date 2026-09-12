@@ -227,15 +227,16 @@ The update does not change registrar delegation.
 - `ReqDnsimple.DomainPush` — Accept a pending push with an explicit target-account
   contact, or reject it without deleting the source domain.
 - `ReqDnsimple.Registrar` — Check domain availability by name, explicitly
-  authorize transfer-out by name, disable automatic renewal by name or ID,
-  submit a renewal or expired-domain restore by name, or replace registrar
-  delegation by name or ID.
+  authorize transfer-out by name, enable or disable automatic renewal by name
+  or ID, submit a renewal or expired-domain restore by name, or replace
+  registrar delegation by name or ID.
   The low-volume check preserves availability, premium, and optional trustee
   flags without using paid Domain Research, registering the domain, or retrying
-  rate limits. Disabling auto-renewal is a single bodyless request and preserves
-  registry or TLD refusal errors. Renewal accepts an optional period and exact
-  premium-price string and returns a typed immediate or asynchronous renewal
-  job without preflight requests or polling. Restore accepts only an optional
+  rate limits. Changing auto-renewal is a single bodyless request and preserves
+  registry or TLD refusal errors without reading current state or immediately
+  renewing. Renewal accepts an optional period and exact premium-price string
+  and returns a typed immediate or asynchronous renewal job without preflight
+  requests or polling. Restore accepts only an optional
   exact premium-price string and returns a typed immediate or asynchronous
   restore job; DNSimple determines charges and eligibility, and refusals remain
   explicit errors without an automatic renewal, purchase, or poll. Delegation

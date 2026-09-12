@@ -2318,7 +2318,7 @@
       "method": "PUT",
       "path": "/{account}/registrar/domains/{domain}/auto_renewal",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-037",
       "br_issue_id": "bd-3an",
       "proposed_interfaces": [
@@ -2365,8 +2365,12 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.Registrar.enable_auto_renewal/3"
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/registrar_test.exs: enable_auto_renewal/3"
+      ]
     },
     {
       "operation_id": "enableDomainDnssec",

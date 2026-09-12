@@ -13,6 +13,9 @@ defmodule ReqDnsimple.Registrar do
       ReqDnsimple.Registrar.disable_auto_renewal(req, 1010, "example.test")
       #=> :ok
 
+      ReqDnsimple.Registrar.enable_auto_renewal(req, 1010, "example.test")
+      #=> :ok
+
       ReqDnsimple.Registrar.renew(req, 1010, "example.test",
         period: 2,
         premium_price: "20.00"
@@ -85,6 +88,7 @@ defmodule ReqDnsimple.Registrar do
   # https://developer.dnsimple.com/v2/registrar/#checkDomain
   # https://developer.dnsimple.com/v2/registrar/#authorizeDomainTransferOut
   # https://developer.dnsimple.com/v2/registrar/auto-renewal/#disableDomainAutoRenewal
+  # https://developer.dnsimple.com/v2/registrar/auto-renewal/#enableDomainAutoRenewal
   # https://developer.dnsimple.com/v2/registrar/#renewDomain
   # https://developer.dnsimple.com/v2/registrar/#restoreDomain
 
@@ -219,6 +223,50 @@ defmodule ReqDnsimple.Registrar do
       req =
         Req.merge(req,
           method: :delete,
+          url: "/:account_id/registrar/domains/:domain/auto_renewal",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain: domain],
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 204}} ->
+          :ok
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Enables automatic renewal for a domain.
+
+  This function sends exactly one bodyless request. It does not renew the
+  domain immediately or read its current state first.
+
+  Returns `:ok` only for the API's empty HTTP 204 response. Registry or TLD
+  refusal responses, other HTTP responses, validation failures, and transport
+  failures are returned as explicit error tuples.
+  """
+  @spec enable_auto_renewal(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer()
+        ) ::
+          :ok | {:error, term()}
+  def enable_auto_renewal(req, account_id, domain) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain],
+             @delegation_path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :put,
           url: "/:account_id/registrar/domains/:domain/auto_renewal",
           path_params_style: :colon,
           path_params: [account_id: account_id, domain: domain],
