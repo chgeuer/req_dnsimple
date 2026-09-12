@@ -174,8 +174,8 @@ defmodule ReqDnsimple.Tld do
               is_boolean(renewal_enabled) and is_boolean(transfer_enabled) and
               dnssec_interface_type in ["ds", "key"] and is_boolean(trustee_service_enabled) and
               is_boolean(trustee_service_required) do
-    with {:ok, name_server_min} <- decode_bound(Map.get(data, "name_server_min")),
-         {:ok, name_server_max} <- decode_bound(Map.get(data, "name_server_max")) do
+    with {:ok, name_server_min} <- decode_optional_bound(data, "name_server_min"),
+         {:ok, name_server_max} <- decode_optional_bound(data, "name_server_max") do
       {:ok,
        %__MODULE__{
          tld: tld,
@@ -200,12 +200,18 @@ defmodule ReqDnsimple.Tld do
 
   defp decode(_data), do: :error
 
-  defp decode_bound(nil), do: {:ok, nil}
+  defp decode_optional_bound(data, key) do
+    case Map.fetch(data, key) do
+      :error -> {:ok, nil}
+      {:ok, value} -> decode_bound(value)
+    end
+  end
+
   defp decode_bound(value) when is_integer(value), do: {:ok, value}
 
   defp decode_bound(value) when is_binary(value) do
-    case Integer.parse(value) do
-      {bound, ""} when bound >= 0 -> {:ok, bound}
+    case Regex.run(~r/\A[0-9]+\z/, value) do
+      [_digits] -> {:ok, String.to_integer(value)}
       _other -> :error
     end
   end

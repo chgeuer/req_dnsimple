@@ -32,7 +32,7 @@ defmodule ReqDnsimple.TldTest do
     test "getTld normalizes numeric-string bounds and preserves missing bounds" do
       string_bounds =
         tld_body()
-        |> put_in(["data", "name_server_min"], "2")
+        |> put_in(["data", "name_server_min"], "002")
         |> put_in(["data", "name_server_max"], "13")
 
       assert {:ok, %ReqDnsimple.Tld{name_server_min: 2, name_server_max: 13}} =
@@ -48,6 +48,40 @@ defmodule ReqDnsimple.TldTest do
                ReqDnsimple.Tld.get(client(200, missing_bounds), "com.au")
 
       assert_request(:get, "/v2/tlds/com.au", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "getTld rejects explicit null and signed strings for optional bounds" do
+      invalid_bounds = [
+        {"name_server_min", nil},
+        {"name_server_max", nil},
+        {"name_server_min", "+2"},
+        {"name_server_min", "-0"},
+        {"name_server_max", "+13"},
+        {"name_server_max", "-0"}
+      ]
+
+      for {field, value} <- invalid_bounds do
+        body = put_in(tld_body(), ["data", field], value)
+
+        assert {:error, %{status: 200, response: ^body}} =
+                 ReqDnsimple.Tld.get(client(200, body), "com")
+
+        assert_request(:get, "/v2/tlds/com", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "getTld preserves integer zero bounds" do
+      zero_bounds =
+        tld_body()
+        |> put_in(["data", "name_server_min"], 0)
+        |> put_in(["data", "name_server_max"], 0)
+
+      assert {:ok, %ReqDnsimple.Tld{name_server_min: 0, name_server_max: 0}} =
+               ReqDnsimple.Tld.get(client(200, zero_bounds), "com")
+
+      assert_request(:get, "/v2/tlds/com", %{}, nil)
       refute_received {:request, _request}
     end
 
@@ -73,6 +107,8 @@ defmodule ReqDnsimple.TldTest do
         put_in(tld_body(), ["data", "tld_type"], 4),
         put_in(tld_body(), ["data", "dnssec_interface_type"], "unsupported"),
         put_in(tld_body(), ["data", "name_server_min"], "2.5"),
+        put_in(tld_body(), ["data", "name_server_min"], "2\n"),
+        put_in(tld_body(), ["data", "name_server_max"], "13x"),
         put_in(tld_body(), ["data", "whois_privacy"], 1)
       ]
 
