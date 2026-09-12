@@ -218,6 +218,16 @@ arbitrary-precision decimal library.
 :ok = ReqDnsimple.Contact.delete(client, account_id, contact_id)
 ```
 
+### Domains
+
+```elixir
+{:ok, domain} = ReqDnsimple.Domain.get(client, account_id, "example.com")
+```
+
+Domain retrieval accepts a name or integer ID and returns registration state,
+privacy, renewal, and nullable expiry metadata in a typed
+`ReqDnsimple.Domain` struct.
+
 ### Domain pushes
 
 ```elixir
@@ -304,7 +314,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.ZoneRecord` | `/zones/:zone/records`, `/zones/:zone/batch` | `list/4`, `get/4`, `create/4`, `update/5`, `delete/4`, `check_distribution/4`, `batch_change/4` |
 | `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/3` |
 | `ReqDnsimple.Contact` | `/contacts` | `list/3`, `get/3`, `delete/3` |
-| `ReqDnsimple.Domain` | `/domains/:domain` | `delete/3` |
+| `ReqDnsimple.Domain` | `/domains/:domain` | `get/3`, `delete/3` |
 | `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records/:ds_record` | `delete/4` |
 | `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards/:email_forward` | `delete/4` |
 | `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4` |
