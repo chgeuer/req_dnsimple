@@ -489,8 +489,8 @@ defmodule ReqDnsimple.ZoneRecord do
          "deletes" => deletes
        })
        when is_list(creates) and is_list(updates) and is_list(deletes) do
-    with {:ok, created_records} <- decode_records(creates),
-         {:ok, updated_records} <- decode_records(updates),
+    with {:ok, created_records} <- decode_list(creates),
+         {:ok, updated_records} <- decode_list(updates),
          {:ok, deleted_records} <- decode_deleted_records(deletes) do
       {:ok,
        %BatchResult{
@@ -505,13 +505,17 @@ defmodule ReqDnsimple.ZoneRecord do
 
   defp decode_batch_result(_data), do: :error
 
-  defp decode_records(records) do
+  @doc false
+  @spec decode_list(term()) :: {:ok, [t()]} | :error
+  def decode_list(records) when is_list(records) do
     if Enum.all?(records, &valid_record_response?/1) do
       {:ok, Enum.map(records, &from_json/1)}
     else
       :error
     end
   end
+
+  def decode_list(_records), do: :error
 
   defp decode_deleted_records(records) do
     if Enum.all?(records, &match?(%{"id" => id} when is_integer(id), &1)) do

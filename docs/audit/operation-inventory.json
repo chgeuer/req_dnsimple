@@ -6668,7 +6668,7 @@
       "method": "PUT",
       "path": "/{account}/zones/{zone}/ns_records",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-090",
       "br_issue_id": "bd-39k",
       "proposed_interfaces": [
@@ -6720,8 +6720,12 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.Zone.update_ns_records/4"
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/zone_test.exs: update_ns_records/4"
+      ]
     },
     {
       "operation_id": "updateZoneRecord",

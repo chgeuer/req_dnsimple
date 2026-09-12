@@ -1,0 +1,178 @@
+defmodule ReqDnsimple.ZoneTest do
+  use ExUnit.Case, async: true
+
+  import ReqDnsimple.TestSupport
+
+  @record_data %{
+    "id" => 401,
+    "zone_id" => "example.test",
+    "parent_id" => nil,
+    "name" => "",
+    "content" => "ns1.example.test",
+    "ttl" => 3600,
+    "priority" => nil,
+    "type" => "NS",
+    "regions" => ["global"],
+    "system_record" => true,
+    "created_at" => "2026-09-01T10:00:00+02:00",
+    "updated_at" => "2026-09-01T10:30:00+02:00"
+  }
+
+  describe "update_ns_records/4" do
+    test "updateZoneNsRecords sends both selections once and returns typed records" do
+      attrs = [
+        ns_names: ["ns1.example.test", "ns2.example.test"],
+        ns_set_ids: [7]
+      ]
+
+      assert {:ok,
+              [
+                %ReqDnsimple.ZoneRecord{
+                  id: 401,
+                  zone_id: "example.test",
+                  parent_id: nil,
+                  name: "",
+                  content: "ns1.example.test",
+                  ttl: 3600,
+                  priority: nil,
+                  type: "NS",
+                  regions: ["global"],
+                  system_record: true,
+                  created_at: ~U[2026-09-01 08:00:00Z],
+                  updated_at: ~U[2026-09-01 08:30:00Z]
+                }
+              ]} =
+               ReqDnsimple.Zone.update_ns_records(
+                 client(200, %{"data" => [@record_data]}),
+                 1010,
+                 "example.test",
+                 attrs
+               )
+
+      assert_request(
+        :put,
+        "/v2/1010/zones/example.test/ns_records",
+        %{},
+        Map.new(attrs)
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "accepts either selector, numeric zone IDs, and explicit empty arrays" do
+      cases = [
+        {"example.test", [ns_names: ["ns1.example.test"]]},
+        {42, [ns_set_ids: [7]]},
+        {"example.test", [ns_names: []]},
+        {0, [ns_set_ids: []]}
+      ]
+
+      for {zone, attrs} <- cases do
+        assert {:ok, []} =
+                 ReqDnsimple.Zone.update_ns_records(
+                   client(200, %{"data" => []}),
+                   1010,
+                   zone,
+                   attrs
+                 )
+
+        assert_request(
+          :put,
+          "/v2/1010/zones/#{zone}/ns_records",
+          %{},
+          Map.new(attrs)
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "rejects missing, unknown, null, and incorrectly typed inputs before HTTP" do
+      request = client(200, %{"data" => []})
+
+      invalid_calls = [
+        {1010, "example.test", []},
+        {1010, "example.test", [unknown: []]},
+        {1010, "example.test", [ns_names: nil]},
+        {1010, "example.test", [ns_names: ["ns1.example.test", nil]]},
+        {1010, "example.test", [ns_set_ids: ["7"]]},
+        {1010, "example.test", %{"ns_names" => []}},
+        {"1010", "example.test", [ns_names: []]},
+        {1010, nil, [ns_names: []]},
+        {1010, 1.0, [ns_names: []]}
+      ]
+
+      for {account_id, zone, attrs} <- invalid_calls do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Zone.update_ns_records(request, account_id, zone, attrs)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "preserves documented and shared HTTP failures" do
+      for status <- [400, 401, 402, 403, 404, 412, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"ns_names" => ["is unavailable"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Zone.update_ns_records(
+                   client(status, body),
+                   1010,
+                   "example.test",
+                   ns_names: []
+                 )
+
+        assert_request(:put, "/v2/1010/zones/example.test/ns_records", %{}, %{
+          ns_names: []
+        })
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "returns explicit errors for malformed successful responses" do
+      malformed_bodies = [
+        %{},
+        %{"data" => nil},
+        %{"data" => %{}},
+        %{"data" => [Map.delete(@record_data, "ttl")]},
+        %{"data" => [Map.put(@record_data, "ttl", "3600")]},
+        %{"data" => [Map.put(@record_data, "type", "INVALID")]},
+        %{"data" => [Map.put(@record_data, "regions", [nil])]},
+        %{"data" => [Map.put(@record_data, "created_at", "not-a-timestamp")]}
+      ]
+
+      for body <- malformed_bodies do
+        assert {:error, %{status: 200, response: ^body}} =
+                 ReqDnsimple.Zone.update_ns_records(
+                   client(200, body),
+                   1010,
+                   "example.test",
+                   ns_set_ids: [7]
+                 )
+
+        assert_request(
+          :put,
+          "/v2/1010/zones/example.test/ns_records",
+          %{},
+          %{ns_set_ids: [7]}
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Zone.update_ns_records(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test",
+                 ns_names: ["ns1.example.test"]
+               )
+    end
+  end
+end

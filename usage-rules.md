@@ -59,6 +59,7 @@ Different modules use slightly different return conventions:
 | `BillingCharge.list/3` | `{:ok, [%BillingCharge{}, ...]}` | `{:error, reason}` |
 | `Zone.get_zone_file/3` | `{:ok, binary()}` | `{:error, reason}` |
 | `Zone.check_zone_distribution/3` | `{:ok, boolean()}` | `{:error, reason}` |
+| `Zone.update_ns_records/4` | `{:ok, [%ZoneRecord{}, ...]}` | `{:error, reason}` |
 
 `whoami/1` returns `{:user, user}` or `{:account, account}` according to the
 single non-null identity in the successful response, regardless of token prefix
@@ -158,7 +159,11 @@ client = ReqDnsimple.new_client(token)
 `ReqDnsimple.ns_records/3` reads all apex NS records by listing zone records
 with exact `name=""` and `type="NS"` filters. It is read-only and returns a bare
 list of `ReqDnsimple.NsRecord` structs. Apex zone records are separate from the
-domain's registrar delegation and from the explicit zone-NS-update API.
+domain's registrar delegation. `Zone.update_ns_records/4` explicitly replaces
+the hosted zone's apex NS records from `ns_names`, `ns_set_ids`, or both. It
+preserves explicit empty lists and performs no lookup or merge, so callers
+retaining vanity configuration must include those names or sets themselves.
+The update does not change registrar delegation.
 
 ## Module Reference
 
@@ -168,7 +173,8 @@ domain's registrar delegation and from the explicit zone-NS-update API.
 - `ReqDnsimple.Account` — Account listing. Struct: `id`, `email`, optional `name`,
   `plan_identifier`, `created_at`, `updated_at`. DNSimple's examples and official
   SDK include `name` even though its OpenAPI schema omits it.
-- `ReqDnsimple.Zone` — Zone listing, zone file retrieval, distribution checks.
+- `ReqDnsimple.Zone` — Zone listing, apex NS updates, zone file retrieval, and
+  distribution checks.
   Struct: `id`, `account_id`, `name`, `active`, `reverse`, `secondary`, timestamps.
   `last_transferred_at` is `nil` when a zone has not been transferred.
 - `ReqDnsimple.ZoneRecord` — Full CRUD, distribution checks, and atomic batch changes for DNS records.
@@ -194,7 +200,8 @@ domain's registrar delegation and from the explicit zone-NS-update API.
 
 - All API functions take a `Req.Request` client as the first argument
 - Account ID is required for most operations (obtained from `Account.list/1`)
-- Zone operations accept zone names (e.g., `"example.com"`) as identifiers
+- Zone operations accept zone names (e.g., `"example.com"`) as identifiers;
+  `Zone.update_ns_records/4` also accepts a numeric zone ID
 - Options are validated at call time via NimbleOptions — invalid options return
   `{:error, %NimbleOptions.ValidationError{}}`
 - The `create` and `update` functions for ZoneRecord take keyword lists, not maps

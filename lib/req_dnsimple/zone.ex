@@ -2,6 +2,20 @@ defmodule ReqDnsimple.Zone do
   @moduledoc """
   DNSimple Zone API functionality.
   Provides zone management operations.
+
+  ## Updating apex NS records
+
+      ReqDnsimple.Zone.update_ns_records(req, 1010, "example.test",
+        ns_names: ["ns1.example.test", "ns2.example.test"],
+        ns_set_ids: [7]
+      )
+      #=> {:ok, [%ReqDnsimple.ZoneRecord{}]}
+
+  At least one of `:ns_names` or `:ns_set_ids` is required; both may be sent,
+  and explicit empty lists are preserved. Callers retaining vanity name-server
+  configuration must include its names or sets themselves. This operation
+  replaces hosted-zone apex NS records only and does not change registrar
+  delegation.
   """
 
   # https://developer.dnsimple.com/v2/zones/
@@ -93,6 +107,86 @@ defmodule ReqDnsimple.Zone do
       params: params
     )
     |> Req.request()
+  end
+
+  @update_ns_records_path_schema [
+    account_id: [type: :integer, required: true],
+    zone: [type: {:or, [:string, :integer]}, required: true]
+  ]
+
+  @update_ns_records_schema [
+    ns_names: [type: {:list, :string}],
+    ns_set_ids: [type: {:list, :integer}]
+  ]
+
+  @doc """
+  Replaces a hosted zone's apex NS records.
+
+  Accepts explicit name-server names, name-server-set IDs, or both. This sends
+  exactly one update request and performs no lookup, merge, or delegation
+  change.
+  """
+  @spec update_ns_records(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          ReqDnsimple.zone_name() | ReqDnsimple.zone_id(),
+          keyword()
+        ) ::
+          {:ok, [ReqDnsimple.ZoneRecord.t()]} | {:error, term()}
+  def update_ns_records(req, account_id, zone, attrs) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, zone: zone],
+             @update_ns_records_path_schema
+           ),
+         {:ok, validated_attrs} <- validate_ns_record_attrs(attrs) do
+      req =
+        Req.merge(req,
+          method: :put,
+          url: "/:account_id/zones/:zone/ns_records",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, zone: zone],
+          json: Map.new(validated_attrs)
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
+          case ReqDnsimple.ZoneRecord.decode_list(data) do
+            {:ok, records} -> {:ok, records}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  defp validate_ns_record_attrs(attrs) when is_list(attrs) do
+    with {:ok, validated_attrs} <- NimbleOptions.validate(attrs, @update_ns_records_schema) do
+      if Keyword.has_key?(validated_attrs, :ns_names) or
+           Keyword.has_key?(validated_attrs, :ns_set_ids) do
+        {:ok, validated_attrs}
+      else
+        {:error,
+         %NimbleOptions.ValidationError{
+           message: "expected at least one of :ns_names or :ns_set_ids",
+           key: :ns_names,
+           value: nil
+         }}
+      end
+    end
+  end
+
+  defp validate_ns_record_attrs(attrs) do
+    {:error,
+     %NimbleOptions.ValidationError{
+       message: "expected a keyword list",
+       value: attrs
+     }}
   end
 
   @spec get_zone_file(Req.Request.t(), ReqDnsimple.account_id(), ReqDnsimple.zone_name()) ::

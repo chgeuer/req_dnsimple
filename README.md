@@ -160,6 +160,22 @@ Each list is optional; explicitly empty lists are sent unchanged.
 :ok = ReqDnsimple.ZoneRecord.delete(client, account_id, "example.com", record_id)
 ```
 
+### Update hosted-zone NS records
+
+```elixir
+{:ok, ns_records} =
+  ReqDnsimple.Zone.update_ns_records(client, account_id, "example.com",
+    ns_names: ["ns1.example.com", "ns2.example.com"],
+    ns_set_ids: [name_server_set_id]
+  )
+```
+
+Pass `ns_names`, `ns_set_ids`, or both; explicit empty lists are sent unchanged.
+The call replaces apex NS records in one request without first reading or
+merging existing records. To retain vanity name-server configuration, include
+its names or sets in the call. This hosted-zone operation does not change the
+domain's registrar delegation.
+
 ### Get a zone file
 
 ```elixir
@@ -240,7 +256,7 @@ a claim that every published DNSimple endpoint is wrapped.
 |--------|-------------|------------|
 | `ReqDnsimple` | Client, `/whoami`, apex NS record enumeration | `new_client/1`, `whoami/1`, `token_type/1`, `ns_records/3` |
 | `ReqDnsimple.Account` | `/accounts` | `list/1` |
-| `ReqDnsimple.Zone` | `/zones` | `list/3`, `get_zone_file/3`, `check_zone_distribution/3` |
+| `ReqDnsimple.Zone` | `/zones` | `list/3`, `update_ns_records/4`, `get_zone_file/3`, `check_zone_distribution/3` |
 | `ReqDnsimple.ZoneRecord` | `/zones/:zone/records`, `/zones/:zone/batch` | `list/4`, `get/4`, `create/4`, `update/5`, `delete/4`, `check_distribution/4`, `batch_change/4` |
 | `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/3` |
 | `ReqDnsimple.Contact` | `/contacts` | `list/3`, `get/3` |
