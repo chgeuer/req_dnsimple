@@ -4164,7 +4164,7 @@
       "method": "PUT",
       "path": "/{account}/secondary_dns/primaries/{primaryserver}/link",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-064",
       "br_issue_id": "bd-17x",
       "proposed_interfaces": [
@@ -4216,8 +4216,19 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "link",
+          "arity": 4
+        }
+      ],
+      "contract_tests": [
+        {
+          "file": "test/primary_server_test.exs",
+          "describe": "link/4"
+        }
+      ]
     },
     {
       "operation_id": "listAccounts",
