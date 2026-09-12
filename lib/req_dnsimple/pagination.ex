@@ -5,11 +5,13 @@ defmodule ReqDnsimple.Pagination do
 
   @spec all(keyword(), (keyword() -> {:ok, {[term()], metadata()}} | {:error, term()})) ::
           {:ok, [term()]} | {:error, term()}
-  def all(opts, fetch_page) when is_list(opts) and is_function(fetch_page, 1) do
-    if Keyword.has_key?(opts, :page) do
-      {:error, {:invalid_option, :page}}
-    else
-      fetch_all(opts, fetch_page, 1, nil, [])
+  def all(opts, fetch_page) when is_function(fetch_page, 1) do
+    with {:ok, opts} <- ReqDnsimple.validate_keyword_list(opts) do
+      if Keyword.has_key?(opts, :page) do
+        {:error, {:invalid_option, :page}}
+      else
+        fetch_all(opts, fetch_page, 1, nil, [])
+      end
     end
   end
 

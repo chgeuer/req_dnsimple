@@ -128,6 +128,9 @@ ReqDnsimple.ZoneRecord.list(client, account_id, zone, sort: [:type, name: :desc]
 ReqDnsimple.Zone.list(client, account_id, page: 2, per_page: 50)
 ```
 
+Malformed option and attribute containers return
+`{:error, %NimbleOptions.ValidationError{}}` without dispatching an HTTP request.
+
 Sort options are lists like `[:id, name: :desc]`. Supported fields are endpoint-specific:
 zones accept `:id` and `:name`; records accept `:id`, `:name`, `:content`, and `:type`;
 contacts accept `:id`, `:label`, and `:email`; billing charges accept only `:invoiced`.

@@ -142,6 +142,30 @@ defmodule ReqDnsimple do
     end
   end
 
+  @doc false
+  @spec validate_keyword_list(term()) ::
+          {:ok, keyword()} | {:error, NimbleOptions.ValidationError.t()}
+  def validate_keyword_list(value) do
+    if Keyword.keyword?(value) do
+      {:ok, value}
+    else
+      {:error,
+       %NimbleOptions.ValidationError{
+         message: "expected a keyword list",
+         value: value
+       }}
+    end
+  end
+
+  @doc false
+  @spec validate_options(term(), NimbleOptions.schema()) ::
+          {:ok, keyword()} | {:error, NimbleOptions.ValidationError.t()}
+  def validate_options(value, schema) do
+    with {:ok, options} <- validate_keyword_list(value) do
+      NimbleOptions.validate(options, schema)
+    end
+  end
+
   @spec from_json(map(), module(), keyword()) :: struct()
   def from_json(json, module, opts) when is_map(json) and is_atom(module) do
     regular_fields = Keyword.get(opts, :regular, [])

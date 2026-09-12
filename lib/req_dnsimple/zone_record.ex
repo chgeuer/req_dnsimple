@@ -88,7 +88,8 @@ defmodule ReqDnsimple.ZoneRecord do
   def list_page(req, account_id, zone_id, opts \\ []) do
     # https://developer.dnsimple.com/v2/zones/records/#listZoneRecords
 
-    with {:ok, validated_opts} <- NimbleOptions.validate(opts, @list_zone_records_schema) do
+    with {:ok, validated_opts} <-
+           ReqDnsimple.validate_options(opts, @list_zone_records_schema) do
       params =
         validated_opts
         |> ReqDnsimple.convert_sort_to_string()
@@ -239,10 +240,10 @@ defmodule ReqDnsimple.ZoneRecord do
 
   @spec create(Req.Request.t(), ReqDnsimple.account_id(), binary(), keyword()) ::
           {:ok, ReqDnsimple.ZoneRecord.t()} | {:error, term()}
-  def create(req, account_id, zone_id, attrs) when is_list(attrs) do
+  def create(req, account_id, zone_id, attrs) do
     # https://developer.dnsimple.com/v2/zones/records/#createZoneRecord
 
-    with {:ok, validated_attrs} <- NimbleOptions.validate(attrs, @zone_record_schema) do
+    with {:ok, validated_attrs} <- ReqDnsimple.validate_options(attrs, @zone_record_schema) do
       req =
         Req.merge(req,
           method: :post,
@@ -445,10 +446,11 @@ defmodule ReqDnsimple.ZoneRecord do
           keyword()
         ) ::
           {:ok, ReqDnsimple.ZoneRecord.t()} | {:error, term()}
-  def update(req, account_id, zone_id, record_id, attrs) when is_list(attrs) do
+  def update(req, account_id, zone_id, record_id, attrs) do
     # https://developer.dnsimple.com/v2/zones/records/#updateZoneRecord
 
-    with {:ok, validated_attrs} <- NimbleOptions.validate(attrs, @update_zone_record_schema) do
+    with {:ok, validated_attrs} <-
+           ReqDnsimple.validate_options(attrs, @update_zone_record_schema) do
       req =
         Req.merge(req,
           method: :patch,

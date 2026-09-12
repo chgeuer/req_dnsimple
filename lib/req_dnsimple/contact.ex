@@ -134,7 +134,7 @@ defmodule ReqDnsimple.Contact do
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, [__MODULE__.t()]} | {:error, term()}
   def list(req, account_id, opts \\ []) do
-    with {:ok, validated_opts} <- NimbleOptions.validate(opts, @list_contacts_schema),
+    with {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_contacts_schema),
          {:ok, %Req.Response{status: 200, body: %{"data" => data}}} <-
            request_list(req, account_id, validated_opts) do
       {:ok, Enum.map(data, &from_json/1)}
@@ -148,7 +148,7 @@ defmodule ReqDnsimple.Contact do
   @spec list_page(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, {[__MODULE__.t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
   def list_page(req, account_id, opts \\ []) do
-    with {:ok, validated_opts} <- NimbleOptions.validate(opts, @list_contacts_schema) do
+    with {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_contacts_schema) do
       case request_list(req, account_id, validated_opts) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data, "pagination" => pagination}}} ->
           {:ok, {Enum.map(data, &from_json/1), pagination}}
