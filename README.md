@@ -253,6 +253,17 @@ purchase:
 Registration, renewal, transfer, restore, and trustee prices remain JSON
 numbers. Optional transfer and trustee prices are `nil` when omitted.
 
+Retrieve the current transfer-lock state without changing it:
+
+```elixir
+{:ok, %ReqDnsimple.Registrar.TransferLock{enabled: enabled}} =
+  ReqDnsimple.Registrar.get_transfer_lock(client, account_id, "example.com")
+```
+
+The operation accepts a domain name or integer ID, sends one bodyless request,
+and returns both enabled and disabled states in the typed resource without a
+domain lookup or mutation.
+
 Enable or disable future automatic renewal without renewing or otherwise
 modifying the domain:
 
@@ -462,7 +473,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records/:ds_record` | `get/4`, `delete/4` |
 | `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards/:email_forward` | `get/4`, `delete/4` |
 | `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4`, `reject/3` |
-| `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `get_prices/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `enable_auto_renewal/3`, `enable_whois_privacy/3`, `renew/3`, `renew/4`, `restore/3`, `restore/4`, `get_delegation/3`, `change_delegation/4` |
+| `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `get_prices/3`, `get_transfer_lock/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `enable_auto_renewal/3`, `enable_whois_privacy/3`, `renew/3`, `renew/4`, `restore/3`, `restore/4`, `get_delegation/3`, `change_delegation/4` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries/:primary_server` | `get/3`, `delete/3`, `from_json/1` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |
 | `ReqDnsimple.Helper` | Req utilities | `append/2` (URL/param merging) |

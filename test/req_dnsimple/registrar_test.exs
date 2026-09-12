@@ -1262,6 +1262,128 @@ defmodule ReqDnsimple.RegistrarTest do
     end
   end
 
+  describe "get_transfer_lock/3" do
+    test "getDomainTransferLock sends one bodyless request and returns typed enabled state" do
+      body = %{"data" => %{"enabled" => true, "ignored" => "field"}}
+
+      assert {:ok, %ReqDnsimple.Registrar.TransferLock{enabled: true}} =
+               ReqDnsimple.Registrar.get_transfer_lock(
+                 client(200, body),
+                 1010,
+                 "example.test"
+               )
+
+      assert_request(
+        :get,
+        "/v2/1010/registrar/domains/example.test/transfer_lock",
+        %{},
+        nil
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "getDomainTransferLock preserves false and accepts integer, zero, and empty identifiers" do
+      assert {:ok, %ReqDnsimple.Registrar.TransferLock{enabled: false}} =
+               ReqDnsimple.Registrar.get_transfer_lock(
+                 client(200, %{"data" => %{"enabled" => false}}),
+                 0,
+                 42
+               )
+
+      assert_request(:get, "/v2/0/registrar/domains/42/transfer_lock", %{}, nil)
+      refute_received {:request, _request}
+
+      assert {:ok, %ReqDnsimple.Registrar.TransferLock{enabled: false}} =
+               ReqDnsimple.Registrar.get_transfer_lock(
+                 client(200, %{"data" => %{"enabled" => false}}),
+                 1010,
+                 ""
+               )
+
+      assert_request(:get, "/v2/1010/registrar/domains//transfer_lock", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "getDomainTransferLock rejects invalid path parameters before HTTP" do
+      request = client(200, %{"data" => %{"enabled" => true}})
+
+      for {account_id, domain} <- [
+            {"1010", "example.test"},
+            {nil, "example.test"},
+            {1010, nil},
+            {1010, 1.0},
+            {1010, []}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Registrar.get_transfer_lock(request, account_id, domain)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "getDomainTransferLock preserves documented and shared HTTP failures" do
+      for status <- [401, 403, 404, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"domain" => ["is unavailable"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Registrar.get_transfer_lock(
+                   client(status, body),
+                   1010,
+                   "example.test"
+                 )
+
+        assert_request(
+          :get,
+          "/v2/1010/registrar/domains/example.test/transfer_lock",
+          %{},
+          nil
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "getDomainTransferLock returns explicit errors for malformed success" do
+      for body <- [
+            %{},
+            %{"data" => nil},
+            %{"data" => %{}},
+            %{"data" => %{"enabled" => nil}},
+            %{"data" => %{"enabled" => "false"}},
+            %{"data" => %{"enabled" => 0}}
+          ] do
+        assert {:error, %{status: 200, response: ^body}} =
+                 ReqDnsimple.Registrar.get_transfer_lock(
+                   client(200, body),
+                   1010,
+                   "example.test"
+                 )
+
+        assert_request(
+          :get,
+          "/v2/1010/registrar/domains/example.test/transfer_lock",
+          %{},
+          nil
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "getDomainTransferLock preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Registrar.get_transfer_lock(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test"
+               )
+    end
+  end
+
   describe "get_delegation/3" do
     test "getDomainDelegation sends one bodyless request and preserves ordered hostnames" do
       name_servers = [

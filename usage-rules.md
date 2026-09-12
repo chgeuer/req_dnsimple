@@ -69,6 +69,7 @@ Different modules use slightly different return conventions:
 | `DomainPush.reject/3` | `:ok` | `{:error, reason}` |
 | `Registrar.check/3` | `{:ok, %Registrar.CheckResult{}}` | `{:error, reason}` |
 | `Registrar.get_prices/3` | `{:ok, %Registrar.Prices{}}` | `{:error, reason}` |
+| `Registrar.get_transfer_lock/3` | `{:ok, %Registrar.TransferLock{}}` | `{:error, reason}` |
 | `Registrar.enable_whois_privacy/3` | `{:ok, %Registrar.WhoisPrivacy{}}` | `{:error, reason}` |
 | `Registrar.renew/3,4` | `{:ok, %Registrar.Renewal{}}` | `{:error, reason}` |
 | `Registrar.restore/3,4` | `{:ok, %Registrar.Restore{}}` | `{:error, reason}` |
@@ -230,16 +231,18 @@ The update does not change registrar delegation.
 - `ReqDnsimple.DomainPush` — Accept a pending push with an explicit target-account
   contact, or reject it without deleting the source domain.
 - `ReqDnsimple.Registrar` — Check domain availability by name, explicitly
-  retrieve registration and lifecycle prices by name, authorize transfer-out by
-  name, enable or disable automatic renewal by name or ID, enable WHOIS privacy
-  by name or ID, submit a renewal or expired-domain restore by name, or retrieve
-  or replace registrar delegation by name or ID.
+  retrieve registration and lifecycle prices by name, retrieve transfer-lock
+  state by name or ID, authorize transfer-out by name, enable or disable
+  automatic renewal by name or ID, enable WHOIS privacy by name or ID, submit a
+  renewal or expired-domain restore by name, or retrieve or replace registrar
+  delegation by name or ID.
   The low-volume check preserves availability, premium, and optional trustee
   flags without using paid Domain Research, registering the domain, or retrying
   rate limits. Price retrieval preserves numeric registration, renewal,
   transfer, restore, and trustee values; optional transfer and trustee prices
-  are `nil` when omitted, and no purchase is initiated. Changing auto-renewal
-  is a single bodyless request and preserves
+  are `nil` when omitted, and no purchase is initiated. Transfer-lock retrieval
+  preserves both boolean states without reading the domain or changing the
+  lock. Changing auto-renewal is a single bodyless request and preserves
   registry or TLD refusal errors without reading current state or immediately
   renewing. Renewal accepts an optional period and exact premium-price string
   and returns a typed immediate or asynchronous renewal job without preflight
