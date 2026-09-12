@@ -15,6 +15,16 @@ defmodule ReqDnsimple.Certificate do
       )
       #=> {:ok, %ReqDnsimple.Certificate.Purchase{}}
 
+      ReqDnsimple.Certificate.purchase_letsencrypt_renewal(
+        req,
+        1010,
+        "example.test",
+        202,
+        auto_renew: false,
+        signature_algorithm: "RSA"
+      )
+      #=> {:ok, %ReqDnsimple.Certificate.Renewal{}}
+
       ReqDnsimple.Certificate.download(req, 1010, "example.test", 202)
       #=> {:ok, %ReqDnsimple.Certificate.Download{}}
 
@@ -86,6 +96,32 @@ defmodule ReqDnsimple.Certificate do
     defstruct [:id, :certificate_id, :state, :auto_renew, :created_at, :updated_at]
   end
 
+  defmodule Renewal do
+    @moduledoc """
+    A Let's Encrypt certificate renewal order awaiting separate issuance.
+    """
+
+    @type t :: %__MODULE__{
+            id: integer(),
+            old_certificate_id: integer(),
+            new_certificate_id: integer(),
+            state: binary(),
+            auto_renew: boolean(),
+            created_at: DateTime.t(),
+            updated_at: DateTime.t()
+          }
+
+    defstruct [
+      :id,
+      :old_certificate_id,
+      :new_certificate_id,
+      :state,
+      :auto_renew,
+      :created_at,
+      :updated_at
+    ]
+  end
+
   @path_schema [
     account_id: [type: :integer, required: true],
     domain: [type: {:or, [:string, :integer]}, required: true],
@@ -101,6 +137,11 @@ defmodule ReqDnsimple.Certificate do
     auto_renew: [type: :boolean],
     name: [type: :string],
     alternate_names: [type: {:list, :string}],
+    signature_algorithm: [type: {:in, ["ECDSA", "RSA"]}]
+  ]
+
+  @renewal_schema [
+    auto_renew: [type: :boolean],
     signature_algorithm: [type: {:in, ["ECDSA", "RSA"]}]
   ]
 
@@ -150,6 +191,71 @@ defmodule ReqDnsimple.Certificate do
         {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
           case decode_purchase(data) do
             {:ok, purchase} -> {:ok, purchase}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Orders a Let's Encrypt renewal without issuing or deploying it.
+
+  Optional settings are `:auto_renew` and `:signature_algorithm` (`"ECDSA"` or
+  `"RSA"`). Omitted settings are left to DNSimple's server defaults, while an
+  explicit `false` value is preserved.
+
+  Returns a typed `Renewal` with distinct old and new certificate IDs. The
+  function sends exactly one request and does not issue the renewal or perform
+  any other follow-up operation.
+  """
+  @spec purchase_letsencrypt_renewal(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer(),
+          integer(),
+          keyword()
+        ) ::
+          {:ok, Renewal.t()} | {:error, term()}
+  def purchase_letsencrypt_renewal(req, account_id, domain, certificate_id, attrs \\ []) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [
+               account_id: account_id,
+               domain: domain,
+               certificate_id: certificate_id
+             ],
+             @path_schema
+           ),
+         {:ok, validated_attrs} <- validate_attrs(attrs, @renewal_schema) do
+      request_options = [
+        method: :post,
+        url: "/:account_id/domains/:domain/certificates/letsencrypt/:certificate_id/renewals",
+        path_params_style: :colon,
+        path_params: [
+          account_id: account_id,
+          domain: domain,
+          certificate_id: certificate_id
+        ],
+        retry: false
+      ]
+
+      request_options =
+        if validated_attrs == [] do
+          request_options
+        else
+          Keyword.put(request_options, :json, Map.new(validated_attrs))
+        end
+
+      case Req.request(Req.merge(req, request_options)) do
+        {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
+          case decode_renewal(data) do
+            {:ok, renewal} -> {:ok, renewal}
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -326,6 +432,48 @@ defmodule ReqDnsimple.Certificate do
        value: attrs
      }}
   end
+
+  defp validate_attrs(attrs, schema) when is_list(attrs) do
+    NimbleOptions.validate(attrs, schema)
+  end
+
+  defp validate_attrs(attrs, _schema) do
+    {:error,
+     %NimbleOptions.ValidationError{
+       message: "expected a keyword list",
+       value: attrs
+     }}
+  end
+
+  defp decode_renewal(%{
+         "id" => id,
+         "old_certificate_id" => old_certificate_id,
+         "new_certificate_id" => new_certificate_id,
+         "state" => state,
+         "auto_renew" => auto_renew,
+         "created_at" => created_at,
+         "updated_at" => updated_at
+       })
+       when is_integer(id) and is_integer(old_certificate_id) and
+              is_integer(new_certificate_id) and
+              state in ["cancelled", "new", "renewing", "renewed", "failed"] and
+              is_boolean(auto_renew) do
+    with {:ok, created_at} <- parse_datetime(created_at),
+         {:ok, updated_at} <- parse_datetime(updated_at) do
+      {:ok,
+       %Renewal{
+         id: id,
+         old_certificate_id: old_certificate_id,
+         new_certificate_id: new_certificate_id,
+         state: state,
+         auto_renew: auto_renew,
+         created_at: created_at,
+         updated_at: updated_at
+       }}
+    end
+  end
+
+  defp decode_renewal(_data), do: :error
 
   defp decode_purchase(%{
          "id" => id,

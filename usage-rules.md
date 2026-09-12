@@ -68,6 +68,7 @@ Different modules use slightly different return conventions:
 | `DomainPush.accept/4` | `:ok` | `{:error, reason}` |
 | `DomainPush.reject/3` | `:ok` | `{:error, reason}` |
 | `Certificate.purchase_letsencrypt/3,4` | `{:ok, %Certificate.Purchase{}}` | `{:error, reason}` |
+| `Certificate.purchase_letsencrypt_renewal/4,5` | `{:ok, %Certificate.Renewal{}}` | `{:error, reason}` |
 | `Certificate.get/4` | `{:ok, %Certificate{}}` | `{:error, reason}` |
 | `Certificate.download/4` | `{:ok, %Certificate.Download{}}` | `{:error, reason}` |
 | `Certificate.get_private_key/4` | `{:ok, %Certificate.PrivateKey{}}` | `{:error, reason}` |
@@ -237,12 +238,12 @@ The update does not change registrar delegation.
   does not send mail or modify MX records.
 - `ReqDnsimple.DomainPush` — Accept a pending push with an explicit target-account
   contact, or reject it without deleting the source domain.
-- `ReqDnsimple.Certificate` — Order a typed Let's Encrypt purchase without
-  automatic issuance or deployment; retrieve typed certificate metadata,
-  including pending nullable CSR/expiry values; download its server, nullable
-  root, and ordered intermediate chain; or retrieve its private key as
-  byte-preserved PEM strings without parsing, logging, persisting, or writing
-  files.
+- `ReqDnsimple.Certificate` — Order typed Let's Encrypt purchases and renewals
+  without automatic issuance or deployment; renewal orders preserve distinct
+  old and new certificate IDs. Retrieve typed certificate metadata, including
+  pending nullable CSR/expiry values; download its server, nullable root, and
+  ordered intermediate chain; or retrieve its private key as byte-preserved PEM
+  strings without parsing, logging, persisting, or writing files.
 - `ReqDnsimple.RegistrantChange` — Typed retrieval of one registrar
   contact-change request by integer ID. Registry extended attributes retain
   string keys and values, and the registry lock-lift date may be `nil`.

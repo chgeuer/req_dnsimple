@@ -217,6 +217,22 @@ returns separate purchase and certificate IDs; it does not issue, download, or
 deploy the certificate automatically.
 
 ```elixir
+{:ok, %ReqDnsimple.Certificate.Renewal{} = renewal} =
+  ReqDnsimple.Certificate.purchase_letsencrypt_renewal(
+    client,
+    account_id,
+    "example.com",
+    certificate_id,
+    auto_renew: false,
+    signature_algorithm: "RSA"
+  )
+```
+
+Renewal ordering returns distinct old and new certificate IDs and does not
+issue or deploy the replacement certificate automatically. Omitting attributes
+leaves renewal defaults to DNSimple.
+
+```elixir
 {:ok, %ReqDnsimple.Certificate{} = certificate} =
   ReqDnsimple.Certificate.get(client, account_id, "example.com", certificate_id)
 ```

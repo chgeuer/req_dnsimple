@@ -6189,7 +6189,7 @@
       "method": "POST",
       "path": "/{account}/domains/{domain}/certificates/letsencrypt/{certificate}/renewals",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-080",
       "br_issue_id": "bd-3g9",
       "proposed_interfaces": [
@@ -6248,8 +6248,20 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "purchase_letsencrypt_renewal",
+          "arity": 5,
+          "arities": [
+            4,
+            5
+          ]
+        }
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/certificate_test.exs"
+      ]
     },
     {
       "operation_id": "queryDnsAnalytics",
