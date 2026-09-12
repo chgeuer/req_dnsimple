@@ -293,15 +293,11 @@ defmodule ReqDnsimple.Service do
     end
   end
 
-  defp validate_attrs(attrs) when is_list(attrs) do
-    with {:ok, validated_attrs} <- NimbleOptions.validate(attrs, @apply_schema),
+  defp validate_attrs(attrs) do
+    with {:ok, validated_attrs} <- ReqDnsimple.validate_options(attrs, @apply_schema),
          :ok <- validate_settings(validated_attrs) do
       {:ok, validated_attrs}
     end
-  end
-
-  defp validate_attrs(attrs) do
-    validation_error("expected a keyword list", attrs)
   end
 
   defp validate_settings(attrs) do

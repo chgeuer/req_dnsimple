@@ -228,6 +228,8 @@ defmodule ReqDnsimple.ServiceTest do
         {1010, "example.test", "offline-service", [settings: []]},
         {1010, "example.test", "offline-service", [settings: %{app: "fake"}]},
         {1010, "example.test", "offline-service", [unknown: true]},
+        {1010, "example.test", "offline-service", [:invalid]},
+        {1010, "example.test", "offline-service", [{:name}]},
         {1010, "example.test", "offline-service", %{settings: %{}}}
       ]
 
