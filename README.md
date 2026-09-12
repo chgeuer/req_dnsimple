@@ -292,9 +292,15 @@ not disable DNSSEC or delete hosted-zone records.
 ### Email forwards
 
 ```elixir
+{:ok, email_forward} =
+  ReqDnsimple.EmailForward.get(client, account_id, "example.com", email_forward_id)
+
 :ok = ReqDnsimple.EmailForward.delete(client, account_id, "example.com", email_forward_id)
 ```
 
+Retrieval returns a typed `ReqDnsimple.EmailForward` with its full alias email,
+destination email, activation state, and timestamps. The returned `alias_email`
+is distinct from the local-part `alias_name` used when creating a forward.
 Deletion removes only the selected email forward. It does not send mail or
 modify the domain's MX records.
 
@@ -344,7 +350,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.Domain` | `/domains/:domain` | `get/3`, `delete/3` |
 | `ReqDnsimple.DomainResearch` | `/domains/research/status` | `get_status/3` |
 | `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records/:ds_record` | `get/4`, `delete/4` |
-| `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards/:email_forward` | `delete/4` |
+| `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards/:email_forward` | `get/4`, `delete/4` |
 | `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries/:primary_server` | `get/3`, `delete/3`, `from_json/1` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |

@@ -3166,7 +3166,7 @@
       "method": "GET",
       "path": "/{account}/domains/{domain}/email_forwards/{emailforward}",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-051",
       "br_issue_id": "bd-cln",
       "proposed_interfaces": [
@@ -3218,8 +3218,17 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.EmailForward",
+          "function": "get",
+          "arity": 4,
+          "signature": "ReqDnsimple.EmailForward.get(req, account_id, domain, email_forward_id)"
+        }
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/email_forward_test.exs"
+      ]
     },
     {
       "operation_id": "getPrimaryServer",

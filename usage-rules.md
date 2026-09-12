@@ -63,6 +63,7 @@ Different modules use slightly different return conventions:
 | `Dnssec.disable/3` | `:ok` | `{:error, reason}` |
 | `DelegationSignerRecord.get/4` | `{:ok, %DelegationSignerRecord{}}` | `{:error, reason}` |
 | `DelegationSignerRecord.delete/4` | `:ok` | `{:error, reason}` |
+| `EmailForward.get/4` | `{:ok, %EmailForward{}}` | `{:error, reason}` |
 | `EmailForward.delete/4` | `:ok` | `{:error, reason}` |
 | `DomainPush.accept/4` | `:ok` | `{:error, reason}` |
 | `BillingCharge.list/3` | `{:ok, [%BillingCharge{}, ...]}` | `{:error, reason}` |
@@ -215,8 +216,10 @@ The update does not change registrar delegation.
   of one registry delegation-signer record by domain name or ID and record ID.
   DS and KEY proof fields that do not apply are `nil`. Deletion does not disable
   DNSSEC or delete hosted-zone records.
-- `ReqDnsimple.EmailForward` — Explicit deletion of one domain email forward by
-  domain name or ID and forward ID. It does not send mail or modify MX records.
+- `ReqDnsimple.EmailForward` — Typed retrieval and explicit deletion of one
+  domain email forward by domain name or ID and forward ID. Retrieval preserves
+  the full alias email, destination, activation state, and timestamps. Deletion
+  does not send mail or modify MX records.
 - `ReqDnsimple.DomainPush` — Accept a pending push with an explicit target-account contact.
 - `ReqDnsimple.PrimaryServer` — Secondary-DNS primary server retrieval and
   explicit deletion. Struct: `id`, `account_id`, `name`, `ip`, integer `port`,
