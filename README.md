@@ -289,6 +289,18 @@ Domain retrieval accepts a name or integer ID and returns registration state,
 privacy, renewal, and nullable expiry metadata in a typed
 `ReqDnsimple.Domain` struct.
 
+### TLD extended attributes
+
+```elixir
+{:ok, attributes} = ReqDnsimple.Tld.list_extended_attributes(client, "co.uk")
+```
+
+The non-paginated result contains typed
+`ReqDnsimple.Tld.ExtendedAttribute` values and their typed options. Registry
+attribute names and values remain strings, free-text attributes retain
+`options: []`, and an omitted display title is `nil`. This retrieval does not
+submit registrant data or initiate a registration or transfer.
+
 ### Registrar operations
 
 Check a domain before registration or transfer:
@@ -625,6 +637,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards/:email_forward` | `get/4`, `delete/4` |
 | `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4`, `reject/3` |
 | `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `get_prices/3`, `get_transfer_lock/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `enable_auto_renewal/3`, `enable_whois_privacy/3`, `register/4`, `transfer/4`, `renew/3`, `renew/4`, `restore/3`, `restore/4`, `get_delegation/3`, `change_delegation/4` |
+| `ReqDnsimple.Tld` | `/tlds/:tld`, `/tlds/:tld/extended_attributes` | `get/2`, `list_extended_attributes/2` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries/:primary_server` | `get/3`, `delete/3`, `from_json/1` |
 | `ReqDnsimple.Service` | `/services/:service`, `/domains/:domain/services/:service` | `get/2`, `apply/4`, `apply/5`, `unapply/4` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |

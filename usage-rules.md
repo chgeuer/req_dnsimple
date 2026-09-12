@@ -264,6 +264,10 @@ The update does not change registrar delegation.
 - `ReqDnsimple.RegistrantChange` — Typed retrieval of one registrar
   contact-change request by integer ID. Registry extended attributes retain
   string keys and values, and the registry lock-lift date may be `nil`.
+- `ReqDnsimple.Tld` — Retrieve one TLD's capabilities or its non-paginated,
+  typed registry extended-attribute definitions. Arbitrary attribute names and
+  option values remain strings, free-text attributes retain empty option lists,
+  and omitted display titles remain `nil`.
 - `ReqDnsimple.Registrar` — Check domain availability by name, explicitly
   retrieve registration and lifecycle prices by name, retrieve transfer-lock
   state by name or ID, authorize transfer-out by name, enable or disable

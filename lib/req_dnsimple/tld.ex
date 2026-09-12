@@ -6,9 +6,45 @@ defmodule ReqDnsimple.Tld do
 
       {:ok, tld} = ReqDnsimple.Tld.get(client, "com.au")
 
+  Retrieve the registry's typed extended-attribute definitions:
+
+      {:ok, attributes} = ReqDnsimple.Tld.list_extended_attributes(client, "co.uk")
+
   Name-server bounds are normalized to integers when DNSimple returns numeric
-  strings. A bound omitted by the registry remains `nil`.
+  strings. A bound omitted by the registry remains `nil`. Extended attributes
+  may omit their display title, and free-text attributes have an empty options
+  list.
   """
+
+  defmodule ExtendedAttribute do
+    @moduledoc """
+    A registry-specific extended attribute accepted for a TLD.
+    """
+
+    defmodule Option do
+      @moduledoc """
+      One allowed value for a registry-specific extended attribute.
+      """
+
+      @type t :: %__MODULE__{
+              title: binary(),
+              value: binary(),
+              description: binary()
+            }
+
+      defstruct ~w(title value description)a
+    end
+
+    @type t :: %__MODULE__{
+            name: binary(),
+            description: binary(),
+            required: boolean(),
+            options: [Option.t()],
+            title: binary() | nil
+          }
+
+    defstruct ~w(name description required options title)a
+  end
 
   @type t :: %__MODULE__{
           tld: binary(),
@@ -81,6 +117,41 @@ defmodule ReqDnsimple.Tld do
     end
   end
 
+  @doc """
+  Retrieves the registry-specific extended-attribute definitions for a TLD.
+
+  The non-paginated result preserves arbitrary registry names and option values
+  as strings. An omitted attribute title is returned as `nil`.
+  """
+  @spec list_extended_attributes(Req.Request.t(), binary()) ::
+          {:ok, [ExtendedAttribute.t()]} | {:error, term()}
+  def list_extended_attributes(req, tld) do
+    with {:ok, _validated_path} <- NimbleOptions.validate([tld: tld], @path_schema) do
+      req =
+        Req.merge(req,
+          method: :get,
+          url: "/tlds/:tld/extended_attributes",
+          path_params_style: :colon,
+          path_params: [tld: tld]
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response}
+        when is_list(data) ->
+          case decode_extended_attributes(data) do
+            {:ok, attributes} -> {:ok, attributes}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
   defp decode(
          %{
            "tld" => tld,
@@ -140,4 +211,67 @@ defmodule ReqDnsimple.Tld do
   end
 
   defp decode_bound(_value), do: :error
+
+  defp decode_extended_attributes(data) do
+    Enum.reduce_while(data, {:ok, []}, fn item, {:ok, attributes} ->
+      case decode_extended_attribute(item) do
+        {:ok, attribute} -> {:cont, {:ok, [attribute | attributes]}}
+        :error -> {:halt, :error}
+      end
+    end)
+    |> case do
+      {:ok, attributes} -> {:ok, Enum.reverse(attributes)}
+      :error -> :error
+    end
+  end
+
+  defp decode_extended_attribute(
+         %{
+           "name" => name,
+           "description" => description,
+           "required" => required,
+           "options" => options
+         } = data
+       )
+       when is_binary(name) and is_binary(description) and is_boolean(required) and
+              is_list(options) do
+    title = Map.get(data, "title")
+
+    with true <- is_nil(title) or is_binary(title),
+         {:ok, options} <- decode_extended_attribute_options(options) do
+      {:ok,
+       %ExtendedAttribute{
+         name: name,
+         description: description,
+         required: required,
+         options: options,
+         title: title
+       }}
+    else
+      _invalid -> :error
+    end
+  end
+
+  defp decode_extended_attribute(_data), do: :error
+
+  defp decode_extended_attribute_options(options) do
+    Enum.reduce_while(options, {:ok, []}, fn
+      %{"title" => title, "value" => value, "description" => description}, {:ok, decoded_options}
+      when is_binary(title) and is_binary(value) and is_binary(description) ->
+        option = %ExtendedAttribute.Option{
+          title: title,
+          value: value,
+          description: description
+        }
+
+        {:cont, {:ok, [option | decoded_options]}}
+
+      _invalid, _acc ->
+        {:halt, :error}
+    end)
+    |> case do
+      {:ok, options} -> {:ok, Enum.reverse(options)}
+      :error -> :error
+    end
+  end
 end

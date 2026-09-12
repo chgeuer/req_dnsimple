@@ -106,6 +106,104 @@ defmodule ReqDnsimple.TldTest do
     end
   end
 
+  describe "list_extended_attributes/2" do
+    test "getTldExtendedAttributes retrieves typed definitions without pagination or a body" do
+      body = extended_attributes_body()
+
+      assert {:ok,
+              [
+                %ReqDnsimple.Tld.ExtendedAttribute{
+                  name: "uk_legal_type",
+                  description: "Legal type of the registrant",
+                  required: true,
+                  title: "Legal type",
+                  options: [
+                    %ReqDnsimple.Tld.ExtendedAttribute.Option{
+                      title: "Individual",
+                      value: "IND",
+                      description: "A private individual"
+                    }
+                  ]
+                },
+                %ReqDnsimple.Tld.ExtendedAttribute{
+                  name: "x-registry-free-text",
+                  description: "",
+                  required: false,
+                  title: nil,
+                  options: []
+                }
+              ]} = ReqDnsimple.Tld.list_extended_attributes(client(200, body), "co.uk")
+
+      assert_request(:get, "/v2/tlds/co.uk/extended_attributes", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "getTldExtendedAttributes accepts an empty suffix and rejects invalid types before HTTP" do
+      assert {:ok, []} =
+               ReqDnsimple.Tld.list_extended_attributes(
+                 client(200, %{"data" => []}),
+                 ""
+               )
+
+      assert_request(:get, "/v2/tlds//extended_attributes", %{}, nil)
+
+      request = client(200, %{"data" => []})
+
+      for tld <- [nil, 1, 1.5, [], %{}] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Tld.list_extended_attributes(request, tld)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "getTldExtendedAttributes rejects malformed successful envelopes and payloads" do
+      malformed_bodies = [
+        %{},
+        %{"data" => nil},
+        %{"data" => %{}},
+        put_in(extended_attributes_body(), ["data", Access.at(0), "required"], 1),
+        put_in(extended_attributes_body(), ["data", Access.at(0), "options"], nil),
+        put_in(
+          extended_attributes_body(),
+          ["data", Access.at(0), "options", Access.at(0), "value"],
+          1
+        )
+      ]
+
+      for body <- malformed_bodies do
+        assert {:error, %{status: 200, response: ^body}} =
+                 ReqDnsimple.Tld.list_extended_attributes(client(200, body), "com")
+
+        assert_request(:get, "/v2/tlds/com/extended_attributes", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "getTldExtendedAttributes preserves documented and shared HTTP failures" do
+      for status <- [401, 403, 404, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"tld" => ["was not found"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Tld.list_extended_attributes(client(status, body), "com")
+
+        assert_request(:get, "/v2/tlds/com/extended_attributes", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "getTldExtendedAttributes preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Tld.list_extended_attributes(
+                 transport_error_client(:timeout),
+                 "com"
+               )
+    end
+  end
+
   defp tld_body do
     %{
       "data" => %{
@@ -124,6 +222,32 @@ defmodule ReqDnsimple.TldTest do
         "trustee_service_enabled" => false,
         "trustee_service_required" => false
       }
+    }
+  end
+
+  defp extended_attributes_body do
+    %{
+      "data" => [
+        %{
+          "name" => "uk_legal_type",
+          "description" => "Legal type of the registrant",
+          "required" => true,
+          "title" => "Legal type",
+          "options" => [
+            %{
+              "title" => "Individual",
+              "value" => "IND",
+              "description" => "A private individual"
+            }
+          ]
+        },
+        %{
+          "name" => "x-registry-free-text",
+          "description" => "",
+          "required" => false,
+          "options" => []
+        }
+      ]
     }
   end
 end

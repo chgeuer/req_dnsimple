@@ -3740,7 +3740,7 @@
       "method": "GET",
       "path": "/tlds/{tld}/extended_attributes",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-058",
       "br_issue_id": "bd-3ip",
       "proposed_interfaces": [
@@ -3782,8 +3782,17 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.Tld",
+          "function": "list_extended_attributes",
+          "arity": 2,
+          "signature": "ReqDnsimple.Tld.list_extended_attributes(req, tld)"
+        }
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/tld_test.exs"
+      ]
     },
     {
       "operation_id": "getWebhook",
