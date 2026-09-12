@@ -590,6 +590,17 @@ confirmation.
 
 ```elixir
 {:ok, delegation_signer_record} =
+  ReqDnsimple.DelegationSignerRecord.create(
+    client,
+    account_id,
+    "example.com",
+    algorithm: "13",
+    digest: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    digest_type: "2",
+    keytag: "12345"
+  )
+
+{:ok, delegation_signer_record} =
   ReqDnsimple.DelegationSignerRecord.get(
     client,
     account_id,
@@ -606,8 +617,9 @@ confirmation.
   )
 ```
 
-Retrieval returns a typed `ReqDnsimple.DelegationSignerRecord`; DS and KEY proof
-fields that do not apply to the returned representation are `nil`.
+Creation accepts a string algorithm with either a complete DS tuple or KEY
+`public_key`, and returns a typed `ReqDnsimple.DelegationSignerRecord`. DS and
+KEY proof fields that do not apply to the returned representation are `nil`.
 Deletion removes only the selected registry delegation-signer record. It does
 not disable DNSSEC or delete hosted-zone records.
 
@@ -746,7 +758,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.Contact` | `/contacts` | `list/3`, `get/3`, `delete/3` |
 | `ReqDnsimple.Domain` | `/domains`, `/domains/:domain` | `create/3`, `get/3`, `delete/3` |
 | `ReqDnsimple.DomainResearch` | `/domains/research/status` | `get_status/3` |
-| `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records/:ds_record` | `get/4`, `delete/4` |
+| `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records[/:ds_record]` | `create/4`, `get/4`, `delete/4` |
 | `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards/:email_forward` | `get/4`, `delete/4` |
 | `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4`, `reject/3` |
 | `ReqDnsimple.VanityNameServer` | `/vanity/:domain` | `enable/3`, `disable/3` |

@@ -71,6 +71,7 @@ Different modules use slightly different return conventions:
 | `Template.delete/3` | `:ok` | `{:error, reason}` |
 | `TemplateRecord.get/4` | `{:ok, %TemplateRecord{}}` | `{:error, reason}` |
 | `TemplateRecord.delete/4` | `:ok` | `{:error, reason}` |
+| `DelegationSignerRecord.create/4` | `{:ok, %DelegationSignerRecord{}}` | `{:error, reason}` |
 | `DelegationSignerRecord.get/4` | `{:ok, %DelegationSignerRecord{}}` | `{:error, reason}` |
 | `DelegationSignerRecord.delete/4` | `:ok` | `{:error, reason}` |
 | `EmailForward.get/4` | `{:ok, %EmailForward{}}` | `{:error, reason}` |
@@ -277,8 +278,9 @@ not contact the callback URL, inspect deliveries, or list registrations first.
   and parses creation/update timestamps. For hosted-only domains, registry
   delegation-signer records must be removed first; disablement does not remove
   them or prompt for confirmation.
-- `ReqDnsimple.DelegationSignerRecord` — Typed retrieval and explicit deletion
-  of one registry delegation-signer record by domain name or ID and record ID.
+- `ReqDnsimple.DelegationSignerRecord` — Typed creation, retrieval, and explicit
+  deletion of registry delegation-signer records by domain name or ID. Creation
+  accepts a string algorithm with either a complete DS tuple or KEY public key.
   DS and KEY proof fields that do not apply are `nil`. Deletion does not disable
   DNSSEC or delete hosted-zone records.
 - `ReqDnsimple.EmailForward` — Typed retrieval and explicit deletion of one

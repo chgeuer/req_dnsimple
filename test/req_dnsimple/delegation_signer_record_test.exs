@@ -15,6 +15,213 @@ defmodule ReqDnsimple.DelegationSignerRecordTest do
     "updated_at" => "2026-09-01T10:30:00+02:00"
   }
 
+  describe "create/4" do
+    test "createDomainDelegationSignerRecord sends complete DS data and returns a typed record" do
+      attrs = [
+        algorithm: "13",
+        digest: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        digest_type: "2",
+        keytag: "12345"
+      ]
+
+      assert {:ok,
+              %ReqDnsimple.DelegationSignerRecord{
+                id: 1,
+                domain_id: 100,
+                algorithm: "13",
+                digest: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                digest_type: "2",
+                keytag: "12345",
+                public_key: nil,
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:30:00Z]
+              }} =
+               ReqDnsimple.DelegationSignerRecord.create(
+                 client(201, %{"data" => @ds_data}),
+                 1010,
+                 "example.test",
+                 attrs
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/domains/example.test/ds_records",
+        %{},
+        Map.new(attrs)
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "createDomainDelegationSignerRecord sends KEY data without omitted DS fields" do
+      public_key = "ZmFrZS1vZmZsaW5lLXB1YmxpYy1rZXk="
+
+      data =
+        Map.merge(@ds_data, %{
+          "digest" => nil,
+          "digest_type" => nil,
+          "keytag" => nil,
+          "public_key" => public_key
+        })
+
+      assert {:ok,
+              %ReqDnsimple.DelegationSignerRecord{
+                algorithm: "",
+                digest: nil,
+                digest_type: nil,
+                keytag: nil,
+                public_key: ^public_key
+              }} =
+               ReqDnsimple.DelegationSignerRecord.create(
+                 client(201, %{"data" => Map.put(data, "algorithm", "")}),
+                 1010,
+                 42,
+                 algorithm: "",
+                 public_key: public_key
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/domains/42/ds_records",
+        %{},
+        %{"algorithm" => "", "public_key" => public_key}
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "createDomainDelegationSignerRecord rejects invalid paths and attributes before HTTP" do
+      request = client(201, %{"data" => @ds_data})
+
+      invalid_inputs = [
+        {"1010", "example.test", [algorithm: "13", public_key: "key"]},
+        {nil, "example.test", [algorithm: "13", public_key: "key"]},
+        {1010, nil, [algorithm: "13", public_key: "key"]},
+        {1010, 1.5, [algorithm: "13", public_key: "key"]},
+        {1010, [], [algorithm: "13", public_key: "key"]},
+        {1010, "example.test", [:invalid]},
+        {1010, "example.test", [{:algorithm}]},
+        {1010, "example.test", []},
+        {1010, "example.test", [algorithm: nil, public_key: "key"]},
+        {1010, "example.test", [algorithm: false, public_key: "key"]},
+        {1010, "example.test", [algorithm: 0, public_key: "key"]},
+        {1010, "example.test", [algorithm: [], public_key: "key"]},
+        {1010, "example.test", [algorithm: %{}, public_key: "key"]},
+        {1010, "example.test", [algorithm: "13"]},
+        {1010, "example.test", [algorithm: "13", digest: "digest"]},
+        {1010, "example.test", [algorithm: "13", digest_type: "2"]},
+        {1010, "example.test", [algorithm: "13", keytag: "12345"]},
+        {1010, "example.test", [algorithm: "13", public_key: nil]},
+        {1010, "example.test", [algorithm: "13", public_key: false]},
+        {1010, "example.test", [algorithm: "13", public_key: 0]},
+        {1010, "example.test", [algorithm: "13", public_key: []]},
+        {1010, "example.test", [algorithm: "13", public_key: %{}]},
+        {1010, "example.test", [algorithm: "13", public_key: "key", unknown: true]}
+      ]
+
+      for {account_id, domain, attrs} <- invalid_inputs do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.DelegationSignerRecord.create(
+                   request,
+                   account_id,
+                   domain,
+                   attrs
+                 )
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "createDomainDelegationSignerRecord preserves documented and shared HTTP failures" do
+      for status <- [400, 401, 403, 404, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"digest" => ["is invalid"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.DelegationSignerRecord.create(
+                   client(status, body),
+                   1010,
+                   "example.test",
+                   algorithm: "13",
+                   public_key: "key"
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/domains/example.test/ds_records",
+          %{},
+          %{"algorithm" => "13", "public_key" => "key"}
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "createDomainDelegationSignerRecord returns explicit errors for malformed success" do
+      malformed_payloads = [
+        %{},
+        %{"data" => nil},
+        %{"data" => Map.delete(@ds_data, "id")},
+        %{"data" => Map.put(@ds_data, "algorithm", 13)},
+        %{"data" => Map.put(@ds_data, "public_key", 123)},
+        %{"data" => Map.put(@ds_data, "created_at", "not-a-timestamp")}
+      ]
+
+      for body <- malformed_payloads do
+        assert {:error, %{status: 201, response: ^body}} =
+                 ReqDnsimple.DelegationSignerRecord.create(
+                   client(201, body),
+                   1010,
+                   "example.test",
+                   algorithm: "13",
+                   public_key: "key"
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/domains/example.test/ds_records",
+          %{},
+          %{"algorithm" => "13", "public_key" => "key"}
+        )
+
+        refute_received {:request, _request}
+      end
+
+      body = %{"data" => @ds_data}
+
+      assert {:error, %{status: 200, response: ^body}} =
+               ReqDnsimple.DelegationSignerRecord.create(
+                 client(200, body),
+                 1010,
+                 "example.test",
+                 algorithm: "13",
+                 public_key: "key"
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/domains/example.test/ds_records",
+        %{},
+        %{"algorithm" => "13", "public_key" => "key"}
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "createDomainDelegationSignerRecord preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.DelegationSignerRecord.create(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test",
+                 algorithm: "13",
+                 public_key: "key"
+               )
+    end
+  end
+
   describe "get/4" do
     test "getDomainDelegationSignerRecord sends one bodyless request and returns typed DS data" do
       assert {:ok,
