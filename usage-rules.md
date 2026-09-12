@@ -99,6 +99,11 @@ by `ReqDnsimple.convert_sort_to_string/1`.
 
 Record `ttl` and `priority` values are non-negative integers. Explicit zero
 values are transmitted unchanged, while omitted fields remain omitted.
+Both create and update accept `integrated_zones: [integer() | "dnsimple"]`.
+Omitting the option preserves the API's default target propagation, while an
+explicit list (including `[]`) is transmitted unchanged. The published endpoint
+prose and examples support the `"dnsimple"` sentinel despite the OpenAPI item's
+integer-only declaration.
 
 ### Typical Account Discovery Flow
 

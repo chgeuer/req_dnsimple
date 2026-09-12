@@ -51,6 +51,137 @@ defmodule ReqDnsimple.ZoneRecordTest do
     )
   end
 
+  test "create and update transmit explicit integrated zone selections" do
+    create_attrs = [
+      name: "",
+      type: "MX",
+      content: "mail.example.com",
+      integrated_zones: [1, 2, "dnsimple"]
+    ]
+
+    assert {:ok, %ReqDnsimple.ZoneRecord{id: 1}} =
+             ReqDnsimple.ZoneRecord.create(
+               client(201, %{"data" => @record_data}),
+               1010,
+               "example.com",
+               create_attrs
+             )
+
+    assert_request(:post, "/v2/1010/zones/example.com/records", %{}, Map.new(create_attrs))
+
+    assert {:ok, %ReqDnsimple.ZoneRecord{id: 1}} =
+             ReqDnsimple.ZoneRecord.update(
+               client(200, %{"data" => @record_data}),
+               1010,
+               "example.com",
+               1,
+               integrated_zones: ["dnsimple"]
+             )
+
+    assert_request(
+      :patch,
+      "/v2/1010/zones/example.com/records/1",
+      %{},
+      %{integrated_zones: ["dnsimple"]}
+    )
+  end
+
+  test "create and update transmit explicit empty integrated zone selections" do
+    create_attrs = [
+      name: "",
+      type: "MX",
+      content: "mail.example.com",
+      integrated_zones: []
+    ]
+
+    assert {:ok, %ReqDnsimple.ZoneRecord{}} =
+             ReqDnsimple.ZoneRecord.create(
+               client(201, %{"data" => @record_data}),
+               1010,
+               "example.com",
+               create_attrs
+             )
+
+    assert_request(:post, "/v2/1010/zones/example.com/records", %{}, Map.new(create_attrs))
+
+    assert {:ok, %ReqDnsimple.ZoneRecord{}} =
+             ReqDnsimple.ZoneRecord.update(
+               client(200, %{"data" => @record_data}),
+               1010,
+               "example.com",
+               1,
+               integrated_zones: []
+             )
+
+    assert_request(
+      :patch,
+      "/v2/1010/zones/example.com/records/1",
+      %{},
+      %{integrated_zones: []}
+    )
+  end
+
+  test "create and update reject invalid integrated zone items before HTTP" do
+    create_client = client(201, %{"data" => @record_data})
+    update_client = client(200, %{"data" => @record_data})
+    required = [name: "", type: "MX", content: "mail.example.com"]
+
+    for integrated_zones <- [[1.0], ["1"], ["other"], [:dnsimple], [nil]] do
+      assert {:error, %NimbleOptions.ValidationError{key: :integrated_zones}} =
+               ReqDnsimple.ZoneRecord.create(
+                 create_client,
+                 1010,
+                 "example.com",
+                 required ++ [integrated_zones: integrated_zones]
+               )
+
+      assert {:error, %NimbleOptions.ValidationError{key: :integrated_zones}} =
+               ReqDnsimple.ZoneRecord.update(
+                 update_client,
+                 1010,
+                 "example.com",
+                 1,
+                 integrated_zones: integrated_zones
+               )
+    end
+
+    refute_received {:request, _request}
+  end
+
+  test "integrated zone mutations preserve API and transport errors" do
+    assert {:error, %{status: 503, response: %{"message" => "unavailable"}}} =
+             ReqDnsimple.ZoneRecord.create(
+               client(503, %{"message" => "unavailable"}),
+               1010,
+               "example.com",
+               name: "",
+               type: "MX",
+               content: "mail.example.com",
+               integrated_zones: ["dnsimple"]
+             )
+
+    assert_request(
+      :post,
+      "/v2/1010/zones/example.com/records",
+      %{},
+      %{
+        name: "",
+        type: "MX",
+        content: "mail.example.com",
+        integrated_zones: ["dnsimple"]
+      }
+    )
+
+    assert {:error, %Req.TransportError{reason: :econnrefused}} =
+             ReqDnsimple.ZoneRecord.update(
+               transport_error_client(:econnrefused),
+               1010,
+               "example.com",
+               1,
+               integrated_zones: [1, "dnsimple"]
+             )
+  end
+
   test "create and update reject negative and incorrectly typed values before HTTP" do
     create_client = client(201, %{"data" => @record_data})
     required = [name: "", type: "MX", content: "mail.example.com"]

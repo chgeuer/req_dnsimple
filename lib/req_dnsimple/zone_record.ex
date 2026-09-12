@@ -133,6 +133,11 @@ defmodule ReqDnsimple.ZoneRecord do
     end
   end
 
+  @integrated_zones_schema [
+    type: {:list, {:or, [:integer, {:in, ["dnsimple"]}]}},
+    doc: ~s(Zone IDs and the "dnsimple" target)
+  ]
+
   @zone_record_schema [
     name: [type: :string, required: true, doc: "Record name without domain"],
     type: [type: :string, required: true, doc: "Record type (A, AAAA, CNAME, MX, etc.)"],
@@ -140,7 +145,7 @@ defmodule ReqDnsimple.ZoneRecord do
     ttl: [type: :non_neg_integer, doc: "Time-to-live in seconds"],
     priority: [type: :non_neg_integer, doc: "Priority (for MX records)"],
     regions: [type: {:list, :string}, doc: "Geographical regions"],
-    integrated_zones: [type: {:list, :any}, doc: "Zone IDs for record creation"]
+    integrated_zones: @integrated_zones_schema
   ]
 
   @spec create(Req.Request.t(), ReqDnsimple.account_id(), binary(), keyword()) ::
@@ -223,7 +228,8 @@ defmodule ReqDnsimple.ZoneRecord do
     content: [type: :string, doc: "Record content"],
     ttl: [type: :non_neg_integer, doc: "Time-to-live in seconds"],
     priority: [type: :non_neg_integer, doc: "Priority (for MX records)"],
-    regions: [type: {:list, :string}, doc: "Geographical regions"]
+    regions: [type: {:list, :string}, doc: "Geographical regions"],
+    integrated_zones: @integrated_zones_schema
   ]
 
   @spec update(

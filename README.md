@@ -113,6 +113,12 @@ enumeration always begins at page one.
 
 `ttl` and `priority` accept non-negative integers. Explicit zero values are
 sent unchanged; omitted fields remain absent from the request.
+For create and update, `integrated_zones` accepts integer zone IDs and the
+literal `"dnsimple"` target, for example `[1, 2, "dnsimple"]`. Omitting the
+option lets the API propagate the mutation to its default targets; an explicit
+list, including an empty list, is sent unchanged. The endpoint documentation
+and examples support `"dnsimple"` even though the OpenAPI item schema currently
+declares integers only.
 
 **Delete a record:**
 
