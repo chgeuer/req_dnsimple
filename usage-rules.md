@@ -58,6 +58,7 @@ Different modules use slightly different return conventions:
 | `Contact.get/3` | `{:ok, %Contact{}}` | `{:error, :not_found}` |
 | `Contact.delete/3` | `:ok` | `{:error, reason}` |
 | `Domain.get/3` | `{:ok, %Domain{}}` | `{:error, reason}` |
+| `Dnssec.get/3` | `{:ok, %Dnssec{}}` | `{:error, reason}` |
 | `Dnssec.disable/3` | `:ok` | `{:error, reason}` |
 | `DelegationSignerRecord.get/4` | `{:ok, %DelegationSignerRecord{}}` | `{:error, reason}` |
 | `DelegationSignerRecord.delete/4` | `:ok` | `{:error, reason}` |
@@ -199,9 +200,11 @@ The update does not change registrar delegation.
   Retrieval returns registration state, privacy, renewal, and nullable expiry
   metadata. Deletion is irreversible within the account, but does not delete a
   registration at the registry or produce a refund.
-- `ReqDnsimple.Dnssec` — Explicitly disables DNSSEC by domain name or ID. For
-  hosted-only domains, registry delegation-signer records must be removed first;
-  this operation does not remove them or prompt for confirmation.
+- `ReqDnsimple.Dnssec` — Typed DNSSEC status retrieval and explicit disablement
+  by domain name or ID. Retrieval keeps enabled and active as separate states
+  and parses creation/update timestamps. For hosted-only domains, registry
+  delegation-signer records must be removed first; disablement does not remove
+  them or prompt for confirmation.
 - `ReqDnsimple.DelegationSignerRecord` — Typed retrieval and explicit deletion
   of one registry delegation-signer record by domain name or ID and record ID.
   DS and KEY proof fields that do not apply are `nil`. Deletion does not disable

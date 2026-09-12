@@ -240,8 +240,12 @@ contact. It does not create a contact, fetch the domain, or preflight ownership.
 ### DNSSEC
 
 ```elixir
+{:ok, dnssec} = ReqDnsimple.Dnssec.get(client, account_id, "example.com")
 :ok = ReqDnsimple.Dnssec.disable(client, account_id, "example.com")
 ```
+
+Retrieval returns the enabled and active states separately, with typed creation
+and update timestamps.
 
 For hosted-only domains, remove registry delegation-signer records before
 disabling DNSSEC. This operation does not remove those records or prompt for
