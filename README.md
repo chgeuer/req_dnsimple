@@ -60,7 +60,7 @@ Filter and sort:
 ```elixir
 {:ok, zones} = ReqDnsimple.Zone.list(client, account_id,
   name_like: "example",
-  sort: [name: :asc]
+  sort: [:id, name: :asc]
 )
 ```
 
@@ -72,7 +72,7 @@ Filter and sort:
 {:ok, {records, pagination}} = ReqDnsimple.ZoneRecord.list(
   client, account_id, "example.com",
   type: "A",
-  sort: [name: :asc]
+  sort: [:id, name: :asc]
 )
 ```
 

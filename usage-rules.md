@@ -58,15 +58,17 @@ Most list operations accept keyword options validated by NimbleOptions:
 ReqDnsimple.Zone.list(client, account_id, name_like: "example")
 ReqDnsimple.ZoneRecord.list(client, account_id, zone, name: "www", type: "A")
 
-# Sorting (keyword list with :asc/:desc)
+# Sorting (bare fields default to :asc; tuples accept :asc/:desc)
 ReqDnsimple.Zone.list(client, account_id, sort: [name: :desc])
-ReqDnsimple.ZoneRecord.list(client, account_id, zone, sort: [type: :asc, name: :desc])
+ReqDnsimple.ZoneRecord.list(client, account_id, zone, sort: [:type, name: :desc])
 
 # Pagination
 ReqDnsimple.Zone.list(client, account_id, page: 2, per_page: 50)
 ```
 
-Sort options are keyword lists like `[name: :asc, id: :desc]`.
+Sort options are lists like `[:id, name: :desc]`. Supported fields are endpoint-specific:
+zones accept `:id` and `:name`; records accept `:id`, `:name`, `:content`, and `:type`;
+contacts accept `:id`, `:label`, and `:email`; billing charges accept only `:invoiced`.
 They are automatically converted to DNSimple's `"name:asc,id:desc"` string format
 by `ReqDnsimple.convert_sort_to_string/1`.
 

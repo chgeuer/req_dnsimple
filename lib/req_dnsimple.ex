@@ -9,6 +9,7 @@ defmodule ReqDnsimple do
   @type contact_id :: integer()
   @type http_error :: %{status: non_neg_integer(), response: any()}
   @type record_id :: integer()
+  @type sort :: [atom() | {atom(), :asc | :desc}]
   @type token_callback :: (-> binary() | {:bearer, binary()})
   @type zone_id :: integer()
   @type zone_name :: binary()
@@ -153,16 +154,22 @@ defmodule ReqDnsimple do
   end
 
   @doc """
-  Converts keyword list sort options to the DNSimple API's string sort format.
+  Converts validated sort options to the DNSimple API's string sort format.
+
+  Bare field atoms default to ascending order.
 
   ## Examples
 
       iex> ReqDnsimple.convert_sort_to_string(sort: [name: :desc, id: :asc])
       [sort: "name:desc,id:asc"]
 
+      iex> ReqDnsimple.convert_sort_to_string(sort: [:id, name: :desc])
+      [sort: "id:asc,name:desc"]
+
       iex> ReqDnsimple.convert_sort_to_string(page: 1)
       [page: 1]
   """
+  @spec convert_sort_to_string(keyword()) :: keyword()
   def convert_sort_to_string(opts) do
     case Keyword.get(opts, :sort) do
       nil ->
@@ -180,6 +187,29 @@ defmodule ReqDnsimple do
         Keyword.put(opts, :sort, sort_string)
     end
   end
+
+  @doc false
+  @spec validate_sort(term(), [atom()]) :: {:ok, sort()} | {:error, binary()}
+  def validate_sort(sort, allowed_fields) when is_list(sort) do
+    case Enum.find(sort, &(not valid_sort_entry?(&1, allowed_fields))) do
+      nil ->
+        {:ok, sort}
+
+      invalid_entry ->
+        {:error,
+         "expected fields #{inspect(allowed_fields)} with :asc or :desc directions, got invalid entry: #{inspect(invalid_entry)}"}
+    end
+  end
+
+  def validate_sort(sort, _allowed_fields),
+    do: {:error, "expected a list of sort fields, got: #{inspect(sort)}"}
+
+  defp valid_sort_entry?(field, allowed_fields) when is_atom(field), do: field in allowed_fields
+
+  defp valid_sort_entry?({field, direction}, allowed_fields),
+    do: field in allowed_fields and direction in [:asc, :desc]
+
+  defp valid_sort_entry?(_entry, _allowed_fields), do: false
 
   defp convert_string_keys_to_atoms(map) do
     for {key, value} <- map, into: %{} do

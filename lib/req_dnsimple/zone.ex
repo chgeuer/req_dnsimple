@@ -31,7 +31,7 @@ defmodule ReqDnsimple.Zone do
   @list_zones_schema [
     name_like: [type: :string, doc: "Filter zones containing a specific string"],
     sort: [
-      type: :keyword_list,
+      type: {:custom, ReqDnsimple, :validate_sort, [[:id, :name]]},
       doc: "Sort by field (id, name). Format: [name: :desc] or [:id, name: :desc]"
     ],
     page: [type: :pos_integer, doc: "Page number for pagination"],

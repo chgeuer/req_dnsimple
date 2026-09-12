@@ -58,7 +58,7 @@ defmodule ReqDnsimple.BillingCharge do
     start_date: [type: :string, doc: "Filter charges from this start date (YYYY-MM-DD)"],
     end_date: [type: :string, doc: "Filter charges up to this end date (YYYY-MM-DD)"],
     sort: [
-      type: :keyword_list,
+      type: {:custom, ReqDnsimple, :validate_sort, [[:invoiced]]},
       doc:
         "Sort by field. Format: [invoiced: :desc] or [:invoiced] (only invoiced field supported)"
     ],

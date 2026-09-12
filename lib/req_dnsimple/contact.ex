@@ -77,7 +77,7 @@ defmodule ReqDnsimple.Contact do
 
   @list_contacts_schema [
     sort: [
-      type: :keyword_list,
+      type: {:custom, ReqDnsimple, :validate_sort, [[:id, :label, :email]]},
       doc: "Sort by field (id, label, email). Format: [label: :desc] or [:id, email: :asc]"
     ],
     page: [type: :pos_integer, doc: "Page number for pagination"],

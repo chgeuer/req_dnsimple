@@ -36,7 +36,7 @@ defmodule ReqDnsimple.ZoneRecord do
     name: [type: :string, doc: "Records with exact name match"],
     type: [type: :string, doc: "Records with specific record type (A, AAAA, CNAME, etc.)"],
     sort: [
-      type: :keyword_list,
+      type: {:custom, ReqDnsimple, :validate_sort, [[:id, :name, :content, :type]]},
       doc: "Sort by field (id, name, content, type). Format: [name: :desc] or [:id, name: :desc]"
     ],
     page: [type: :pos_integer, doc: "Page number for pagination"],
