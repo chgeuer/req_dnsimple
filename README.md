@@ -164,6 +164,9 @@ ReqDnsimple.ZoneRecord.create(client, account_id, "example.com", attrs)
 - **Create/Update** return `{:ok, struct}` or `{:error, reason}`
 - **Delete** returns `:ok` or `{:error, reason}`
 - **Validation errors** return `{:error, %NimbleOptions.ValidationError{}}`
+- **Generic HTTP errors** return
+  `{:error, %{status: status, response: response_body}}`; endpoint-specific
+  errors such as `:not_found`, `:unauthorized`, and `:timeout` remain atoms
 
 ## Sorting and Filtering
 

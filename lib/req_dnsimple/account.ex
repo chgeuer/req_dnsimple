@@ -35,6 +35,9 @@ defmodule ReqDnsimple.Account do
       {:ok, %Req.Response{status: 200, body: %{"data" => accounts}}} ->
         accounts |> Enum.map(&ReqDnsimple.Account.from_json/1)
 
+      {:ok, response} ->
+        ReqDnsimple.response_error(response)
+
       {:error, e} ->
         {:error, e}
     end

@@ -44,7 +44,8 @@ defmodule ReqDnsimple.Contact do
     )
   end
 
-  @spec get(Req.Request.t(), ReqDnsimple.account_id(), ReqDnsimple.contact_id()) :: __MODULE__.t()
+  @spec get(Req.Request.t(), ReqDnsimple.account_id(), ReqDnsimple.contact_id()) ::
+          {:ok, __MODULE__.t()} | {:error, term()}
   def get(req, account_id, contact_id) do
     # https://developer.dnsimple.com/v2/contacts/#getContact
 
@@ -66,6 +67,9 @@ defmodule ReqDnsimple.Contact do
       {:ok, %Req.Response{status: 404}} ->
         {:error, :not_found}
 
+      {:ok, response} ->
+        ReqDnsimple.response_error(response)
+
       {:error, e} ->
         {:error, e}
     end
@@ -81,7 +85,7 @@ defmodule ReqDnsimple.Contact do
   ]
 
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, [__MODULE__.t()]} | {:error, NimbleOptions.ValidationError.t() | atom()}
+          {:ok, [__MODULE__.t()]} | {:error, term()}
   def list(req, account_id, opts \\ []) do
     with {:ok, validated_opts} <- NimbleOptions.validate(opts, @list_contacts_schema) do
       params =
@@ -106,6 +110,9 @@ defmodule ReqDnsimple.Contact do
 
         {:ok, %Req.Response{status: 404}} ->
           {:error, :not_found}
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
 
         {:error, e} ->
           {:error, e}

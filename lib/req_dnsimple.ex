@@ -7,6 +7,7 @@ defmodule ReqDnsimple do
 
   @type account_id :: integer()
   @type contact_id :: integer()
+  @type http_error :: %{status: non_neg_integer(), response: any()}
   @type record_id :: integer()
   @type token_callback :: (-> binary() | {:bearer, binary()})
   @type zone_id :: integer()
@@ -47,7 +48,7 @@ defmodule ReqDnsimple do
   def token_type(x) when is_binary(x), do: :unknown_token
 
   @spec whoami(Req.Request.t()) ::
-          {:account, any()} | {:unknown_token, map()} | {:user, any()} | Req.Response.t()
+          {:account, any()} | {:unknown_token, map()} | {:user, any()} | {:error, term()}
   def whoami(req) do
     req
     |> Req.merge(
@@ -67,8 +68,8 @@ defmodule ReqDnsimple do
           :unknown_token -> {:unknown_token, body}
         end
 
-      {:ok, fail} ->
-        fail
+      {:ok, response} ->
+        response_error(response)
 
       {:error, e} ->
         {:error, e}
@@ -76,7 +77,7 @@ defmodule ReqDnsimple do
   end
 
   @spec ns_records(Req.Request.t(), ReqDnsimple.account_id(), binary()) ::
-          [ReqDnsimple.NsRecord.t()]
+          [ReqDnsimple.NsRecord.t()] | {:error, term()}
   def ns_records(req, account_id, zone_id) do
     # https://developer.dnsimple.com/v2/zones/ns-records/
 
@@ -94,6 +95,9 @@ defmodule ReqDnsimple do
     |> case do
       {:ok, %Req.Response{status: 200, body: %{"data" => data}}} ->
         data |> Enum.map(&ReqDnsimple.NsRecord.from_json/1)
+
+      {:ok, response} ->
+        response_error(response)
 
       {:error, e} ->
         {:error, e}
@@ -129,6 +133,12 @@ defmodule ReqDnsimple do
   defdelegate check_zone_distribution(req, account_id, zone_name),
     to: ReqDnsimple.Zone,
     as: :check_zone_distribution
+
+  @doc false
+  @spec response_error(Req.Response.t()) :: {:error, http_error()}
+  def response_error(%Req.Response{status: status, body: body}) do
+    {:error, %{status: status, response: body}}
+  end
 
   @spec from_json(map(), module(), keyword()) :: struct()
   def from_json(json, module, opts) when is_map(json) and is_atom(module) do

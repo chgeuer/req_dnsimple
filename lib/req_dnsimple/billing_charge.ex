@@ -67,7 +67,7 @@ defmodule ReqDnsimple.BillingCharge do
   ]
 
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, [__MODULE__.t()]} | {:error, NimbleOptions.ValidationError.t()}
+          {:ok, [__MODULE__.t()]} | {:error, term()}
   def list(req, account_id, opts \\ []) do
     with {:ok, validated_opts} <- NimbleOptions.validate(opts, @list_billing_charges_schema) do
       params =
@@ -87,6 +87,9 @@ defmodule ReqDnsimple.BillingCharge do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}}} ->
           {:ok, Enum.map(data, &from_json/1)}
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
 
         {:error, e} ->
           {:error, e}

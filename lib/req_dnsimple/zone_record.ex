@@ -45,7 +45,7 @@ defmodule ReqDnsimple.ZoneRecord do
 
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), binary(), keyword()) ::
           {:ok, {[ReqDnsimple.ZoneRecord.t()], map()}}
-          | {:error, NimbleOptions.ValidationError.t()}
+          | {:error, term()}
   def list(req, account_id, zone_id, opts \\ []) do
     # https://developer.dnsimple.com/v2/zones/records/#listZoneRecords
 
@@ -74,8 +74,8 @@ defmodule ReqDnsimple.ZoneRecord do
         {:ok, %Req.Response{status: 404}} ->
           {:error, :not_found}
 
-        {:ok, %Req.Response{status: status, body: body}} ->
-          {:error, %{status: status, response: body}}
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
 
         {:error, e} ->
           {:error, e}
@@ -89,7 +89,7 @@ defmodule ReqDnsimple.ZoneRecord do
           ReqDnsimple.zone_name(),
           ReqDnsimple.record_id()
         ) ::
-          {:ok, ReqDnsimple.ZoneRecord.t()}
+          {:ok, ReqDnsimple.ZoneRecord.t()} | {:error, term()}
   def get(req, account_id, zone_name, record_id) do
     # https://developer.dnsimple.com/v2/zones/records/#getZoneRecord
 
@@ -112,8 +112,8 @@ defmodule ReqDnsimple.ZoneRecord do
       {:ok, %Req.Response{status: 404}} ->
         {:error, :not_found}
 
-      {:ok, %Req.Response{status: status, body: body}} ->
-        {:error, %{status: status, response: body}}
+      {:ok, response} ->
+        ReqDnsimple.response_error(response)
 
       {:error, e} ->
         {:error, e}
@@ -131,7 +131,7 @@ defmodule ReqDnsimple.ZoneRecord do
   ]
 
   @spec create(Req.Request.t(), ReqDnsimple.account_id(), binary(), keyword()) ::
-          {:ok, ReqDnsimple.ZoneRecord.t()} | {:error, NimbleOptions.ValidationError.t()}
+          {:ok, ReqDnsimple.ZoneRecord.t()} | {:error, term()}
   def create(req, account_id, zone_id, attrs) when is_list(attrs) do
     # https://developer.dnsimple.com/v2/zones/records/#createZoneRecord
 
@@ -163,8 +163,8 @@ defmodule ReqDnsimple.ZoneRecord do
             {400, %{"errors" => errors, "message" => message}} ->
               {:error, %{status: 400, message: message, errors: errors}}
 
-            {status, _} ->
-              {:error, %{status: status, response: body}}
+            {_status, _} ->
+              ReqDnsimple.response_error(%Req.Response{status: status, body: body})
           end
 
         {:error, e} ->
@@ -173,7 +173,8 @@ defmodule ReqDnsimple.ZoneRecord do
     end
   end
 
-  @spec delete(Req.Request.t(), ReqDnsimple.account_id(), binary(), integer()) :: :ok
+  @spec delete(Req.Request.t(), ReqDnsimple.account_id(), binary(), integer()) ::
+          :ok | {:error, term()}
   def delete(req, account_id, zone_id, record_id) do
     # https://developer.dnsimple.com/v2/zones/records/#deleteZoneRecord
 
@@ -196,8 +197,8 @@ defmodule ReqDnsimple.ZoneRecord do
       {:ok, %Req.Response{status: 404}} ->
         {:error, :not_found}
 
-      {:ok, %Req.Response{status: status, body: body}} ->
-        {:error, %{status: status, response: body}}
+      {:ok, response} ->
+        ReqDnsimple.response_error(response)
 
       {:error, e} ->
         {:error, e}
@@ -219,7 +220,7 @@ defmodule ReqDnsimple.ZoneRecord do
           ReqDnsimple.record_id(),
           keyword()
         ) ::
-          {:ok, ReqDnsimple.ZoneRecord.t()} | {:error, NimbleOptions.ValidationError.t()}
+          {:ok, ReqDnsimple.ZoneRecord.t()} | {:error, term()}
   def update(req, account_id, zone_id, record_id, attrs) when is_list(attrs) do
     # https://developer.dnsimple.com/v2/zones/records/#updateZoneRecord
 
@@ -249,8 +250,8 @@ defmodule ReqDnsimple.ZoneRecord do
             {400, %{"errors" => errors, "message" => message}} ->
               {:error, %{status: 400, message: message, errors: errors}}
 
-            {status, _} ->
-              {:error, %{status: status, response: body}}
+            {_status, _} ->
+              ReqDnsimple.response_error(%Req.Response{status: status, body: body})
           end
 
         {:error, e} ->

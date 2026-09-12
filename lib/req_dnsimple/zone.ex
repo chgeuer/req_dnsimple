@@ -39,7 +39,7 @@ defmodule ReqDnsimple.Zone do
   ]
 
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, [__MODULE__.t()]} | {:error, NimbleOptions.ValidationError.t() | atom()}
+          {:ok, [__MODULE__.t()]} | {:error, term()}
   def list(req, account_id, opts \\ []) do
     with {:ok, validated_opts} <- NimbleOptions.validate(opts, @list_zones_schema) do
       params =
@@ -63,6 +63,9 @@ defmodule ReqDnsimple.Zone do
         {:ok, %Req.Response{status: 404}} ->
           {:error, :not_found}
 
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
         {:error, e} ->
           {:error, e}
       end
@@ -70,7 +73,7 @@ defmodule ReqDnsimple.Zone do
   end
 
   @spec get_zone_file(Req.Request.t(), ReqDnsimple.account_id(), ReqDnsimple.zone_name()) ::
-          {:ok, binary()} | {:error, NimbleOptions.ValidationError.t() | atom()}
+          {:ok, binary()} | {:error, term()}
   def get_zone_file(req, account_id, zone_name) do
     # https://developer.dnsimple.com/v2/zones/#getZoneFile
 
@@ -95,6 +98,9 @@ defmodule ReqDnsimple.Zone do
       {:ok, %Req.Response{status: 404}} ->
         {:error, :not_found}
 
+      {:ok, response} ->
+        ReqDnsimple.response_error(response)
+
       {:error, e} ->
         {:error, e}
     end
@@ -105,7 +111,7 @@ defmodule ReqDnsimple.Zone do
           ReqDnsimple.account_id(),
           ReqDnsimple.zone_name()
         ) ::
-          {:ok, boolean()} | {:error, NimbleOptions.ValidationError.t() | atom()}
+          {:ok, boolean()} | {:error, term()}
   def check_zone_distribution(req, account_id, zone_name) do
     # https://developer.dnsimple.com/v2/zones/#checkZoneDistribution
 
@@ -132,6 +138,9 @@ defmodule ReqDnsimple.Zone do
 
       {:ok, %Req.Response{status: 504}} ->
         {:error, :timeout}
+
+      {:ok, response} ->
+        ReqDnsimple.response_error(response)
 
       {:error, e} ->
         {:error, e}
