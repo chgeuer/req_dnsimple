@@ -1217,6 +1217,36 @@ defmodule ReqDnsimple.RegistrarTest do
       refute_received {:request, _request}
     end
 
+    test "transferDomain rejects explicit null extended attributes before HTTP" do
+      request = client(201, %{"data" => %{}})
+
+      assert {:error, %NimbleOptions.ValidationError{}} =
+               ReqDnsimple.Registrar.transfer(
+                 request,
+                 1010,
+                 "example.test",
+                 registrant_id: 11,
+                 extended_attributes: nil
+               )
+
+      refute_received {:request, _request}
+    end
+
+    test "transferDomain rejects struct extended attributes before HTTP" do
+      request = client(201, %{"data" => %{}})
+
+      assert {:error, %NimbleOptions.ValidationError{}} =
+               ReqDnsimple.Registrar.transfer(
+                 request,
+                 1010,
+                 "example.test",
+                 registrant_id: 11,
+                 extended_attributes: URI.parse("https://example.invalid")
+               )
+
+      refute_received {:request, _request}
+    end
+
     test "transferDomain preserves documented and shared HTTP failures" do
       for status <- [400, 402, 401, 403, 429, 500, 418] do
         body = %{
