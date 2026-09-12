@@ -6732,7 +6732,7 @@
       "method": "DELETE",
       "path": "/{account}/domains/{domain}/services/{service}",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-086",
       "br_issue_id": "bd-3os",
       "proposed_interfaces": [
@@ -6784,8 +6784,19 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.Service",
+          "function": "unapply",
+          "arity": 4,
+          "arities": [
+            4
+          ]
+        }
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/service_test.exs"
+      ]
     },
     {
       "operation_id": "unlinkPrimaryServer",

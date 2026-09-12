@@ -20,6 +20,10 @@ defmodule ReqDnsimple.Service do
           "service-sid",
           settings: %{"app" => "fake-app"}
         )
+
+  Unapply one selected service without deleting records individually:
+
+      :ok = ReqDnsimple.Service.unapply(client, 1010, "example.test", "service-sid")
   """
 
   defmodule Setting do
@@ -69,7 +73,7 @@ defmodule ReqDnsimple.Service do
     service: [type: {:or, [:string, :integer]}, required: true]
   ]
 
-  @apply_path_schema [
+  @domain_service_path_schema [
     account_id: [type: :integer, required: true],
     domain: [type: {:or, [:string, :integer]}, required: true],
     service: [type: {:or, [:string, :integer]}, required: true]
@@ -132,7 +136,7 @@ defmodule ReqDnsimple.Service do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
              [account_id: account_id, domain: domain, service: service],
-             @apply_path_schema
+             @domain_service_path_schema
            ),
          {:ok, validated_attrs} <- validate_attrs(attrs) do
       request_options = [
@@ -151,6 +155,46 @@ defmodule ReqDnsimple.Service do
         end
 
       req = Req.merge(req, request_options)
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 204}} ->
+          :ok
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Unapplies one selected service from a domain.
+
+  This sends exactly one bodyless request and returns `:ok` only for HTTP 204.
+  It does not fetch the service or delete records individually.
+  """
+  @spec unapply(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer(),
+          binary() | integer()
+        ) :: :ok | {:error, term()}
+  def unapply(req, account_id, domain, service) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain, service: service],
+             @domain_service_path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :delete,
+          url: "/:account_id/domains/:domain/services/:service",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain: domain, service: service],
+          retry: false
+        )
 
       case Req.request(req) do
         {:ok, %Req.Response{status: 204}} ->

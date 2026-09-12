@@ -287,10 +287,11 @@ The update does not change registrar delegation.
   ordered `linked_secondary_zones`, and timestamps. Deletion does not unlink
   zones or perform DNS requests.
 - `ReqDnsimple.Service` — Retrieve a global one-click service by sid or ID,
-  including typed timestamps and setting definitions, or apply one to a domain.
-  Optional dynamic settings use string keys. Omitted settings send no body,
-  while an explicit empty map is preserved. Applying performs no catalog lookup
-  or per-record requests.
+  including typed timestamps and setting definitions, or apply/unapply one on a
+  domain. Optional dynamic settings use string keys. Omitted settings send no
+  body, while an explicit empty map is preserved. Applying performs no catalog
+  lookup or per-record requests; unapplying sends one bodyless request and does
+  not delete records individually.
 - `ReqDnsimple.NsRecord` — Name server record struct and JSON parsing.
 - `ReqDnsimple.Helper` — Req helper for incrementally appending URL path segments
   and merging params/path_params onto a `Req.Request`.

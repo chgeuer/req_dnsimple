@@ -297,6 +297,123 @@ defmodule ReqDnsimple.ServiceTest do
     end
   end
 
+  describe "unapply/4" do
+    test "unapplyServiceFromDomain sends one bodyless request and returns :ok" do
+      assert :ok =
+               ReqDnsimple.Service.unapply(
+                 client(204, ""),
+                 1010,
+                 "example.test",
+                 "offline-service"
+               )
+
+      assert_request(
+        :delete,
+        "/v2/1010/domains/example.test/services/offline-service",
+        %{},
+        nil
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "unapplyServiceFromDomain accepts integer, zero, and empty identifiers" do
+      for {account_id, domain, service} <- [{0, 0, 0}, {1010, "", ""}] do
+        assert :ok =
+                 ReqDnsimple.Service.unapply(
+                   client(204, nil),
+                   account_id,
+                   domain,
+                   service
+                 )
+
+        assert_request(
+          :delete,
+          "/v2/#{account_id}/domains/#{domain}/services/#{service}",
+          %{},
+          nil
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "unapplyServiceFromDomain rejects invalid path parameters before HTTP" do
+      request = client(204, nil)
+
+      for {account_id, domain, service} <- [
+            {"1010", "example.test", "offline-service"},
+            {nil, "example.test", "offline-service"},
+            {1010, nil, "offline-service"},
+            {1010, 1.5, "offline-service"},
+            {1010, "example.test", nil},
+            {1010, "example.test", 1.5}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Service.unapply(request, account_id, domain, service)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "unapplyServiceFromDomain preserves documented and shared HTTP failures" do
+      for status <- [400, 401, 403, 404, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"service" => ["is unavailable"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Service.unapply(
+                   client(status, body),
+                   1010,
+                   "example.test",
+                   "offline-service"
+                 )
+
+        assert_request(
+          :delete,
+          "/v2/1010/domains/example.test/services/offline-service",
+          %{},
+          nil
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "unapplyServiceFromDomain rejects non-204 successful responses" do
+      for {status, body} <- [{200, %{}}, {200, nil}, {201, %{"data" => %{}}}] do
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Service.unapply(
+                   client(status, body),
+                   1010,
+                   "example.test",
+                   "offline-service"
+                 )
+
+        assert_request(
+          :delete,
+          "/v2/1010/domains/example.test/services/offline-service",
+          %{},
+          nil
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "unapplyServiceFromDomain preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Service.unapply(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test",
+                 "offline-service"
+               )
+    end
+  end
+
   defp service_body do
     %{
       "data" => %{
