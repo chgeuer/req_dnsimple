@@ -183,11 +183,20 @@ defmodule ReqDnsimple do
   @doc false
   @spec validate_sort(term(), [atom()]) :: {:ok, sort()} | {:error, binary()}
   def validate_sort(sort, allowed_fields) when is_list(sort) do
-    case Enum.find(sort, &(not valid_sort_entry?(&1, allowed_fields))) do
-      nil ->
+    result =
+      Enum.reduce_while(sort, :valid, fn entry, :valid ->
+        if valid_sort_entry?(entry, allowed_fields) do
+          {:cont, :valid}
+        else
+          {:halt, {:invalid, entry}}
+        end
+      end)
+
+    case result do
+      :valid ->
         {:ok, sort}
 
-      invalid_entry ->
+      {:invalid, invalid_entry} ->
         {:error,
          "expected fields #{inspect(allowed_fields)} with :asc or :desc directions, got invalid entry: #{inspect(invalid_entry)}"}
     end

@@ -29,6 +29,9 @@ defmodule ReqDnsimple.SortTest do
   test "list operations reject invalid sort values before making a request" do
     invalid_sorts = [
       "name:asc",
+      [nil],
+      [nil, name: :sideways],
+      [nil, :unsupported],
       [name: :sideways],
       [{:name, :asc, :extra}],
       [{"name", :asc}]
