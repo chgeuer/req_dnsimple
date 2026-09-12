@@ -201,6 +201,13 @@ preserves explicit empty lists and performs no lookup or merge, so callers
 retaining vanity configuration must include those names or sets themselves.
 The update does not change registrar delegation.
 
+### Disabling Vanity Name Servers
+
+`ReqDnsimple.VanityNameServer.disable/3` sends one bodyless request to remove a
+domain's vanity A and AAAA configuration. It accepts a domain name or integer
+ID, does not inspect or change registrar delegation, and does not delete records
+individually.
+
 ## Module Reference
 
 - `ReqDnsimple` — Client creation (`new_client/1`), response-based identity
@@ -255,6 +262,8 @@ The update does not change registrar delegation.
   does not send mail or modify MX records.
 - `ReqDnsimple.DomainPush` — Accept a pending push with an explicit target-account
   contact, or reject it without deleting the source domain.
+- `ReqDnsimple.VanityNameServer` — Explicitly disable a domain's vanity A and
+  AAAA configuration by name or ID without changing registrar delegation.
 - `ReqDnsimple.Certificate` — Order typed Let's Encrypt purchases and renewals
   without automatic issuance or deployment; renewal orders preserve distinct
   old and new certificate IDs. Retrieve typed certificate metadata, including
