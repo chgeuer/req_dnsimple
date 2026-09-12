@@ -213,15 +213,6 @@ defmodule ReqDnsimple.ZoneRecord do
         when is_boolean(distributed) ->
           {:ok, distributed}
 
-        {:ok, %Req.Response{status: 401}} ->
-          {:error, :unauthorized}
-
-        {:ok, %Req.Response{status: 404}} ->
-          {:error, :not_found}
-
-        {:ok, %Req.Response{status: 504}} ->
-          {:error, :timeout}
-
         {:ok, response} ->
           ReqDnsimple.response_error(response)
 

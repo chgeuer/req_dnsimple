@@ -253,22 +253,21 @@ defmodule ReqDnsimple.ZoneRecordTest do
     end
 
     test "preserves endpoint-specific and generic HTTP failures" do
-      body = %{"message" => "Fake offline request failure"}
-
-      for {status, expected} <- [
-            {401, {:error, :unauthorized}},
-            {404, {:error, :not_found}},
-            {504, {:error, :timeout}},
-            {403, {:error, %{status: 403, response: body}}},
-            {429, {:error, %{status: 429, response: body}}},
-            {500, {:error, %{status: 500, response: body}}}
+      for {status, body} <- [
+            {401, %{"detail" => "Fake token rejected"}},
+            {404, %{"errors" => %{"record" => ["Fake record missing"]}}},
+            {504, "Fake gateway timeout"},
+            {403, %{"message" => "Fake request forbidden"}},
+            {429, %{"message" => "Fake rate limit"}},
+            {500, %{"message" => "Fake server failure"}}
           ] do
-        assert ReqDnsimple.ZoneRecord.check_distribution(
-                 client(status, body),
-                 1010,
-                 "example.test",
-                 1
-               ) == expected
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.ZoneRecord.check_distribution(
+                   client(status, body),
+                   1010,
+                   "example.test",
+                   1
+                 )
 
         assert_request(:get, "/v2/1010/zones/example.test/records/1/distribution")
         refute_received {:request, _request}
