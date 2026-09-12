@@ -122,4 +122,65 @@ defmodule ReqDnsimple.PrimaryServerTest do
                ReqDnsimple.PrimaryServer.get(transport_error_client(:timeout), 1010, 1)
     end
   end
+
+  describe "delete/3" do
+    test "removePrimaryServer sends one bodyless request and returns :ok" do
+      assert :ok = ReqDnsimple.PrimaryServer.delete(client(204, ""), 1010, 1)
+
+      assert_request(:delete, "/v2/1010/secondary_dns/primaries/1", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "removePrimaryServer rejects invalid path parameters before HTTP" do
+      request = client(204, "")
+
+      for {account_id, primary_server_id} <- [
+            {"1010", 1},
+            {nil, 1},
+            {1010, "1"},
+            {1010, nil}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.PrimaryServer.delete(request, account_id, primary_server_id)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "removePrimaryServer preserves explicit zero identifiers" do
+      assert :ok = ReqDnsimple.PrimaryServer.delete(client(204, nil), 0, 0)
+
+      assert_request(:delete, "/v2/0/secondary_dns/primaries/0", %{}, nil)
+    end
+
+    test "removePrimaryServer preserves documented and shared HTTP failures" do
+      for status <- [401, 403, 404, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"primaryserver" => ["is unavailable"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.PrimaryServer.delete(client(status, body), 1010, 1)
+
+        assert_request(:delete, "/v2/1010/secondary_dns/primaries/1", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "removePrimaryServer rejects non-204 successful responses" do
+      for {status, body} <- [{200, %{}}, {200, nil}, {201, %{"data" => %{}}}] do
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.PrimaryServer.delete(client(status, body), 1010, 1)
+
+        assert_request(:delete, "/v2/1010/secondary_dns/primaries/1", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "removePrimaryServer preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.PrimaryServer.delete(transport_error_client(:timeout), 1010, 1)
+    end
+  end
 end

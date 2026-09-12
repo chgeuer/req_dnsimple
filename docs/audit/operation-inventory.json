@@ -6295,7 +6295,7 @@
       "method": "DELETE",
       "path": "/{account}/secondary_dns/primaries/{primaryserver}",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-084",
       "br_issue_id": "bd-3cd",
       "proposed_interfaces": [
@@ -6342,8 +6342,20 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "delete",
+          "arity": 3,
+          "signature": "ReqDnsimple.PrimaryServer.delete(req, account_id, primary_server_id)"
+        }
+      ],
+      "contract_tests": [
+        {
+          "file": "test/primary_server_test.exs",
+          "describe": "delete/3"
+        }
+      ]
     },
     {
       "operation_id": "transferDomain",

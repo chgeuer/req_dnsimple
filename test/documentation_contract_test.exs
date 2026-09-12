@@ -39,7 +39,8 @@ defmodule ReqDnsimple.DocumentationContractTest do
       {ReqDnsimple.BillingCharge, :list, 3},
       {ReqDnsimple.Contact, :list, 3},
       {ReqDnsimple.Contact, :get, 3},
-      {ReqDnsimple.PrimaryServer, :get, 3}
+      {ReqDnsimple.PrimaryServer, :get, 3},
+      {ReqDnsimple.PrimaryServer, :delete, 3}
     ]
 
     for {module, function, arity} <- exports do

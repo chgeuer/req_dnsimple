@@ -6,9 +6,13 @@ defmodule ReqDnsimple.PrimaryServer do
 
       ReqDnsimple.PrimaryServer.get(req, 1010, 1)
       #=> {:ok, %ReqDnsimple.PrimaryServer{}}
+
+      ReqDnsimple.PrimaryServer.delete(req, 1010, 1)
+      #=> :ok
   """
 
   # https://developer.dnsimple.com/v2/secondary-dns/#getPrimaryServer
+  # https://developer.dnsimple.com/v2/secondary-dns/#removePrimaryServer
 
   @type t :: %__MODULE__{
           id: integer(),
@@ -23,7 +27,7 @@ defmodule ReqDnsimple.PrimaryServer do
 
   defstruct ~w(id account_id name ip port linked_secondary_zones created_at updated_at)a
 
-  @get_schema [
+  @path_schema [
     account_id: [type: :integer, required: true],
     primary_server_id: [type: :integer, required: true]
   ]
@@ -40,7 +44,7 @@ defmodule ReqDnsimple.PrimaryServer do
     with {:ok, _validated_params} <-
            NimbleOptions.validate(
              [account_id: account_id, primary_server_id: primary_server_id],
-             @get_schema
+             @path_schema
            ) do
       req =
         Req.merge(req,
@@ -59,6 +63,43 @@ defmodule ReqDnsimple.PrimaryServer do
             {:ok, primary_server} -> {:ok, primary_server}
             :error -> ReqDnsimple.response_error(response)
           end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Deletes one secondary-DNS primary server configuration.
+
+  The request does not unlink zones or make any DNS or reachability requests.
+  """
+  @spec delete(Req.Request.t(), ReqDnsimple.account_id(), integer()) ::
+          :ok | {:error, term()}
+  def delete(req, account_id, primary_server_id) do
+    with {:ok, _validated_params} <-
+           NimbleOptions.validate(
+             [account_id: account_id, primary_server_id: primary_server_id],
+             @path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :delete,
+          url: "/:account_id/secondary_dns/primaries/:primary_server_id",
+          path_params_style: :colon,
+          path_params: [
+            account_id: account_id,
+            primary_server_id: primary_server_id
+          ]
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 204}} ->
+          :ok
 
         {:ok, response} ->
           ReqDnsimple.response_error(response)
