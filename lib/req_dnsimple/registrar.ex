@@ -930,16 +930,8 @@ defmodule ReqDnsimple.Registrar do
     ReqDnsimple.validate_options(attrs, @delegation_schema)
   end
 
-  defp validate_renewal_attrs(attrs) when is_list(attrs) do
-    NimbleOptions.validate(attrs, @renewal_schema)
-  end
-
   defp validate_renewal_attrs(attrs) do
-    {:error,
-     %NimbleOptions.ValidationError{
-       message: "expected a keyword list",
-       value: attrs
-     }}
+    ReqDnsimple.validate_options(attrs, @renewal_schema)
   end
 
   defp validate_registration_attrs(attrs) when is_list(attrs) do

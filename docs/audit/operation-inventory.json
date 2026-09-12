@@ -2211,7 +2211,8 @@
         "ReqDnsimple.Registrar.renew/4"
       ],
       "contract_tests": [
-        "test/req_dnsimple/registrar_test.exs: domainRenew"
+        "test/req_dnsimple/registrar_test.exs: domainRenew sends all supplied attributes once and returns the typed 201 payload",
+        "test/req_dnsimple/registrar_test.exs: domainRenew rejects malformed keyword containers before HTTP"
       ]
     },
     {

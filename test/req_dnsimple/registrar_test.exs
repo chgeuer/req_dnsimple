@@ -1478,6 +1478,33 @@ defmodule ReqDnsimple.RegistrarTest do
       refute_received {:request, _request}
     end
 
+    test "domainRenew rejects malformed keyword containers before HTTP" do
+      request =
+        client(201, %{
+          "data" => %{
+            "id" => 1,
+            "domain_id" => 100,
+            "period" => 1,
+            "state" => "renewed",
+            "created_at" => "2026-09-01T10:00:00Z",
+            "updated_at" => "2026-09-01T10:00:00Z"
+          }
+        })
+
+      for attrs <- [[:invalid], [{:name}]] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Registrar.renew(request, 1010, "example.test", attrs)
+
+        refute_received {:request, _request}
+      end
+
+      assert {:ok, %ReqDnsimple.Registrar.Renewal{}} =
+               ReqDnsimple.Registrar.renew(request, 1010, "example.test", [])
+
+      assert_request(:post, "/v2/1010/registrar/domains/example.test/renewals", %{}, nil)
+      refute_received {:request, _request}
+    end
+
     test "domainRenew preserves documented and shared HTTP failures" do
       for status <- [400, 402, 401, 403, 429, 500, 418] do
         body = %{
