@@ -215,6 +215,7 @@ arbitrary-precision decimal library.
 ```elixir
 {:ok, contacts} = ReqDnsimple.Contact.list(client, account_id, sort: [label: :asc])
 {:ok, contact}  = ReqDnsimple.Contact.get(client, account_id, contact_id)
+:ok = ReqDnsimple.Contact.delete(client, account_id, contact_id)
 ```
 
 ### Secondary-DNS primary servers
@@ -259,7 +260,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.Zone` | `/zones` | `list/3`, `update_ns_records/4`, `get_zone_file/3`, `check_zone_distribution/3` |
 | `ReqDnsimple.ZoneRecord` | `/zones/:zone/records`, `/zones/:zone/batch` | `list/4`, `get/4`, `create/4`, `update/5`, `delete/4`, `check_distribution/4`, `batch_change/4` |
 | `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/3` |
-| `ReqDnsimple.Contact` | `/contacts` | `list/3`, `get/3` |
+| `ReqDnsimple.Contact` | `/contacts` | `list/3`, `get/3`, `delete/3` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries/:primary_server` | `get/3`, `delete/3`, `from_json/1` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |
 | `ReqDnsimple.Helper` | Req utilities | `append/2` (URL/param merging) |

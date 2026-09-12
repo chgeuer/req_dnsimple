@@ -8,6 +8,7 @@ defmodule ReqDnsimple.PublicTypespecTest do
 
     assert_spec(ReqDnsimple.Account, :list, 1, "[t()] | {:error, any()}")
     assert_spec(ReqDnsimple.Contact, :get, 3, "{:ok, t()} | {:error, term()}")
+    assert_spec(ReqDnsimple.Contact, :delete, 3, ":ok | {:error, term()}")
     assert_spec(ReqDnsimple.PrimaryServer, :delete, 3, ":ok | {:error, term()}")
 
     for module <- [ReqDnsimple.BillingCharge, ReqDnsimple.Contact, ReqDnsimple.Zone] do

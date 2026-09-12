@@ -56,6 +56,7 @@ Different modules use slightly different return conventions:
 | `ZoneRecord.batch_change/4` | `{:ok, %ZoneRecord.BatchResult{}}` | `{:error, reason}` |
 | `Contact.list/3` | `{:ok, [%Contact{}, ...]}` | `{:error, reason}` |
 | `Contact.get/3` | `{:ok, %Contact{}}` | `{:error, :not_found}` |
+| `Contact.delete/3` | `:ok` | `{:error, reason}` |
 | `BillingCharge.list/3` | `{:ok, [%BillingCharge{}, ...]}` | `{:error, reason}` |
 | `Zone.get_zone_file/3` | `{:ok, binary()}` | `{:error, reason}` |
 | `Zone.check_zone_distribution/3` | `{:ok, boolean()}` | `{:error, reason}` |

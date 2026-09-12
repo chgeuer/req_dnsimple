@@ -1264,7 +1264,7 @@
       "method": "DELETE",
       "path": "/{account}/contacts/{contact}",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-021",
       "br_issue_id": "bd-3aj",
       "proposed_interfaces": [
@@ -1311,8 +1311,20 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.Contact",
+          "function": "delete",
+          "arity": 3,
+          "signature": "ReqDnsimple.Contact.delete(req, account_id, contact_id)"
+        }
+      ],
+      "contract_tests": [
+        {
+          "file": "test/contact_test.exs",
+          "describe": "delete/3"
+        }
+      ]
     },
     {
       "operation_id": "deleteDomain",

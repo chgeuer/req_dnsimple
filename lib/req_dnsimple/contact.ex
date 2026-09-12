@@ -2,6 +2,11 @@ defmodule ReqDnsimple.Contact do
   @moduledoc """
   DNSimple Contact API functionality.
   Provides contact management operations.
+
+  ## Example
+
+      ReqDnsimple.Contact.delete(req, 1010, 1)
+      #=> :ok
   """
 
   # https://developer.dnsimple.com/v2/contacts/
@@ -32,6 +37,11 @@ defmodule ReqDnsimple.Contact do
                label email fax phone
                address1 address2 postal_code city country state_province
                created_at updated_at)a
+
+  @delete_contact_schema [
+    account_id: [type: :integer, required: true],
+    contact_id: [type: :integer, required: true]
+  ]
 
   @spec from_json(map()) :: t()
   defp from_json(json) do
@@ -72,6 +82,43 @@ defmodule ReqDnsimple.Contact do
 
       {:error, e} ->
         {:error, e}
+    end
+  end
+
+  @doc """
+  Deletes one contact.
+
+  Contacts that are in use remain unchanged and return the API's HTTP error.
+  """
+  @spec delete(Req.Request.t(), ReqDnsimple.account_id(), ReqDnsimple.contact_id()) ::
+          :ok | {:error, term()}
+  def delete(req, account_id, contact_id) do
+    with {:ok, _validated_params} <-
+           NimbleOptions.validate(
+             [account_id: account_id, contact_id: contact_id],
+             @delete_contact_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :delete,
+          url: "/:account_id/contacts/:contact_id",
+          path_params_style: :colon,
+          path_params: [
+            account_id: account_id,
+            contact_id: contact_id
+          ]
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 204}} ->
+          :ok
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
     end
   end
 
