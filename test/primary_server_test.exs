@@ -14,6 +14,237 @@ defmodule ReqDnsimple.PrimaryServerTest do
     "updated_at" => "2026-09-01T10:30:00+02:00"
   }
 
+  @pagination %{
+    "current_page" => 1,
+    "per_page" => 1,
+    "total_entries" => 1,
+    "total_pages" => 1
+  }
+
+  describe "list_page/3 and list/3" do
+    test "listPrimaryServers sends ordered options once and returns typed data with pagination" do
+      data =
+        Map.put(
+          @primary_server_data,
+          "linked_secondary_zones",
+          ["secondary.example", "secondary.example.net"]
+        )
+
+      assert {:ok,
+              {[
+                 %ReqDnsimple.PrimaryServer{
+                   id: 1,
+                   account_id: 1010,
+                   name: "Offline primary",
+                   ip: "192.0.2.1",
+                   port: 5353,
+                   linked_secondary_zones: [
+                     "secondary.example",
+                     "secondary.example.net"
+                   ],
+                   created_at: ~U[2026-09-01 08:00:00Z],
+                   updated_at: ~U[2026-09-01 08:30:00Z]
+                 }
+               ], pagination}} =
+               ReqDnsimple.PrimaryServer.list_page(
+                 client(200, %{
+                   "data" => [data],
+                   "pagination" => %{@pagination | "current_page" => 2}
+                 }),
+                 1010,
+                 sort: [id: :asc, name: :desc],
+                 page: 2,
+                 per_page: 1
+               )
+
+      assert pagination == %{@pagination | "current_page" => 2}
+
+      assert_request(
+        :get,
+        "/v2/1010/secondary_dns/primaries",
+        %{"sort" => "id:asc,name:desc", "page" => 2, "per_page" => 1},
+        nil
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "listPrimaryServers convenience alias requests one page and preserves empty metadata" do
+      pagination = %{
+        "current_page" => 1,
+        "per_page" => 30,
+        "total_entries" => 0,
+        "total_pages" => 0
+      }
+
+      assert {:ok, {[], ^pagination}} =
+               ReqDnsimple.PrimaryServer.list(
+                 client(200, %{"data" => [], "pagination" => pagination}),
+                 0
+               )
+
+      assert_request(:get, "/v2/0/secondary_dns/primaries", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "listPrimaryServers rejects invalid paths and options before HTTP" do
+      request =
+        client(200, %{"data" => [@primary_server_data], "pagination" => @pagination})
+
+      invalid_calls = [
+        {"1010", []},
+        {nil, []},
+        {1010, [:invalid]},
+        {1010, [{:name}]},
+        {1010, [unknown: true]},
+        {1010, [sort: "id:asc"]},
+        {1010, [sort: [ip: :asc]]},
+        {1010, [sort: [id: :sideways]]},
+        {1010, [page: 0]},
+        {1010, [per_page: 0]},
+        {1010, [per_page: 101]}
+      ]
+
+      for {account_id, opts} <- invalid_calls do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.PrimaryServer.list_page(request, account_id, opts)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "listPrimaryServers preserves shared HTTP and transport failures" do
+      for status <- [401, 403, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"account" => ["is unavailable"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.PrimaryServer.list_page(client(status, body), 1010)
+
+        assert_request(:get, "/v2/1010/secondary_dns/primaries", %{}, nil)
+        refute_received {:request, _request}
+      end
+
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.PrimaryServer.list_page(transport_error_client(:timeout), 1010)
+    end
+
+    test "listPrimaryServers returns explicit errors for malformed successful responses" do
+      malformed_bodies = [
+        %{},
+        %{"data" => nil, "pagination" => @pagination},
+        %{"data" => %{}, "pagination" => @pagination},
+        %{
+          "data" => [Map.delete(@primary_server_data, "linked_secondary_zones")],
+          "pagination" => @pagination
+        },
+        %{
+          "data" => [Map.put(@primary_server_data, "linked_secondary_zones", [nil])],
+          "pagination" => @pagination
+        },
+        %{
+          "data" => [Map.put(@primary_server_data, "created_at", "not-a-timestamp")],
+          "pagination" => @pagination
+        },
+        %{"data" => [@primary_server_data]},
+        %{"data" => [@primary_server_data], "pagination" => nil},
+        %{
+          "data" => [@primary_server_data],
+          "pagination" => Map.delete(@pagination, "total_entries")
+        },
+        %{
+          "data" => [@primary_server_data],
+          "pagination" => %{@pagination | "per_page" => 0}
+        }
+      ]
+
+      for body <- malformed_bodies do
+        assert {:error, %{status: 200, response: ^body}} =
+                 ReqDnsimple.PrimaryServer.list_page(client(200, body), 1010)
+
+        assert_request(:get, "/v2/1010/secondary_dns/primaries", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+  end
+
+  describe "list_all/3" do
+    test "enumerates from page one while preserving options and server order" do
+      second = Map.merge(@primary_server_data, %{"id" => 2, "name" => "Second primary"})
+
+      pages = %{
+        1 =>
+          {[@primary_server_data],
+           %{@pagination | "current_page" => 1, "total_entries" => 2, "total_pages" => 2}},
+        2 =>
+          {[second],
+           %{@pagination | "current_page" => 2, "total_entries" => 2, "total_pages" => 2}}
+      }
+
+      assert {:ok,
+              [
+                %ReqDnsimple.PrimaryServer{id: 1, name: "Offline primary"},
+                %ReqDnsimple.PrimaryServer{id: 2, name: "Second primary"}
+              ]} =
+               ReqDnsimple.PrimaryServer.list_all(page_client(pages), 1010,
+                 sort: [name: :desc, id: :asc],
+                 per_page: 1
+               )
+
+      query = %{"sort" => "name:desc,id:asc", "per_page" => 1}
+      assert_request(:get, "/v2/1010/secondary_dns/primaries", Map.put(query, "page", 1))
+      assert_request(:get, "/v2/1010/secondary_dns/primaries", Map.put(query, "page", 2))
+      refute_received {:request, _request}
+    end
+
+    test "rejects explicit pages and malformed option containers before HTTP" do
+      request = client(200, %{"data" => [], "pagination" => @pagination})
+
+      assert {:error, {:invalid_option, :page}} =
+               ReqDnsimple.PrimaryServer.list_all(request, 1010, page: 2)
+
+      for opts <- [[:invalid], [{:name}]] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.PrimaryServer.list_all(request, 1010, opts)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "aborts on later-page failures and rejects non-progressing pagination" do
+      first_page =
+        %{@pagination | "current_page" => 1, "total_entries" => 2, "total_pages" => 2}
+
+      http_client =
+        response_client(fn
+          1 -> {200, %{"data" => [@primary_server_data], "pagination" => first_page}}
+          2 -> {503, %{"message" => "unavailable"}}
+        end)
+
+      assert {:error, %{status: 503, response: %{"message" => "unavailable"}}} =
+               ReqDnsimple.PrimaryServer.list_all(http_client, 1010)
+
+      assert_request(:get, "/v2/1010/secondary_dns/primaries", %{"page" => 1})
+      assert_request(:get, "/v2/1010/secondary_dns/primaries", %{"page" => 2})
+
+      repeated = %{@pagination | "current_page" => 1, "total_entries" => 2, "total_pages" => 2}
+
+      assert {:error, {:invalid_pagination, ^repeated}} =
+               ReqDnsimple.PrimaryServer.list_all(
+                 response_client(fn _page ->
+                   {200, %{"data" => [@primary_server_data], "pagination" => repeated}}
+                 end),
+                 1010
+               )
+
+      assert_request(:get, "/v2/1010/secondary_dns/primaries", %{"page" => 1})
+      assert_request(:get, "/v2/1010/secondary_dns/primaries", %{"page" => 2})
+      refute_received {:request, _request}
+    end
+  end
+
   describe "get/3" do
     test "getPrimaryServer requests one unlinked server and returns a typed response" do
       assert {:ok,
@@ -522,5 +753,37 @@ defmodule ReqDnsimple.PrimaryServerTest do
       assert {:error, %Req.TransportError{reason: :timeout}} =
                ReqDnsimple.PrimaryServer.delete(transport_error_client(:timeout), 1010, 1)
     end
+  end
+
+  defp page_client(pages) do
+    response_client(fn page ->
+      {data, pagination} = Map.fetch!(pages, page)
+      {200, %{"data" => data, "pagination" => pagination}}
+    end)
+  end
+
+  defp response_client(response_for_page) do
+    test_pid = self()
+
+    adapter = fn request ->
+      send(test_pid, {:request, request})
+
+      page =
+        request.url.query
+        |> then(&URI.decode_query(&1 || ""))
+        |> Map.get("page", "1")
+        |> String.to_integer()
+
+      case response_for_page.(page) do
+        {:error, reason} ->
+          {request, %Req.TransportError{reason: reason}}
+
+        {status, body} ->
+          {request, %Req.Response{status: status, body: body}}
+      end
+    end
+
+    ReqDnsimple.new_client("dnsimple_u_fake-token")
+    |> Req.merge(adapter: adapter, retry: false)
   end
 end

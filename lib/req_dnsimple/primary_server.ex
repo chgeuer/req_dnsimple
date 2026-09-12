@@ -16,6 +16,16 @@ defmodule ReqDnsimple.PrimaryServer do
       ReqDnsimple.PrimaryServer.get(req, 1010, 1)
       #=> {:ok, %ReqDnsimple.PrimaryServer{}}
 
+      ReqDnsimple.PrimaryServer.list_page(req, 1010,
+        sort: [id: :asc, name: :desc],
+        page: 2,
+        per_page: 30
+      )
+      #=> {:ok, {[%ReqDnsimple.PrimaryServer{}], %{"current_page" => 2}}}
+
+      ReqDnsimple.PrimaryServer.list_all(req, 1010, sort: [name: :asc])
+      #=> {:ok, [%ReqDnsimple.PrimaryServer{}]}
+
       ReqDnsimple.PrimaryServer.link(req, 1010, 1, zone: "secondary.example.test")
       #=> {:ok, %ReqDnsimple.PrimaryServer{}}
 
@@ -25,6 +35,7 @@ defmodule ReqDnsimple.PrimaryServer do
 
   # https://developer.dnsimple.com/v2/secondary-dns/#createPrimaryServer
   # https://developer.dnsimple.com/v2/secondary-dns/#getPrimaryServer
+  # https://developer.dnsimple.com/v2/secondary-dns/#listPrimaryServers
   # https://developer.dnsimple.com/v2/secondary-dns/#linkPrimaryServer
   # https://developer.dnsimple.com/v2/secondary-dns/#removePrimaryServer
 
@@ -58,6 +69,15 @@ defmodule ReqDnsimple.PrimaryServer do
 
   @link_schema [
     zone: [type: :string, required: true]
+  ]
+
+  @list_schema [
+    sort: [
+      type: {:custom, ReqDnsimple, :validate_sort, [[:id, :name]]},
+      doc: "Sort by id or name. Format: [id: :asc, name: :desc]"
+    ],
+    page: [type: :pos_integer, doc: "Page number for pagination"],
+    per_page: [type: {:in, 1..100}, doc: "Number of primary servers per page"]
   ]
 
   @doc """
@@ -147,6 +167,60 @@ defmodule ReqDnsimple.PrimaryServer do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Lists one page of secondary-DNS primary servers.
+
+  Supports ordered `:sort` terms for `:id` and `:name`, plus `:page` and
+  `:per_page`. The returned pagination metadata retains its string keys.
+  """
+  @spec list_page(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req, account_id, opts \\ []) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate([account_id: account_id], @create_path_schema),
+         {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_schema) do
+      case request_list(req, account_id, validated_opts) do
+        {:ok,
+         %Req.Response{
+           status: 200,
+           body: %{"data" => data, "pagination" => pagination}
+         } = response} ->
+          case decode_page(data, pagination) do
+            {:ok, result} -> {:ok, result}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Lists one page of secondary-DNS primary servers.
+
+  This is a convenience alias for `list_page/3`; it never enumerates additional
+  pages implicitly.
+  """
+  @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list(req, account_id, opts \\ []), do: list_page(req, account_id, opts)
+
+  @doc """
+  Enumerates every page of secondary-DNS primary servers in server order.
+
+  Enumeration always begins at page one, so an explicit `:page` option is
+  rejected. Other validated list options are retained for every request.
+  """
+  @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
+          {:ok, [t()]} | {:error, term()}
+  def list_all(req, account_id, opts \\ []) do
+    ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, &1))
   end
 
   @doc """
@@ -274,6 +348,60 @@ defmodule ReqDnsimple.PrimaryServer do
   end
 
   defp decode(_data), do: :error
+
+  defp decode_page(data, pagination) when is_list(data) do
+    with {:ok, primary_servers} <- decode_many(data),
+         true <- valid_pagination?(pagination) do
+      {:ok, {primary_servers, pagination}}
+    else
+      _error -> :error
+    end
+  end
+
+  defp decode_page(_data, _pagination), do: :error
+
+  defp decode_many(data) do
+    Enum.reduce_while(data, {:ok, []}, fn item, {:ok, primary_servers} ->
+      case decode(item) do
+        {:ok, primary_server} -> {:cont, {:ok, [primary_server | primary_servers]}}
+        :error -> {:halt, :error}
+      end
+    end)
+    |> case do
+      {:ok, primary_servers} -> {:ok, Enum.reverse(primary_servers)}
+      :error -> :error
+    end
+  end
+
+  defp valid_pagination?(%{
+         "current_page" => current_page,
+         "per_page" => per_page,
+         "total_entries" => total_entries,
+         "total_pages" => total_pages
+       })
+       when is_integer(current_page) and current_page >= 0 and is_integer(per_page) and
+              per_page > 0 and is_integer(total_entries) and total_entries >= 0 and
+              is_integer(total_pages) and total_pages >= 0,
+       do: true
+
+  defp valid_pagination?(_pagination), do: false
+
+  defp request_list(req, account_id, opts) do
+    params =
+      opts
+      |> ReqDnsimple.convert_sort_to_string()
+      |> Map.new()
+
+    req
+    |> Req.merge(
+      method: :get,
+      url: "/:account_id/secondary_dns/primaries",
+      path_params_style: :colon,
+      path_params: [account_id: account_id],
+      params: params
+    )
+    |> Req.request()
+  end
 
   defp valid_datetime?(value) do
     match?({:ok, _datetime, _offset}, DateTime.from_iso8601(value))

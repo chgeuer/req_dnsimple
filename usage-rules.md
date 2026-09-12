@@ -335,13 +335,15 @@ not contact the callback URL, inspect deliveries, or list registrations first.
   request, and does not read or merge the prior delegation. Both are distinct
   from hosted-zone apex NS records and `Zone.update_ns_records/4`.
 - `ReqDnsimple.PrimaryServer` — Secondary-DNS primary server creation,
-  retrieval, zone linking, and explicit deletion. Creation requires a name and
-  IP, preserves a supplied integer port (including zero), omits an absent port,
-  and performs no reachability or follow-up requests. Linking requires a zone
-  name and sends one request without looking up or creating either resource.
-  Struct: `id`, `account_id`, `name`, `ip`, integer `port`, ordered
-  `linked_secondary_zones`, and timestamps. Deletion does not unlink zones or
-  perform DNS requests.
+  retrieval, paginated listing, zone linking, and explicit deletion. Listing
+  supports ordered `id`/`name` sorting: `list_page/3` and `list/3` return one
+  page with string-keyed metadata, while `list_all/3` explicitly enumerates
+  from page one. Creation requires a name and IP, preserves a supplied integer
+  port (including zero), omits an absent port, and performs no reachability or
+  follow-up requests. Linking requires a zone name and sends one request without
+  looking up or creating either resource. Struct: `id`, `account_id`, `name`,
+  `ip`, integer `port`, ordered `linked_secondary_zones`, and timestamps.
+  Deletion does not unlink zones or perform DNS requests.
 - `ReqDnsimple.Service` — Retrieve a global one-click service by sid or ID,
   including typed timestamps and setting definitions, or apply/unapply one on a
   domain. Optional dynamic settings use string keys. Omitted settings send no

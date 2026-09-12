@@ -5079,7 +5079,7 @@
       "method": "GET",
       "path": "/{account}/secondary_dns/primaries",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-070",
       "br_issue_id": "bd-36i",
       "proposed_interfaces": [
@@ -5219,8 +5219,45 @@
           "alias_contract": "Delegate once to the explicit page operation, retaining the same payload/pagination pair; never enumerate implicitly."
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "list_page",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ]
+        },
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "list_all",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ]
+        },
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "list",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ]
+        }
+      ],
+      "contract_tests": [
+        {
+          "file": "test/primary_server_test.exs",
+          "describe": "list_page/3 and list/3"
+        },
+        {
+          "file": "test/primary_server_test.exs",
+          "describe": "list_all/3"
+        }
+      ]
     },
     {
       "operation_id": "listPushes",

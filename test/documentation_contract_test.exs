@@ -80,6 +80,9 @@ defmodule ReqDnsimple.DocumentationContractTest do
       {ReqDnsimple.Contact, :delete, 3},
       {ReqDnsimple.Registrar, :disable_auto_renewal, 3},
       {ReqDnsimple.PrimaryServer, :get, 3},
+      {ReqDnsimple.PrimaryServer, :list, 3},
+      {ReqDnsimple.PrimaryServer, :list_page, 3},
+      {ReqDnsimple.PrimaryServer, :list_all, 3},
       {ReqDnsimple.PrimaryServer, :delete, 3}
     ]
 

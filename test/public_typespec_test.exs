@@ -9,6 +9,28 @@ defmodule ReqDnsimple.PublicTypespecTest do
     assert_spec(ReqDnsimple.Account, :list, 1, "[t()] | {:error, any()}")
     assert_spec(ReqDnsimple.Contact, :get, 3, "{:ok, t()} | {:error, term()}")
     assert_spec(ReqDnsimple.Contact, :delete, 3, ":ok | {:error, term()}")
+
+    assert_spec(
+      ReqDnsimple.PrimaryServer,
+      :list,
+      3,
+      "{:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}"
+    )
+
+    assert_spec(
+      ReqDnsimple.PrimaryServer,
+      :list_page,
+      3,
+      "{:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}"
+    )
+
+    assert_spec(
+      ReqDnsimple.PrimaryServer,
+      :list_all,
+      3,
+      "{:ok, [t()]} | {:error, term()}"
+    )
+
     assert_spec(ReqDnsimple.PrimaryServer, :delete, 3, ":ok | {:error, term()}")
     assert_spec(ReqDnsimple.Registrar, :disable_auto_renewal, 3, ":ok | {:error, term()}")
 
