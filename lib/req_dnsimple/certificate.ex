@@ -102,13 +102,13 @@ defmodule ReqDnsimple.Certificate do
     """
 
     @type t :: %__MODULE__{
-            id: integer(),
-            old_certificate_id: integer(),
-            new_certificate_id: integer(),
-            state: binary(),
-            auto_renew: boolean(),
-            created_at: DateTime.t(),
-            updated_at: DateTime.t()
+            id: integer() | nil,
+            old_certificate_id: integer() | nil,
+            new_certificate_id: integer() | nil,
+            state: binary() | nil,
+            auto_renew: boolean() | nil,
+            created_at: DateTime.t() | nil,
+            updated_at: DateTime.t() | nil
           }
 
     defstruct [
@@ -232,7 +232,7 @@ defmodule ReqDnsimple.Certificate do
              ],
              @path_schema
            ),
-         {:ok, validated_attrs} <- validate_attrs(attrs, @renewal_schema) do
+         {:ok, validated_attrs} <- ReqDnsimple.validate_options(attrs, @renewal_schema) do
       request_options = [
         method: :post,
         url: "/:account_id/domains/:domain/certificates/letsencrypt/:certificate_id/renewals",
@@ -424,33 +424,21 @@ defmodule ReqDnsimple.Certificate do
   defp validate_purchase_attrs(attrs),
     do: ReqDnsimple.validate_options(attrs, @purchase_schema)
 
-  defp validate_attrs(attrs, schema) when is_list(attrs) do
-    NimbleOptions.validate(attrs, schema)
-  end
-
-  defp validate_attrs(attrs, _schema) do
-    {:error,
-     %NimbleOptions.ValidationError{
-       message: "expected a keyword list",
-       value: attrs
-     }}
-  end
-
-  defp decode_renewal(%{
-         "id" => id,
-         "old_certificate_id" => old_certificate_id,
-         "new_certificate_id" => new_certificate_id,
-         "state" => state,
-         "auto_renew" => auto_renew,
-         "created_at" => created_at,
-         "updated_at" => updated_at
-       })
-       when is_integer(id) and is_integer(old_certificate_id) and
-              is_integer(new_certificate_id) and
-              state in ["cancelled", "new", "renewing", "renewed", "failed"] and
-              is_boolean(auto_renew) do
-    with {:ok, created_at} <- parse_datetime(created_at),
-         {:ok, updated_at} <- parse_datetime(updated_at) do
+  defp decode_renewal(data) when is_map(data) do
+    with {:ok, id} <- decode_optional(data, "id", &is_integer/1),
+         {:ok, old_certificate_id} <-
+           decode_optional(data, "old_certificate_id", &is_integer/1),
+         {:ok, new_certificate_id} <-
+           decode_optional(data, "new_certificate_id", &is_integer/1),
+         {:ok, state} <-
+           decode_optional(
+             data,
+             "state",
+             &(&1 in ["cancelled", "new", "renewing", "renewed", "failed"])
+           ),
+         {:ok, auto_renew} <- decode_optional(data, "auto_renew", &is_boolean/1),
+         {:ok, created_at} <- decode_optional(data, "created_at", &parse_datetime/1),
+         {:ok, updated_at} <- decode_optional(data, "updated_at", &parse_datetime/1) do
       {:ok,
        %Renewal{
          id: id,
@@ -465,6 +453,21 @@ defmodule ReqDnsimple.Certificate do
   end
 
   defp decode_renewal(_data), do: :error
+
+  defp decode_optional(data, key, validator) do
+    case Map.fetch(data, key) do
+      :error -> {:ok, nil}
+      {:ok, value} -> validate_optional_value(value, validator)
+    end
+  end
+
+  defp validate_optional_value(value, validator) do
+    case validator.(value) do
+      true -> {:ok, value}
+      {:ok, decoded} -> {:ok, decoded}
+      _ -> :error
+    end
+  end
 
   defp decode_purchase(%{
          "id" => id,

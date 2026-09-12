@@ -744,6 +744,86 @@ defmodule ReqDnsimple.CertificateTest do
       refute_received {:request, _request}
     end
 
+    test "purchaseRenewalLetsencryptCertificate rejects malformed keyword containers before HTTP" do
+      request = client(201, %{"data" => @renewal_data})
+
+      for attrs <- [[:invalid], [{:name}]] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Certificate.purchase_letsencrypt_renewal(
+                   request,
+                   1010,
+                   "example.test",
+                   202,
+                   attrs
+                 )
+
+        refute_received {:request, _request}
+      end
+
+      assert {:ok, %ReqDnsimple.Certificate.Renewal{}} =
+               ReqDnsimple.Certificate.purchase_letsencrypt_renewal(
+                 request,
+                 1010,
+                 "example.test",
+                 202,
+                 auto_renew: false
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/domains/example.test/certificates/letsencrypt/202/renewals",
+        %{},
+        %{auto_renew: false}
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "purchaseRenewalLetsencryptCertificate preserves omitted response fields as nil" do
+      fields = [
+        {"id", :id},
+        {"old_certificate_id", :old_certificate_id},
+        {"new_certificate_id", :new_certificate_id},
+        {"state", :state},
+        {"auto_renew", :auto_renew},
+        {"created_at", :created_at},
+        {"updated_at", :updated_at}
+      ]
+
+      for {json_field, struct_field} <- fields do
+        body = %{"data" => Map.delete(@renewal_data, json_field)}
+
+        assert {:ok, %ReqDnsimple.Certificate.Renewal{} = renewal} =
+                 ReqDnsimple.Certificate.purchase_letsencrypt_renewal(
+                   client(201, body),
+                   1010,
+                   "example.test",
+                   202
+                 )
+
+        assert Map.fetch!(Map.from_struct(renewal), struct_field) == nil
+
+        assert_request(
+          :post,
+          "/v2/1010/domains/example.test/certificates/letsencrypt/202/renewals"
+        )
+
+        refute_received {:request, _request}
+      end
+
+      assert {:ok, %ReqDnsimple.Certificate.Renewal{} = renewal} =
+               ReqDnsimple.Certificate.purchase_letsencrypt_renewal(
+                 client(201, %{"data" => %{}}),
+                 1010,
+                 "example.test",
+                 202
+               )
+
+      assert renewal == %ReqDnsimple.Certificate.Renewal{}
+      assert_request(:post, "/v2/1010/domains/example.test/certificates/letsencrypt/202/renewals")
+      refute_received {:request, _request}
+    end
+
     test "purchaseRenewalLetsencryptCertificate preserves HTTP failures and disables retries" do
       for status <- [400, 404, 412, 401, 403, 429, 500, 418] do
         body = %{
@@ -777,8 +857,8 @@ defmodule ReqDnsimple.CertificateTest do
       malformed_payloads = [
         %{},
         %{"data" => nil},
-        %{"data" => Map.delete(@renewal_data, "id")},
         %{"data" => Map.put(@renewal_data, "id", "505")},
+        %{"data" => Map.put(@renewal_data, "id", nil)},
         %{"data" => Map.put(@renewal_data, "old_certificate_id", nil)},
         %{"data" => Map.put(@renewal_data, "new_certificate_id", nil)},
         %{"data" => Map.put(@renewal_data, "state", "unknown")},
