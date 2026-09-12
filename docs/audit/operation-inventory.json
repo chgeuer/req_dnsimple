@@ -2611,7 +2611,7 @@
       "method": "GET",
       "path": "/{account}/domains/{domain}/certificates/{certificate}",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-042",
       "br_issue_id": "bd-ub4",
       "proposed_interfaces": [
@@ -2663,8 +2663,16 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "get",
+          "arity": 4
+        }
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/certificate_test.exs"
+      ]
     },
     {
       "operation_id": "getCertificatePrivateKey",

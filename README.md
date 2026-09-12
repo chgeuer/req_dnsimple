@@ -199,6 +199,14 @@ domain's registrar delegation.
 ### Download a certificate
 
 ```elixir
+{:ok, %ReqDnsimple.Certificate{} = certificate} =
+  ReqDnsimple.Certificate.get(client, account_id, "example.com", certificate_id)
+```
+
+Certificate metadata includes its issuance state, alternate names, renewal
+setting, and typed creation/update and nullable expiry values.
+
+```elixir
 {:ok, %ReqDnsimple.Certificate.Download{} = bundle} =
   ReqDnsimple.Certificate.download(client, account_id, "example.com", certificate_id)
 ```
