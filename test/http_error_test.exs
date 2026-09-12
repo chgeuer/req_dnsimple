@@ -140,10 +140,25 @@ defmodule ReqDnsimple.HttpErrorTest do
       "updated_at" => "2024-01-02T00:00:00Z"
     }
 
-    assert [%ReqDnsimple.NsRecord{id: 1}] =
-             ReqDnsimple.ns_records(client(200, %{"data" => [ns_data]}), 1010, "example.com")
+    ns_pagination = %{
+      "current_page" => 1,
+      "per_page" => 100,
+      "total_entries" => 1,
+      "total_pages" => 1
+    }
 
-    assert_request(:get, "/v2/1010/zones/example.com/ns_records")
+    assert [%ReqDnsimple.NsRecord{id: 1}] =
+             ReqDnsimple.ns_records(
+               client(200, %{"data" => [ns_data], "pagination" => ns_pagination}),
+               1010,
+               "example.com"
+             )
+
+    assert_request(:get, "/v2/1010/zones/example.com/records", %{
+      "name" => "",
+      "type" => "NS",
+      "page" => 1
+    })
 
     zone_data = %{
       "id" => 9,

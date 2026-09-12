@@ -156,11 +156,16 @@ ReqDnsimple.create_zone_record(client, account_id, "example.com", attrs)
 ReqDnsimple.ZoneRecord.create(client, account_id, "example.com", attrs)
 ```
 
+`ReqDnsimple.ns_records/3` is a read-only convenience for enumerating every
+apex (`name=""`) NS record in a zone through the zone-record collection. These
+records describe the zone apex; they are distinct from registrar delegation and
+from the separate API that explicitly replaces a zone's NS records.
+
 ## API Modules
 
 | Module | DNSimple API | Operations |
 |--------|-------------|------------|
-| `ReqDnsimple` | Client, `/whoami`, NS records | `new_client/1`, `whoami/1`, `token_type/1`, `ns_records/3` |
+| `ReqDnsimple` | Client, `/whoami`, apex NS record enumeration | `new_client/1`, `whoami/1`, `token_type/1`, `ns_records/3` |
 | `ReqDnsimple.Account` | `/accounts` | `list/1` |
 | `ReqDnsimple.Zone` | `/zones` | `list/3`, `get_zone_file/3`, `check_zone_distribution/3` |
 | `ReqDnsimple.ZoneRecord` | `/zones/:zone/records` | `list/4`, `get/4`, `create/4`, `update/5`, `delete/4` |

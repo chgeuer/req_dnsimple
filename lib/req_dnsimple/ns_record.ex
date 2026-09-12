@@ -4,7 +4,7 @@ defmodule ReqDnsimple.NsRecord do
   """
   @type t :: %__MODULE__{
           id: ReqDnsimple.record_id(),
-          zone_id: ReqDnsimple.zone_id(),
+          zone_id: ReqDnsimple.zone_name(),
           parent_id: integer() | nil,
           name: binary(),
           content: binary(),

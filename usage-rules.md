@@ -106,6 +106,13 @@ client = ReqDnsimple.new_client(token)
 {:ok, {records, _pagination}} = ReqDnsimple.ZoneRecord.list(client, account.id, "example.com")
 ```
 
+### Reading Apex Name Server Records
+
+`ReqDnsimple.ns_records/3` reads all apex NS records by listing zone records
+with exact `name=""` and `type="NS"` filters. It is read-only and returns a bare
+list of `ReqDnsimple.NsRecord` structs. Apex zone records are separate from the
+domain's registrar delegation and from the explicit zone-NS-update API.
+
 ## Module Reference
 
 - `ReqDnsimple` — Client creation (`new_client/1`), `whoami/1`, `token_type/1`,

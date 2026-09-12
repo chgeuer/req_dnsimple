@@ -80,28 +80,12 @@ defmodule ReqDnsimple do
   @spec ns_records(Req.Request.t(), ReqDnsimple.account_id(), binary()) ::
           [ReqDnsimple.NsRecord.t()] | {:error, term()}
   def ns_records(req, account_id, zone_id) do
-    # https://developer.dnsimple.com/v2/zones/ns-records/
+    case ReqDnsimple.ZoneRecord.list_all(req, account_id, zone_id, name: "", type: "NS") do
+      {:ok, records} ->
+        Enum.map(records, &struct(ReqDnsimple.NsRecord, Map.from_struct(&1)))
 
-    req
-    |> Req.merge(
-      method: :get,
-      url: "/:account/zones/:zone/ns_records",
-      path_params_style: :colon,
-      path_params: [
-        account: account_id,
-        zone: zone_id
-      ]
-    )
-    |> Req.request()
-    |> case do
-      {:ok, %Req.Response{status: 200, body: %{"data" => data}}} ->
-        data |> Enum.map(&ReqDnsimple.NsRecord.from_json/1)
-
-      {:ok, response} ->
-        response_error(response)
-
-      {:error, e} ->
-        {:error, e}
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
