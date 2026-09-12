@@ -3825,7 +3825,7 @@
       "method": "GET",
       "path": "/{account}/webhooks/{webhook}",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-059",
       "br_issue_id": "bd-10h",
       "proposed_interfaces": [
@@ -3872,8 +3872,12 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.Webhook.get/3"
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/webhook_test.exs: get/3"
+      ]
     },
     {
       "operation_id": "getZone",

@@ -195,15 +195,23 @@ Disabling sends one bodyless request to remove the domain's vanity A and AAAA
 configuration. Neither operation changes registrar delegation, and disabling
 does not delete records individually.
 
-### Deregister a webhook endpoint
+### Retrieve or deregister a webhook endpoint
+
+```elixir
+{:ok, webhook} = ReqDnsimple.Webhook.get(client, account_id, webhook_id)
+# => {:ok, %ReqDnsimple.Webhook{url: "https://receiver.example/events", suppressed_at: nil}}
+```
+
+Webhook retrieval returns the registered callback URL and its nullable
+suppression timestamp without contacting the callback URL.
 
 ```elixir
 :ok = ReqDnsimple.Webhook.delete(client, account_id, webhook_id)
 ```
 
-Webhook deletion sends one bodyless request and accepts an integer or
-numeric-string webhook ID. It does not contact the callback URL, inspect
-deliveries, or list registrations first.
+Both operations send one bodyless request and accept an integer or
+numeric-string webhook ID. Neither operation contacts the callback URL,
+inspects deliveries, or lists registrations first.
 
 ### Get a zone file
 

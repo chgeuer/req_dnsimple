@@ -71,6 +71,7 @@ Different modules use slightly different return conventions:
 | `DelegationSignerRecord.delete/4` | `:ok` | `{:error, reason}` |
 | `EmailForward.get/4` | `{:ok, %EmailForward{}}` | `{:error, reason}` |
 | `EmailForward.delete/4` | `:ok` | `{:error, reason}` |
+| `Webhook.get/3` | `{:ok, %Webhook{}}` | `{:error, reason}` |
 | `Webhook.delete/3` | `:ok` | `{:error, reason}` |
 | `DomainPush.accept/4` | `:ok` | `{:error, reason}` |
 | `DomainPush.reject/3` | `:ok` | `{:error, reason}` |
@@ -214,11 +215,12 @@ domain's vanity A and AAAA configuration. It accepts a domain name or integer
 ID. Neither operation inspects or changes registrar delegation, and disabling
 does not delete records individually.
 
-### Deregistering Webhook Endpoints
+### Retrieving and Deregistering Webhook Endpoints
 
-`ReqDnsimple.Webhook.delete/3` sends one bodyless request and returns `:ok` only
-for HTTP 204. It accepts an integer or numeric-string webhook ID and does not
-contact the callback URL, inspect deliveries, or list registrations first.
+`ReqDnsimple.Webhook.get/3` sends one bodyless request and returns the registered
+callback URL with its nullable suppression timestamp. `delete/3` returns `:ok`
+only for HTTP 204. Both accept an integer or numeric-string webhook ID and do
+not contact the callback URL, inspect deliveries, or list registrations first.
 
 ## Module Reference
 
@@ -276,8 +278,9 @@ contact the callback URL, inspect deliveries, or list registrations first.
   contact, or reject it without deleting the source domain.
 - `ReqDnsimple.VanityNameServer` — Enable or disable a domain's vanity A and
   AAAA configuration by name or ID without changing registrar delegation.
-- `ReqDnsimple.Webhook` — Explicitly deregister a webhook endpoint by integer or
-  numeric-string ID without contacting its callback URL or listing registrations.
+- `ReqDnsimple.Webhook` — Retrieve a typed webhook registration or explicitly
+  deregister it by integer or numeric-string ID without contacting its callback
+  URL or listing registrations. Struct: `id`, `url`, nullable `suppressed_at`.
 - `ReqDnsimple.Certificate` — Order typed Let's Encrypt purchases and renewals
   without automatic issuance or deployment; renewal orders preserve distinct
   old and new certificate IDs. Retrieve typed certificate metadata, including

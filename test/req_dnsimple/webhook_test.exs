@@ -3,6 +3,112 @@ defmodule ReqDnsimple.WebhookTest do
 
   import ReqDnsimple.TestSupport
 
+  @webhook_data %{
+    "id" => 1,
+    "url" => "https://receiver.example.test/events",
+    "suppressed_at" => nil
+  }
+
+  describe "get/3" do
+    test "getWebhook sends one bodyless request and returns an unsuppressed webhook" do
+      assert {:ok,
+              %{
+                __struct__: ReqDnsimple.Webhook,
+                id: 1,
+                url: "https://receiver.example.test/events",
+                suppressed_at: nil
+              }} =
+               ReqDnsimple.Webhook.get(
+                 client(200, %{"data" => @webhook_data}),
+                 1010,
+                 1
+               )
+
+      assert_request(:get, "/v2/1010/webhooks/1", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "getWebhook parses a non-null offset suppression timestamp" do
+      data = Map.put(@webhook_data, "suppressed_at", "2026-09-01T10:00:00+02:00")
+
+      assert {:ok,
+              %{
+                __struct__: ReqDnsimple.Webhook,
+                suppressed_at: ~U[2026-09-01 08:00:00Z]
+              }} = ReqDnsimple.Webhook.get(client(200, %{"data" => data}), 1010, "0042")
+
+      assert_request(:get, "/v2/1010/webhooks/0042", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "getWebhook preserves explicit zero identifiers" do
+      data = Map.put(@webhook_data, "id", 0)
+
+      assert {:ok, %{__struct__: ReqDnsimple.Webhook, id: 0}} =
+               ReqDnsimple.Webhook.get(client(200, %{"data" => data}), 0, 0)
+
+      assert_request(:get, "/v2/0/webhooks/0", %{}, nil)
+    end
+
+    test "getWebhook rejects invalid path parameters before HTTP" do
+      request = client(200, %{"data" => @webhook_data})
+
+      for {account_id, webhook_id} <- [
+            {"1010", 1},
+            {nil, 1},
+            {1010, nil},
+            {1010, 1.5},
+            {1010, []}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Webhook.get(request, account_id, webhook_id)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "getWebhook preserves documented and shared HTTP failures" do
+      for status <- [400, 401, 403, 404, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"webhook" => ["is unavailable"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Webhook.get(client(status, body), 1010, 1)
+
+        assert_request(:get, "/v2/1010/webhooks/1", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "getWebhook returns explicit errors for malformed successful responses" do
+      malformed_payloads = [
+        %{},
+        %{"data" => nil},
+        %{"data" => Map.delete(@webhook_data, "id")},
+        %{"data" => Map.delete(@webhook_data, "url")},
+        %{"data" => Map.delete(@webhook_data, "suppressed_at")},
+        %{"data" => Map.put(@webhook_data, "id", "1")},
+        %{"data" => Map.put(@webhook_data, "url", nil)},
+        %{"data" => Map.put(@webhook_data, "suppressed_at", "not-a-timestamp")}
+      ]
+
+      for body <- malformed_payloads do
+        assert {:error, %{status: 200, response: ^body}} =
+                 ReqDnsimple.Webhook.get(client(200, body), 1010, 1)
+
+        assert_request(:get, "/v2/1010/webhooks/1", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "getWebhook preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Webhook.get(transport_error_client(:timeout), 1010, 1)
+    end
+  end
+
   describe "delete/3" do
     test "deleteWebhook sends one bodyless request and returns :ok" do
       assert :ok = ReqDnsimple.Webhook.delete(client(204, nil), 1010, 1)
