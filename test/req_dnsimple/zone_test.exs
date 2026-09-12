@@ -92,6 +92,8 @@ defmodule ReqDnsimple.ZoneTest do
 
       invalid_calls = [
         {1010, "example.test", []},
+        {1010, "example.test", [:invalid]},
+        {1010, "example.test", [{:name}]},
         {1010, "example.test", [unknown: []]},
         {1010, "example.test", [ns_names: nil]},
         {1010, "example.test", [ns_names: ["ns1.example.test", nil]]},

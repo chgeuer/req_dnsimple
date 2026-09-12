@@ -165,8 +165,9 @@ defmodule ReqDnsimple.Zone do
     end
   end
 
-  defp validate_ns_record_attrs(attrs) when is_list(attrs) do
-    with {:ok, validated_attrs} <- NimbleOptions.validate(attrs, @update_ns_records_schema) do
+  defp validate_ns_record_attrs(attrs) do
+    with {:ok, attrs} <- ReqDnsimple.validate_keyword_list(attrs),
+         {:ok, validated_attrs} <- NimbleOptions.validate(attrs, @update_ns_records_schema) do
       if Keyword.has_key?(validated_attrs, :ns_names) or
            Keyword.has_key?(validated_attrs, :ns_set_ids) do
         {:ok, validated_attrs}
@@ -179,14 +180,6 @@ defmodule ReqDnsimple.Zone do
          }}
       end
     end
-  end
-
-  defp validate_ns_record_attrs(attrs) do
-    {:error,
-     %NimbleOptions.ValidationError{
-       message: "expected a keyword list",
-       value: attrs
-     }}
   end
 
   @spec get_zone_file(Req.Request.t(), ReqDnsimple.account_id(), ReqDnsimple.zone_name()) ::
