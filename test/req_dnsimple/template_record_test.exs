@@ -31,7 +31,7 @@ defmodule ReqDnsimple.TemplateRecordTest do
     end
 
     test "getTemplateRecord normalizes legacy numeric-string and nullable priorities" do
-      for {wire_priority, priority} <- [{"10", 10}, {nil, nil}] do
+      for {wire_priority, priority} <- [{"10", 10}, {"0010", 10}, {-1, -1}, {nil, nil}] do
         assert {:ok, %ReqDnsimple.TemplateRecord{priority: ^priority}} =
                  ReqDnsimple.TemplateRecord.get(
                    client(200, template_record_body(wire_priority)),
@@ -103,6 +103,7 @@ defmodule ReqDnsimple.TemplateRecordTest do
         put_in(template_record_body(nil), ["data", "ttl"], -1),
         put_in(template_record_body(nil), ["data", "priority"], "high"),
         put_in(template_record_body(nil), ["data", "priority"], "+10"),
+        put_in(template_record_body(nil), ["data", "priority"], "10\n"),
         put_in(template_record_body(nil), ["data", "type"], "INVALID")
       ]
 

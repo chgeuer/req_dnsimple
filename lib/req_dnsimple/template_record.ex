@@ -41,7 +41,7 @@ defmodule ReqDnsimple.TemplateRecord do
   defstruct ~w(id template_id name content ttl priority type created_at updated_at)a
 
   @record_types ~w[A AAAA ALIAS CAA CNAME DNSKEY DS HINFO MX NAPTR NS POOL PTR SOA SPF SRV SSHFP TXT URL]
-  @numeric_priority ~r/^[0-9]+$/
+  @numeric_priority ~r/\A[0-9]+\z/
 
   @path_schema [
     account_id: [type: :integer, required: true],
@@ -54,6 +54,8 @@ defmodule ReqDnsimple.TemplateRecord do
 
   The template may be a short name or integer ID. This sends exactly one
   bodyless request and returns a typed record with parsed timestamps.
+  Legacy priority strings must contain only ASCII digits; malformed values
+  return an error tuple.
   """
   @spec get(
           Req.Request.t(),
