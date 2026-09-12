@@ -952,7 +952,7 @@ defmodule ReqDnsimple.Registrar do
 
   defp validate_registration_attrs(attrs) when is_list(attrs) do
     with {:ok, validated_attrs} <- NimbleOptions.validate(attrs, @registration_schema),
-         :ok <- validate_extended_attributes(validated_attrs[:extended_attributes]) do
+         :ok <- validate_extended_attributes(validated_attrs) do
       {:ok, validated_attrs}
     end
   end
@@ -967,7 +967,7 @@ defmodule ReqDnsimple.Registrar do
 
   defp validate_transfer_attrs(attrs) when is_list(attrs) do
     with {:ok, validated_attrs} <- NimbleOptions.validate(attrs, @transfer_schema),
-         :ok <- validate_extended_attributes(validated_attrs[:extended_attributes]) do
+         :ok <- validate_extended_attributes(validated_attrs) do
       {:ok, validated_attrs}
     end
   end
@@ -980,10 +980,15 @@ defmodule ReqDnsimple.Registrar do
      }}
   end
 
-  defp validate_extended_attributes(nil), do: :ok
+  defp validate_extended_attributes(attrs) do
+    case Keyword.fetch(attrs, :extended_attributes) do
+      :error -> :ok
+      {:ok, extended_attributes} -> validate_extended_attributes_map(extended_attributes)
+    end
+  end
 
-  defp validate_extended_attributes(map) when is_map(map) do
-    if Enum.all?(map, fn {key, _value} -> is_binary(key) end) do
+  defp validate_extended_attributes_map(map) when is_map(map) and not is_struct(map) do
+    if Enum.all?(Map.keys(map), &is_binary/1) do
       :ok
     else
       {:error,
@@ -995,7 +1000,7 @@ defmodule ReqDnsimple.Registrar do
     end
   end
 
-  defp validate_extended_attributes(value) do
+  defp validate_extended_attributes_map(value) do
     {:error,
      %NimbleOptions.ValidationError{
        message: "expected :extended_attributes to be a map with string keys",
