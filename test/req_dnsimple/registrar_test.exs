@@ -901,6 +901,48 @@ defmodule ReqDnsimple.RegistrarTest do
       refute_received {:request, _request}
     end
 
+    test "registerDomain rejects malformed keyword containers before HTTP" do
+      request =
+        client(201, %{
+          "data" => %{
+            "id" => 1,
+            "domain_id" => 100,
+            "registrant_id" => 11,
+            "period" => 1,
+            "state" => "registered",
+            "auto_renew" => false,
+            "whois_privacy" => false,
+            "trustee" => false,
+            "created_at" => "2026-09-01T10:00:00Z",
+            "updated_at" => "2026-09-01T10:00:00Z"
+          }
+        })
+
+      for attrs <- [[:invalid], [{:name}]] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Registrar.register(request, 1010, "example.test", attrs)
+
+        refute_received {:request, _request}
+      end
+
+      assert {:ok, %ReqDnsimple.Registrar.Registration{}} =
+               ReqDnsimple.Registrar.register(
+                 request,
+                 1010,
+                 "example.test",
+                 registrant_id: 11
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/registrar/domains/example.test/registrations",
+        %{},
+        %{registrant_id: 11}
+      )
+
+      refute_received {:request, _request}
+    end
+
     test "registerDomain rejects explicit null extended attributes before HTTP" do
       request = client(201, %{"data" => %{}})
 
