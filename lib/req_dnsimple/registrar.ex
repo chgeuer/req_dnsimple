@@ -4,6 +4,9 @@ defmodule ReqDnsimple.Registrar do
 
   ## Example
 
+      ReqDnsimple.Registrar.check(req, 1010, "example.test")
+      #=> {:ok, %ReqDnsimple.Registrar.CheckResult{}}
+
       ReqDnsimple.Registrar.authorize_transfer_out(req, 1010, "example.test")
       #=> :ok
 
@@ -13,6 +16,22 @@ defmodule ReqDnsimple.Registrar do
       #=> {:ok, ["ns1.example.test", "ns2.example.test"]}
   """
 
+  defmodule CheckResult do
+    @moduledoc """
+    The availability information returned by a registrar domain check.
+    """
+
+    @type t :: %__MODULE__{
+            domain: String.t(),
+            available: boolean(),
+            premium: boolean(),
+            trustee: boolean() | nil
+          }
+
+    defstruct [:domain, :available, :premium, :trustee]
+  end
+
+  # https://developer.dnsimple.com/v2/registrar/#checkDomain
   # https://developer.dnsimple.com/v2/registrar/#authorizeDomainTransferOut
 
   @path_schema [
@@ -28,6 +47,50 @@ defmodule ReqDnsimple.Registrar do
   @delegation_schema [
     name_servers: [type: {:list, :string}, required: true]
   ]
+
+  @doc """
+  Checks whether a domain name is available for registration.
+
+  This low-volume endpoint has a stricter rate limit than most DNSimple API
+  operations. It sends exactly one request and does not use the paid Domain
+  Research API, register an available domain, or retry rate-limit responses.
+
+  Returns the availability, premium status, and optional trustee flag in a
+  `CheckResult`. Older successful responses that omit `trustee` return it as
+  `nil`.
+  """
+  @spec check(Req.Request.t(), ReqDnsimple.account_id(), String.t()) ::
+          {:ok, CheckResult.t()} | {:error, term()}
+  def check(req, account_id, domain_name) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain_name: domain_name],
+             @path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :get,
+          url: "/:account_id/registrar/domains/:domain_name/check",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain_name: domain_name],
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
+          case decode_check_result(data) do
+            {:ok, result} -> {:ok, result}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
 
   @doc """
   Authorizes a domain transfer out.
@@ -136,4 +199,38 @@ defmodule ReqDnsimple.Registrar do
   end
 
   defp decode_name_servers(_name_servers), do: :error
+
+  defp decode_check_result(
+         %{
+           "domain" => domain,
+           "available" => available,
+           "premium" => premium
+         } = data
+       )
+       when is_binary(domain) and is_boolean(available) and is_boolean(premium) do
+    case Map.fetch(data, "trustee") do
+      :error ->
+        {:ok,
+         %CheckResult{
+           domain: domain,
+           available: available,
+           premium: premium,
+           trustee: nil
+         }}
+
+      {:ok, trustee} when is_boolean(trustee) ->
+        {:ok,
+         %CheckResult{
+           domain: domain,
+           available: available,
+           premium: premium,
+           trustee: trustee
+         }}
+
+      {:ok, _trustee} ->
+        :error
+    end
+  end
+
+  defp decode_check_result(_data), do: :error
 end

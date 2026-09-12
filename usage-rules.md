@@ -67,6 +67,7 @@ Different modules use slightly different return conventions:
 | `EmailForward.delete/4` | `:ok` | `{:error, reason}` |
 | `DomainPush.accept/4` | `:ok` | `{:error, reason}` |
 | `DomainPush.reject/3` | `:ok` | `{:error, reason}` |
+| `Registrar.check/3` | `{:ok, %Registrar.CheckResult{}}` | `{:error, reason}` |
 | `BillingCharge.list/3` | `{:ok, [%BillingCharge{}, ...]}` | `{:error, reason}` |
 | `Zone.get_zone_file/3` | `{:ok, binary()}` | `{:error, reason}` |
 | `Zone.check_zone_distribution/3` | `{:ok, boolean()}` | `{:error, reason}` |
@@ -223,11 +224,13 @@ The update does not change registrar delegation.
   does not send mail or modify MX records.
 - `ReqDnsimple.DomainPush` — Accept a pending push with an explicit target-account
   contact, or reject it without deleting the source domain.
-- `ReqDnsimple.Registrar` — Explicitly authorize transfer-out by domain name or
-  replace registrar delegation by domain name or ID. Delegation replacement
-  preserves the supplied order and explicit empty lists, sends one request, and
-  does not read or merge the prior delegation. It is distinct from hosted-zone
-  apex NS records and `Zone.update_ns_records/4`.
+- `ReqDnsimple.Registrar` — Check domain availability by name, explicitly
+  authorize transfer-out by name, or replace registrar delegation by name or ID.
+  The low-volume check preserves availability, premium, and optional trustee
+  flags without using paid Domain Research, registering the domain, or retrying
+  rate limits. Delegation replacement preserves the supplied order and explicit
+  empty lists, sends one request, and does not read or merge the prior delegation.
+  It is distinct from hosted-zone apex NS records and `Zone.update_ns_records/4`.
 - `ReqDnsimple.PrimaryServer` — Secondary-DNS primary server retrieval and
   explicit deletion. Struct: `id`, `account_id`, `name`, `ip`, integer `port`,
   ordered `linked_secondary_zones`, and timestamps. Deletion does not unlink

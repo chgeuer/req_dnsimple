@@ -3,6 +3,157 @@ defmodule ReqDnsimple.RegistrarTest do
 
   import ReqDnsimple.TestSupport
 
+  describe "check/3" do
+    test "checkDomain sends one bodyless request and returns a typed result" do
+      body = %{
+        "data" => %{
+          "domain" => "example.test",
+          "available" => true,
+          "premium" => true,
+          "trustee" => true
+        }
+      }
+
+      assert {:ok,
+              %ReqDnsimple.Registrar.CheckResult{
+                domain: "example.test",
+                available: true,
+                premium: true,
+                trustee: true
+              }} = ReqDnsimple.Registrar.check(client(200, body), 1010, "example.test")
+
+      assert_request(:get, "/v2/1010/registrar/domains/example.test/check", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "checkDomain preserves false booleans and permits an omitted trustee" do
+      body = %{
+        "data" => %{
+          "domain" => "",
+          "available" => false,
+          "premium" => false
+        }
+      }
+
+      assert {:ok,
+              %ReqDnsimple.Registrar.CheckResult{
+                domain: "",
+                available: false,
+                premium: false,
+                trustee: nil
+              }} = ReqDnsimple.Registrar.check(client(200, body), 0, "")
+
+      assert_request(:get, "/v2/0/registrar/domains//check", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "checkDomain rejects invalid path parameters before HTTP" do
+      request =
+        client(200, %{
+          "data" => %{"domain" => "example.test", "available" => true, "premium" => false}
+        })
+
+      for {account_id, domain_name} <- [
+            {"1010", "example.test"},
+            {nil, "example.test"},
+            {1010, nil},
+            {1010, 42},
+            {1010, []}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Registrar.check(request, account_id, domain_name)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "checkDomain preserves documented and shared HTTP failures" do
+      for status <- [400, 401, 403, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"domain" => ["is unavailable"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Registrar.check(
+                   client(status, body),
+                   1010,
+                   "example.test"
+                 )
+
+        assert_request(:get, "/v2/1010/registrar/domains/example.test/check", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "checkDomain preserves Retry-After without retrying" do
+      test_pid = self()
+      body = %{"message" => "Fake registrar check rate limit"}
+
+      adapter = fn request ->
+        send(test_pid, {:request, request})
+
+        response =
+          %Req.Response{status: 429, body: body}
+          |> Req.Response.put_header("retry-after", "60")
+
+        {request, response}
+      end
+
+      request =
+        ReqDnsimple.new_client("dnsimple_u_fake-token")
+        |> Req.merge(adapter: adapter, retry: :transient)
+
+      assert {:error, %{status: 429, response: ^body, retry_after: "60"}} =
+               ReqDnsimple.Registrar.check(request, 1010, "example.test")
+
+      assert_request(:get, "/v2/1010/registrar/domains/example.test/check", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "checkDomain returns explicit errors for malformed successful responses" do
+      valid_data = %{
+        "domain" => "example.test",
+        "available" => true,
+        "premium" => false,
+        "trustee" => nil
+      }
+
+      malformed_payloads = [
+        %{},
+        %{"data" => nil},
+        %{"data" => Map.delete(valid_data, "domain")},
+        %{"data" => Map.delete(valid_data, "available")},
+        %{"data" => Map.delete(valid_data, "premium")},
+        %{"data" => Map.put(valid_data, "domain", 42)},
+        %{"data" => Map.put(valid_data, "available", nil)},
+        %{"data" => Map.put(valid_data, "premium", "false")},
+        %{"data" => Map.put(valid_data, "trustee", 0)}
+      ]
+
+      for body <- malformed_payloads do
+        assert {:error, %{status: 200, response: ^body}} =
+                 ReqDnsimple.Registrar.check(
+                   client(200, body),
+                   1010,
+                   "example.test"
+                 )
+
+        assert_request(:get, "/v2/1010/registrar/domains/example.test/check", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "checkDomain preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Registrar.check(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test"
+               )
+    end
+  end
+
   describe "authorize_transfer_out/3" do
     test "authorizeDomainTransferOut sends one bodyless request and returns :ok" do
       assert :ok =

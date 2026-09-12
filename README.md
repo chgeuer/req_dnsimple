@@ -230,6 +230,18 @@ privacy, renewal, and nullable expiry metadata in a typed
 
 ### Registrar delegation
 
+Check a domain before registration or transfer:
+
+```elixir
+{:ok, %ReqDnsimple.Registrar.CheckResult{} = result} =
+  ReqDnsimple.Registrar.check(client, account_id, "example.com")
+```
+
+The registrar check is intended for low-volume interactive use and has a
+stricter rate limit than most DNSimple endpoints. It reports availability,
+premium status, and the optional trustee flag without using the paid Domain
+Research API, registering the domain, or retrying a rate-limited request.
+
 ```elixir
 {:ok, name_servers} =
   ReqDnsimple.Registrar.change_delegation(
@@ -372,7 +384,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records/:ds_record` | `get/4`, `delete/4` |
 | `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards/:email_forward` | `get/4`, `delete/4` |
 | `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4`, `reject/3` |
-| `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `authorize_transfer_out/3`, `change_delegation/4` |
+| `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `authorize_transfer_out/3`, `change_delegation/4` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries/:primary_server` | `get/3`, `delete/3`, `from_json/1` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |
 | `ReqDnsimple.Helper` | Req utilities | `append/2` (URL/param merging) |
