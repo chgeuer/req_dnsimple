@@ -32,6 +32,14 @@ defmodule ReqDnsimple.Registrar do
       )
       #=> {:ok, %ReqDnsimple.Registrar.Registration{}}
 
+      ReqDnsimple.Registrar.transfer(req, 1010, "example.test",
+        registrant_id: 11,
+        auth_code: "fake-transfer-code",
+        whois_privacy: false,
+        premium_price: "12.00"
+      )
+      #=> {:ok, %ReqDnsimple.Registrar.Transfer{}}
+
       ReqDnsimple.Registrar.renew(req, 1010, "example.test",
         period: 2,
         premium_price: "20.00"
@@ -156,6 +164,40 @@ defmodule ReqDnsimple.Registrar do
     defstruct [:id, :domain_id, :period, :state, :created_at, :updated_at]
   end
 
+  defmodule Transfer do
+    @moduledoc """
+    An inbound domain-transfer job returned by the registrar API.
+    """
+
+    @type state :: String.t()
+
+    @type t :: %__MODULE__{
+            id: integer(),
+            domain_id: integer(),
+            registrant_id: integer(),
+            state: state(),
+            auto_renew: boolean(),
+            whois_privacy: boolean(),
+            trustee: boolean(),
+            status_description: String.t() | nil,
+            created_at: DateTime.t(),
+            updated_at: DateTime.t()
+          }
+
+    defstruct [
+      :id,
+      :domain_id,
+      :registrant_id,
+      :state,
+      :auto_renew,
+      :whois_privacy,
+      :trustee,
+      :status_description,
+      :created_at,
+      :updated_at
+    ]
+  end
+
   defmodule Restore do
     @moduledoc """
     A domain-restore job returned by the registrar API.
@@ -199,6 +241,7 @@ defmodule ReqDnsimple.Registrar do
   # https://developer.dnsimple.com/v2/registrar/auto-renewal/#enableDomainAutoRenewal
   # https://developer.dnsimple.com/v2/registrar/whois-privacy/#enableWhoisPrivacy
   # https://developer.dnsimple.com/v2/registrar/#registerDomain
+  # https://developer.dnsimple.com/v2/registrar/#transferDomain
   # https://developer.dnsimple.com/v2/registrar/#renewDomain
   # https://developer.dnsimple.com/v2/registrar/#restoreDomain
 
@@ -232,6 +275,16 @@ defmodule ReqDnsimple.Registrar do
   ]
 
   @restore_schema [
+    premium_price: [type: :string]
+  ]
+
+  @transfer_schema [
+    registrant_id: [type: :integer, required: true],
+    auth_code: [type: :string],
+    whois_privacy: [type: :boolean],
+    auto_renew: [type: :boolean],
+    trustee: [type: :boolean],
+    extended_attributes: [type: :any],
     premium_price: [type: :string]
   ]
 
@@ -661,6 +714,61 @@ defmodule ReqDnsimple.Registrar do
   end
 
   @doc """
+  Submits an inbound domain transfer for an existing contact.
+
+  `:registrant_id` is required. Optional settings are `:auth_code`,
+  `:whois_privacy`, `:auto_renew`, `:trustee`, `:extended_attributes`, and
+  `:premium_price`. Authorization codes and extended attributes are supplied
+  only when required by the TLD. Extended-attribute keys must be strings, and
+  a supplied premium price remains an exact string.
+
+  Returns a typed `Transfer` for immediate HTTP 201 and asynchronous HTTP 202
+  responses without polling. The function sends exactly one request and does
+  not fetch TLD metadata, unlock or authorize transfer-out, check prices, or
+  perform any other preflight or follow-up operation.
+  """
+  @spec transfer(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          String.t(),
+          keyword()
+        ) ::
+          {:ok, Transfer.t()} | {:error, term()}
+  def transfer(req, account_id, domain_name, attrs) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain_name: domain_name],
+             @path_schema
+           ),
+         {:ok, validated_attrs} <- validate_transfer_attrs(attrs) do
+      req =
+        Req.merge(req,
+          method: :post,
+          url: "/:account_id/registrar/domains/:domain_name/transfers",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain_name: domain_name],
+          json: Map.new(validated_attrs),
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: status, body: %{"data" => data}} = response}
+        when status in [201, 202] ->
+          case decode_transfer(data) do
+            {:ok, transfer} -> {:ok, transfer}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
   Submits an expired-domain restore.
 
   Premium domains can include the caller-confirmed `:premium_price`, which is
@@ -857,6 +965,21 @@ defmodule ReqDnsimple.Registrar do
      }}
   end
 
+  defp validate_transfer_attrs(attrs) when is_list(attrs) do
+    with {:ok, validated_attrs} <- NimbleOptions.validate(attrs, @transfer_schema),
+         :ok <- validate_extended_attributes(validated_attrs[:extended_attributes]) do
+      {:ok, validated_attrs}
+    end
+  end
+
+  defp validate_transfer_attrs(attrs) do
+    {:error,
+     %NimbleOptions.ValidationError{
+       message: "expected a keyword list",
+       value: attrs
+     }}
+  end
+
   defp validate_extended_attributes(nil), do: :ok
 
   defp validate_extended_attributes(map) when is_map(map) do
@@ -954,6 +1077,47 @@ defmodule ReqDnsimple.Registrar do
   end
 
   defp decode_registration(_data), do: :error
+
+  defp decode_transfer(
+         %{
+           "id" => id,
+           "domain_id" => domain_id,
+           "registrant_id" => registrant_id,
+           "state" => state,
+           "auto_renew" => auto_renew,
+           "whois_privacy" => whois_privacy,
+           "trustee" => trustee,
+           "created_at" => created_at,
+           "updated_at" => updated_at
+         } = data
+       )
+       when is_integer(id) and is_integer(domain_id) and is_integer(registrant_id) and
+              state in ["cancelled", "new", "transferring", "transferred", "failed"] and
+              is_boolean(auto_renew) and is_boolean(whois_privacy) and is_boolean(trustee) do
+    status_description = Map.get(data, "status_description")
+
+    with true <- is_nil(status_description) or is_binary(status_description),
+         {:ok, created_at} <- parse_datetime(created_at),
+         {:ok, updated_at} <- parse_datetime(updated_at) do
+      {:ok,
+       %Transfer{
+         id: id,
+         domain_id: domain_id,
+         registrant_id: registrant_id,
+         state: state,
+         auto_renew: auto_renew,
+         whois_privacy: whois_privacy,
+         trustee: trustee,
+         status_description: status_description,
+         created_at: created_at,
+         updated_at: updated_at
+       }}
+    else
+      _ -> :error
+    end
+  end
+
+  defp decode_transfer(_data), do: :error
 
   defp decode_restore(%{
          "id" => id,

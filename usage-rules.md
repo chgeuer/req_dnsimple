@@ -73,6 +73,7 @@ Different modules use slightly different return conventions:
 | `RegistrantChange.get/3` | `{:ok, %RegistrantChange{}}` | `{:error, reason}` |
 | `Registrar.enable_whois_privacy/3` | `{:ok, %Registrar.WhoisPrivacy{}}` | `{:error, reason}` |
 | `Registrar.register/4` | `{:ok, %Registrar.Registration{}}` | `{:error, reason}` |
+| `Registrar.transfer/4` | `{:ok, %Registrar.Transfer{}}` | `{:error, reason}` |
 | `Registrar.renew/3,4` | `{:ok, %Registrar.Renewal{}}` | `{:error, reason}` |
 | `Registrar.restore/3,4` | `{:ok, %Registrar.Restore{}}` | `{:error, reason}` |
 | `Registrar.get_delegation/3` | `{:ok, [String.t()]}` | `{:error, reason}` |
@@ -239,8 +240,9 @@ The update does not change registrar delegation.
   retrieve registration and lifecycle prices by name, retrieve transfer-lock
   state by name or ID, authorize transfer-out by name, enable or disable
   automatic renewal by name or ID, enable WHOIS privacy by name or ID, submit a
-  registration for an existing contact, submit a renewal or expired-domain
-  restore by name, or retrieve or replace registrar delegation by name or ID.
+  registration or inbound transfer for an existing contact, submit a renewal
+  or expired-domain restore by name, or retrieve or replace registrar
+  delegation by name or ID.
   The low-volume check preserves availability, premium, and optional trustee
   flags without using paid Domain Research, registering the domain, or retrying
   rate limits. Price retrieval preserves numeric registration, renewal,
@@ -255,9 +257,13 @@ The update does not change registrar delegation.
   options, false booleans, string-keyed extended attributes, and exact premium
   prices, and returns a typed immediate or asynchronous job. Registration and
   service charges remain server-determined, and the operation does not perform
-  availability, price, contact, domain-creation, or polling requests. Restore accepts only an optional
-  exact premium-price string and returns a typed immediate or asynchronous
-  restore job; DNSimple determines charges and eligibility, and refusals remain
+  availability, price, contact, domain-creation, or polling requests. Inbound
+  transfer requires a contact ID, leaves authorization TLD-conditional, and
+  preserves omitted options, false booleans, string-keyed extended attributes,
+  and exact premium prices. It sends no TLD, price, unlock, transfer-out
+  authorization, or polling requests. Restore accepts only an optional exact
+  premium-price string and returns a typed immediate or asynchronous restore
+  job; DNSimple determines charges and eligibility, and refusals remain
   explicit errors without an automatic renewal, purchase, or poll. Delegation
   retrieval returns the ordered hostnames exactly as supplied. Delegation
   replacement preserves the supplied order and explicit empty lists, sends one
