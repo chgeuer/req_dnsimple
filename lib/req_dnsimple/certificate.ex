@@ -9,6 +9,9 @@ defmodule ReqDnsimple.Certificate do
 
       ReqDnsimple.Certificate.download(req, 1010, "example.test", 202)
       #=> {:ok, %ReqDnsimple.Certificate.Download{}}
+
+      ReqDnsimple.Certificate.get_private_key(req, 1010, "example.test", 202)
+      #=> {:ok, %ReqDnsimple.Certificate.PrivateKey{}}
   """
 
   # https://developer.dnsimple.com/v2/certificates/
@@ -46,6 +49,16 @@ defmodule ReqDnsimple.Certificate do
           }
 
     defstruct [:server, :root, chain: []]
+  end
+
+  defmodule PrivateKey do
+    @moduledoc """
+    A certificate's byte-preserved PEM-encoded private key.
+    """
+
+    @type t :: %__MODULE__{private_key: binary()}
+
+    defstruct [:private_key]
   end
 
   @path_schema [
@@ -155,6 +168,63 @@ defmodule ReqDnsimple.Certificate do
       end
     end
   end
+
+  @doc """
+  Retrieves a certificate's private key without parsing or persisting it.
+
+  The PEM string is returned byte-for-byte as supplied by DNSimple. A
+  certificate without an available private key returns the API's HTTP 428 error.
+  """
+  @spec get_private_key(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer(),
+          integer()
+        ) ::
+          {:ok, PrivateKey.t()} | {:error, term()}
+  def get_private_key(req, account_id, domain, certificate_id) do
+    with {:ok, _validated_params} <-
+           NimbleOptions.validate(
+             [
+               account_id: account_id,
+               domain: domain,
+               certificate_id: certificate_id
+             ],
+             @path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :get,
+          url: "/:account_id/domains/:domain/certificates/:certificate_id/private_key",
+          path_params_style: :colon,
+          path_params: [
+            account_id: account_id,
+            domain: domain,
+            certificate_id: certificate_id
+          ]
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
+          case decode_private_key(data) do
+            {:ok, private_key} -> {:ok, private_key}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  defp decode_private_key(%{"private_key" => private_key}) when is_binary(private_key) do
+    {:ok, %PrivateKey{private_key: private_key}}
+  end
+
+  defp decode_private_key(_data), do: :error
 
   defp decode_download(%{"server" => server, "root" => root, "chain" => chain})
        when is_binary(server) and (is_binary(root) or is_nil(root)) and is_list(chain) do

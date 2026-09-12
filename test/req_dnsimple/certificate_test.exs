@@ -13,6 +13,11 @@ defmodule ReqDnsimple.CertificateTest do
   FAKE-OFFLINE-INTERMEDIATE
   -----END CERTIFICATE-----
   """
+  @private_key_pem """
+  -----BEGIN PRIVATE KEY-----
+  FAKE-OFFLINE-NOT-A-PRIVATE-KEY
+  -----END PRIVATE KEY-----
+  """
   @download_data %{
     "server" => @server_pem,
     "root" => nil,
@@ -284,6 +289,115 @@ defmodule ReqDnsimple.CertificateTest do
     test "downloadCertificate preserves transport failures" do
       assert {:error, %Req.TransportError{reason: :timeout}} =
                ReqDnsimple.Certificate.download(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test",
+                 202
+               )
+    end
+  end
+
+  describe "get_private_key/4" do
+    test "getCertificatePrivateKey sends one bodyless request and preserves the PEM text" do
+      assert {:ok, %ReqDnsimple.Certificate.PrivateKey{private_key: @private_key_pem}} =
+               ReqDnsimple.Certificate.get_private_key(
+                 client(200, %{"data" => %{"private_key" => @private_key_pem}}),
+                 1010,
+                 "example.test",
+                 202
+               )
+
+      assert_request(
+        :get,
+        "/v2/1010/domains/example.test/certificates/202/private_key",
+        %{},
+        nil
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "getCertificatePrivateKey accepts an integer domain and preserves zero identifiers" do
+      assert {:ok, %ReqDnsimple.Certificate.PrivateKey{private_key: @private_key_pem}} =
+               ReqDnsimple.Certificate.get_private_key(
+                 client(200, %{"data" => %{"private_key" => @private_key_pem}}),
+                 0,
+                 0,
+                 0
+               )
+
+      assert_request(:get, "/v2/0/domains/0/certificates/0/private_key", %{}, nil)
+    end
+
+    test "getCertificatePrivateKey rejects invalid path parameters before HTTP" do
+      request = client(200, %{"data" => %{"private_key" => @private_key_pem}})
+
+      for {account_id, domain, certificate_id} <- [
+            {"1010", "example.test", 202},
+            {nil, "example.test", 202},
+            {1010, nil, 202},
+            {1010, :example, 202},
+            {1010, "example.test", "202"},
+            {1010, "example.test", nil}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Certificate.get_private_key(
+                   request,
+                   account_id,
+                   domain,
+                   certificate_id
+                 )
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "getCertificatePrivateKey preserves documented and shared HTTP failures" do
+      for status <- [401, 403, 404, 428, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"certificate" => ["private key is not present"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Certificate.get_private_key(
+                   client(status, body),
+                   1010,
+                   "example.test",
+                   202
+                 )
+
+        assert_request(:get, "/v2/1010/domains/example.test/certificates/202/private_key")
+        refute_received {:request, _request}
+      end
+    end
+
+    test "getCertificatePrivateKey returns explicit errors for malformed successful responses" do
+      malformed_payloads = [
+        %{},
+        %{"data" => nil},
+        %{"data" => %{}},
+        %{"data" => %{"private_key" => nil}},
+        %{"data" => %{"private_key" => 0}}
+      ]
+
+      for body <- malformed_payloads do
+        assert {:error, %{status: 200, response: ^body}} =
+                 ReqDnsimple.Certificate.get_private_key(
+                   client(200, body),
+                   1010,
+                   "example.test",
+                   202
+                 )
+
+        assert_request(:get, "/v2/1010/domains/example.test/certificates/202/private_key")
+        refute_received {:request, _request}
+      end
+    end
+
+    test "getCertificatePrivateKey preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Certificate.get_private_key(
                  transport_error_client(:timeout),
                  1010,
                  "example.test",

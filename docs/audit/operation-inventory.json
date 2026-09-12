@@ -2679,7 +2679,7 @@
       "method": "GET",
       "path": "/{account}/domains/{domain}/certificates/{certificate}/private_key",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-043",
       "br_issue_id": "bd-1ef",
       "proposed_interfaces": [
@@ -2731,8 +2731,12 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.Certificate.get_private_key/4"
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/certificate_test.exs: getCertificatePrivateKey"
+      ]
     },
     {
       "operation_id": "getContact",

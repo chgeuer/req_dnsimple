@@ -69,6 +69,7 @@ Different modules use slightly different return conventions:
 | `DomainPush.reject/3` | `:ok` | `{:error, reason}` |
 | `Certificate.get/4` | `{:ok, %Certificate{}}` | `{:error, reason}` |
 | `Certificate.download/4` | `{:ok, %Certificate.Download{}}` | `{:error, reason}` |
+| `Certificate.get_private_key/4` | `{:ok, %Certificate.PrivateKey{}}` | `{:error, reason}` |
 | `Registrar.check/3` | `{:ok, %Registrar.CheckResult{}}` | `{:error, reason}` |
 | `Registrar.get_prices/3` | `{:ok, %Registrar.Prices{}}` | `{:error, reason}` |
 | `Registrar.get_transfer_lock/3` | `{:ok, %Registrar.TransferLock{}}` | `{:error, reason}` |
@@ -236,8 +237,9 @@ The update does not change registrar delegation.
 - `ReqDnsimple.DomainPush` — Accept a pending push with an explicit target-account
   contact, or reject it without deleting the source domain.
 - `ReqDnsimple.Certificate` — Retrieve typed certificate metadata, including
-  pending nullable CSR/expiry values, or download its server, nullable root, and
-  ordered intermediate chain as byte-preserved PEM strings without writing files.
+  pending nullable CSR/expiry values, download its server, nullable root, and
+  ordered intermediate chain, or retrieve its private key as byte-preserved PEM
+  strings without parsing, logging, persisting, or writing files.
 - `ReqDnsimple.RegistrantChange` — Typed retrieval of one registrar
   contact-change request by integer ID. Registry extended attributes retain
   string keys and values, and the registry lock-lift date may be `nil`.

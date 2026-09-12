@@ -196,7 +196,7 @@ domain's registrar delegation.
   ReqDnsimple.ZoneRecord.check_distribution(client, account_id, "example.com", record_id)
 ```
 
-### Download a certificate
+### Retrieve certificate material
 
 ```elixir
 {:ok, %ReqDnsimple.Certificate{} = certificate} =
@@ -214,6 +214,14 @@ setting, and typed creation/update and nullable expiry values.
 The bundle contains the server certificate, nullable root certificate, and
 ordered intermediate certificate chain as PEM strings. The strings are
 preserved exactly and are not parsed or written to files.
+
+```elixir
+{:ok, %ReqDnsimple.Certificate.PrivateKey{private_key: private_key}} =
+  ReqDnsimple.Certificate.get_private_key(client, account_id, "example.com", certificate_id)
+```
+
+The private key PEM is likewise preserved byte-for-byte and is not parsed,
+logged, persisted, or written to a file.
 
 ### Billing charges
 
