@@ -8,12 +8,13 @@ defmodule ReqDnsimple do
   @type account_id :: integer()
   @type contact_id :: integer()
   @type record_id :: integer()
+  @type token_callback :: (-> binary() | {:bearer, binary()})
   @type zone_id :: integer()
   @type zone_name :: binary()
 
   @base_url "https://api.dnsimple.com/v2"
 
-  @spec new_client(binary()) :: Req.Request.t()
+  @spec new_client(binary() | token_callback()) :: Req.Request.t()
   def new_client(token) when is_binary(token) do
     Req.new(
       base_url: @base_url,
@@ -24,7 +25,12 @@ defmodule ReqDnsimple do
   def new_client(token_fun) when is_function(token_fun, 0) do
     Req.new(
       base_url: @base_url,
-      auth: token_fun
+      auth: fn ->
+        case token_fun.() do
+          token when is_binary(token) -> {:bearer, token}
+          auth -> auth
+        end
+      end
     )
   end
 

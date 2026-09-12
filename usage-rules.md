@@ -14,12 +14,13 @@ Always start by creating a client with `ReqDnsimple.new_client/1`:
 # Static token
 client = ReqDnsimple.new_client("dnsimple_u_your_token")
 
-# Dynamic token (zero-arity function)
+# Dynamic token (zero-arity function returning a token string or {:bearer, token})
 client = ReqDnsimple.new_client(fn -> System.fetch_env!("DNSIMPLE_TOKEN") end)
 ```
 
-The client is a `Req.Request` struct pre-configured with the DNSimple base URL and auth.
-Pass it as the first argument to every API call.
+Dynamic token functions are evaluated lazily for every request. The client is a
+`Req.Request` struct pre-configured with the DNSimple base URL and auth. Pass it
+as the first argument to every API call.
 
 ## Return Value Patterns
 

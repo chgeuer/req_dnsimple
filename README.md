@@ -24,7 +24,9 @@ end
 client = ReqDnsimple.new_client("dnsimple_u_your_token_here")
 ```
 
-You can also pass a zero-arity function for dynamic token resolution:
+You can also pass a zero-arity function for dynamic token resolution. The
+function is evaluated for each request and may return either the token string or
+`{:bearer, token}`:
 
 ```elixir
 client = ReqDnsimple.new_client(fn ->
@@ -203,4 +205,3 @@ This library wraps the [DNSimple API v2](https://developer.dnsimple.com/v2/).
 ## License
 
 MIT
-
