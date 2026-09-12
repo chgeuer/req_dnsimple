@@ -1719,7 +1719,7 @@
       "method": "DELETE",
       "path": "/{account}/templates/{template}/records/{templaterecord}",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-027",
       "br_issue_id": "bd-2q9",
       "proposed_interfaces": [
@@ -1771,8 +1771,12 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.TemplateRecord.delete/4"
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/template_record_test.exs: delete/4"
+      ]
     },
     {
       "operation_id": "deleteWebhook",
