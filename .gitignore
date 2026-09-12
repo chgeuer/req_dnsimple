@@ -22,3 +22,5 @@ erl_crash.dump
 # Ignore package tarball (built via "mix hex.build").
 req_dnsimple-*.tar
 
+# Local campaign logs, reference downloads, and authoring drafts.
+/.campaign/
