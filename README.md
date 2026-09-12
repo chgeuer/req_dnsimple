@@ -173,6 +173,13 @@ Each list is optional; explicitly empty lists are sent unchanged.
 {:ok, true} = ReqDnsimple.Zone.check_zone_distribution(client, account_id, "example.com")
 ```
 
+### Check zone record distribution
+
+```elixir
+{:ok, false} =
+  ReqDnsimple.ZoneRecord.check_distribution(client, account_id, "example.com", record_id)
+```
+
 ### Billing charges
 
 ```elixir
@@ -222,7 +229,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple` | Client, `/whoami`, apex NS record enumeration | `new_client/1`, `whoami/1`, `token_type/1`, `ns_records/3` |
 | `ReqDnsimple.Account` | `/accounts` | `list/1` |
 | `ReqDnsimple.Zone` | `/zones` | `list/3`, `get_zone_file/3`, `check_zone_distribution/3` |
-| `ReqDnsimple.ZoneRecord` | `/zones/:zone/records`, `/zones/:zone/batch` | `list/4`, `get/4`, `create/4`, `update/5`, `delete/4`, `batch_change/4` |
+| `ReqDnsimple.ZoneRecord` | `/zones/:zone/records`, `/zones/:zone/batch` | `list/4`, `get/4`, `create/4`, `update/5`, `delete/4`, `check_distribution/4`, `batch_change/4` |
 | `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/3` |
 | `ReqDnsimple.Contact` | `/contacts` | `list/3`, `get/3` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |

@@ -52,6 +52,7 @@ Different modules use slightly different return conventions:
 | `ZoneRecord.update/5` | `{:ok, %ZoneRecord{}}` | `{:error, reason}` |
 | `ZoneRecord.delete/4` | `:ok` | `{:error, reason}` |
 | `ZoneRecord.get/4` | `{:ok, %ZoneRecord{}}` | `{:error, :not_found}` |
+| `ZoneRecord.check_distribution/4` | `{:ok, boolean()}` | `{:error, reason}` |
 | `ZoneRecord.batch_change/4` | `{:ok, %ZoneRecord.BatchResult{}}` | `{:error, reason}` |
 | `Contact.list/3` | `{:ok, [%Contact{}, ...]}` | `{:error, reason}` |
 | `Contact.get/3` | `{:ok, %Contact{}}` | `{:error, :not_found}` |
@@ -119,6 +120,10 @@ by `ReqDnsimple.convert_sort_to_string/1`.
 # Delete
 :ok = ReqDnsimple.ZoneRecord.delete(client, account_id, "example.com", record_id)
 
+# Check distribution
+{:ok, distributed?} =
+  ReqDnsimple.ZoneRecord.check_distribution(client, account_id, "example.com", record_id)
+
 # Atomic batch; each operation list is optional
 {:ok, %ReqDnsimple.ZoneRecord.BatchResult{} = result} =
   ReqDnsimple.ZoneRecord.batch_change(client, account_id, "example.com",
@@ -166,7 +171,7 @@ domain's registrar delegation and from the explicit zone-NS-update API.
 - `ReqDnsimple.Zone` — Zone listing, zone file retrieval, distribution checks.
   Struct: `id`, `account_id`, `name`, `active`, `reverse`, `secondary`, timestamps.
   `last_transferred_at` is `nil` when a zone has not been transferred.
-- `ReqDnsimple.ZoneRecord` — Full CRUD and atomic batch changes for DNS records.
+- `ReqDnsimple.ZoneRecord` — Full CRUD, distribution checks, and atomic batch changes for DNS records.
   Record struct: `id`, `zone_id`,
   `name`, `content`, `ttl`, `priority`, `type`, `regions`, `parent_id`,
   `system_record`, timestamps. Batch responses use `ZoneRecord.BatchResult` and

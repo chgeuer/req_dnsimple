@@ -560,7 +560,7 @@
       "method": "GET",
       "path": "/{account}/zones/{zone}/records/{zonerecord}/distribution",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-009",
       "br_issue_id": "bd-12p",
       "proposed_interfaces": [
@@ -612,8 +612,12 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.ZoneRecord.check_distribution/4"
+      ],
+      "contract_tests": [
+        "test/zone_record_test.exs: check_distribution/4"
+      ]
     },
     {
       "operation_id": "createContact",

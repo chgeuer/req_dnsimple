@@ -165,6 +165,72 @@ defmodule ReqDnsimple.ZoneRecord do
     end
   end
 
+  @check_distribution_schema [
+    account_id: [type: :integer, required: true],
+    zone_name: [type: :string, required: true],
+    record_id: [type: :integer, required: true]
+  ]
+
+  @doc """
+  Checks whether an individual zone record is distributed to all name servers.
+
+  ## Example
+
+      ReqDnsimple.ZoneRecord.check_distribution(req, 1010, "example.test", 1)
+      #=> {:ok, true}
+  """
+  @spec check_distribution(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          ReqDnsimple.zone_name(),
+          ReqDnsimple.record_id()
+        ) ::
+          {:ok, boolean()} | {:error, term()}
+  def check_distribution(req, account_id, zone_name, record_id) do
+    with {:ok, _validated_params} <-
+           NimbleOptions.validate(
+             [account_id: account_id, zone_name: zone_name, record_id: record_id],
+             @check_distribution_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :get,
+          url: "/:account_id/zones/:zone_name/records/:record_id/distribution",
+          path_params_style: :colon,
+          path_params: [
+            account_id: account_id,
+            zone_name: zone_name,
+            record_id: record_id
+          ]
+        )
+
+      case Req.request(req) do
+        {:ok,
+         %Req.Response{
+           status: 200,
+           body: %{"data" => %{"distributed" => distributed}}
+         }}
+        when is_boolean(distributed) ->
+          {:ok, distributed}
+
+        {:ok, %Req.Response{status: 401}} ->
+          {:error, :unauthorized}
+
+        {:ok, %Req.Response{status: 404}} ->
+          {:error, :not_found}
+
+        {:ok, %Req.Response{status: 504}} ->
+          {:error, :timeout}
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
   @integrated_zones_schema [
     type: {:list, {:or, [:integer, {:in, ["dnsimple"]}]}},
     doc: ~s(Zone IDs and the "dnsimple" target)

@@ -230,6 +230,97 @@ defmodule ReqDnsimple.ZoneRecordTest do
     refute_received {:request, _request}
   end
 
+  describe "check_distribution/4" do
+    test "checks one record once and preserves both boolean results" do
+      for distributed <- [true, false] do
+        assert {:ok, ^distributed} =
+                 ReqDnsimple.ZoneRecord.check_distribution(
+                   client(200, %{"data" => %{"distributed" => distributed}}),
+                   1010,
+                   "example.test",
+                   1
+                 )
+
+        assert_request(
+          :get,
+          "/v2/1010/zones/example.test/records/1/distribution",
+          %{},
+          nil
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "preserves endpoint-specific and generic HTTP failures" do
+      body = %{"message" => "Fake offline request failure"}
+
+      for {status, expected} <- [
+            {401, {:error, :unauthorized}},
+            {404, {:error, :not_found}},
+            {504, {:error, :timeout}},
+            {403, {:error, %{status: 403, response: body}}},
+            {429, {:error, %{status: 429, response: body}}},
+            {500, {:error, %{status: 500, response: body}}}
+          ] do
+        assert ReqDnsimple.ZoneRecord.check_distribution(
+                 client(status, body),
+                 1010,
+                 "example.test",
+                 1
+               ) == expected
+
+        assert_request(:get, "/v2/1010/zones/example.test/records/1/distribution")
+        refute_received {:request, _request}
+      end
+    end
+
+    test "returns explicit errors for malformed success and transport timeout" do
+      for body <- [
+            %{},
+            %{"data" => %{}},
+            %{"data" => %{"distributed" => nil}},
+            %{"data" => %{"distributed" => "true"}}
+          ] do
+        assert {:error, %{status: 200, response: ^body}} =
+                 ReqDnsimple.ZoneRecord.check_distribution(
+                   client(200, body),
+                   1010,
+                   "example.test",
+                   1
+                 )
+      end
+
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.ZoneRecord.check_distribution(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test",
+                 1
+               )
+    end
+
+    test "rejects invalid path parameter types before HTTP" do
+      request = client(200, %{"data" => %{"distributed" => true}})
+
+      for {account_id, zone_name, record_id} <- [
+            {"1010", "example.test", 1},
+            {1010, nil, 1},
+            {1010, "example.test", "1"}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.ZoneRecord.check_distribution(
+                   request,
+                   account_id,
+                   zone_name,
+                   record_id
+                 )
+      end
+
+      refute_received {:request, _request}
+    end
+  end
+
   describe "batch_change/4" do
     test "sends all operations once and returns typed results" do
       attrs = [
