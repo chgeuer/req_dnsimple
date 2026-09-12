@@ -941,19 +941,11 @@ defmodule ReqDnsimple.Registrar do
     end
   end
 
-  defp validate_transfer_attrs(attrs) when is_list(attrs) do
-    with {:ok, validated_attrs} <- NimbleOptions.validate(attrs, @transfer_schema),
+  defp validate_transfer_attrs(attrs) do
+    with {:ok, validated_attrs} <- ReqDnsimple.validate_options(attrs, @transfer_schema),
          :ok <- validate_extended_attributes(validated_attrs) do
       {:ok, validated_attrs}
     end
-  end
-
-  defp validate_transfer_attrs(attrs) do
-    {:error,
-     %NimbleOptions.ValidationError{
-       message: "expected a keyword list",
-       value: attrs
-     }}
   end
 
   defp validate_extended_attributes(attrs) do

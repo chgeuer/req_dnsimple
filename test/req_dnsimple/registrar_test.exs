@@ -1259,6 +1259,17 @@ defmodule ReqDnsimple.RegistrarTest do
       refute_received {:request, _request}
     end
 
+    test "transferDomain rejects malformed keyword attribute containers before HTTP" do
+      request = client(201, %{"data" => %{}})
+
+      for attrs <- [[:invalid], [{:registrant_id}]] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Registrar.transfer(request, 1010, "example.test", attrs)
+      end
+
+      refute_received {:request, _request}
+    end
+
     test "transferDomain rejects explicit null extended attributes before HTTP" do
       request = client(201, %{"data" => %{}})
 
