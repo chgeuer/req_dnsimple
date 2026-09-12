@@ -385,6 +385,11 @@ defmodule ReqDnsimple.ZoneRecord do
     ]
   ]
 
+  @batch_change_path_schema [
+    account_id: [type: :integer, required: true],
+    zone_name: [type: :string, required: true]
+  ]
+
   @spec batch_change(
           Req.Request.t(),
           ReqDnsimple.account_id(),
@@ -393,7 +398,12 @@ defmodule ReqDnsimple.ZoneRecord do
         ) ::
           {:ok, BatchResult.t()} | {:error, term()}
   def batch_change(req, account_id, zone_name, attrs) when is_list(attrs) do
-    with {:ok, validated_attrs} <- NimbleOptions.validate(attrs, @batch_change_schema) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, zone_name: zone_name],
+             @batch_change_path_schema
+           ),
+         {:ok, validated_attrs} <- NimbleOptions.validate(attrs, @batch_change_schema) do
       body =
         Map.new(validated_attrs, fn {operation, records} ->
           {operation, Enum.map(records, &Map.new/1)}

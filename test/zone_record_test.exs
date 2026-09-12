@@ -460,6 +460,23 @@ defmodule ReqDnsimple.ZoneRecordTest do
       refute_received {:request, _request}
     end
 
+    test "rejects invalid path parameter types before HTTP" do
+      request =
+        client(200, %{
+          "data" => %{"creates" => [], "updates" => [], "deletes" => []}
+        })
+
+      for {account_id, zone_name} <- [
+            {"1010", "example.test"},
+            {1010, 2020}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.ZoneRecord.batch_change(request, account_id, zone_name, [])
+      end
+
+      refute_received {:request, _request}
+    end
+
     test "preserves indexed validation errors and generic HTTP failures" do
       validation_body = %{
         "message" => "Fake offline validation failure",
