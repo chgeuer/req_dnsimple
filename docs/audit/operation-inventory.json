@@ -3123,7 +3123,7 @@
       "method": "GET",
       "path": "/{account}/secondary_dns/primaries/{primaryserver}",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-052",
       "br_issue_id": "bd-7ip",
       "proposed_interfaces": [
@@ -3170,8 +3170,20 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "get",
+          "arity": 3,
+          "signature": "ReqDnsimple.PrimaryServer.get(req, account_id, primary_server_id)"
+        }
+      ],
+      "contract_tests": [
+        {
+          "file": "test/primary_server_test.exs",
+          "describe": "get/3"
+        }
+      ]
     },
     {
       "operation_id": "getRegistrantChange",

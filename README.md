@@ -201,6 +201,16 @@ arbitrary-precision decimal library.
 {:ok, contact}  = ReqDnsimple.Contact.get(client, account_id, contact_id)
 ```
 
+### Secondary-DNS primary servers
+
+```elixir
+{:ok, primary_server} = ReqDnsimple.PrimaryServer.get(client, account_id, primary_server_id)
+```
+
+The returned `ReqDnsimple.PrimaryServer` includes its IP, integer port, and the
+ordered list of linked secondary-zone names. Retrieval makes no zone-transfer
+or reachability requests.
+
 ## Convenience Delegates
 
 The top-level `ReqDnsimple` module provides shorthand delegates for common operations:
@@ -232,6 +242,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.ZoneRecord` | `/zones/:zone/records`, `/zones/:zone/batch` | `list/4`, `get/4`, `create/4`, `update/5`, `delete/4`, `check_distribution/4`, `batch_change/4` |
 | `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/3` |
 | `ReqDnsimple.Contact` | `/contacts` | `list/3`, `get/3` |
+| `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries/:primary_server` | `get/3`, `from_json/1` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |
 | `ReqDnsimple.Helper` | Req utilities | `append/2` (URL/param merging) |
 

@@ -182,6 +182,9 @@ domain's registrar delegation and from the explicit zone-NS-update API.
   library when arithmetic is required. Manual-charge item product identifiers and
   references may be `nil`.
 - `ReqDnsimple.Contact` — Contact listing and retrieval. 14 contact fields + timestamps.
+- `ReqDnsimple.PrimaryServer` — Secondary-DNS primary server retrieval. Struct:
+  `id`, `account_id`, `name`, `ip`, integer `port`, ordered
+  `linked_secondary_zones`, and timestamps.
 - `ReqDnsimple.NsRecord` — Name server record struct and JSON parsing.
 - `ReqDnsimple.Helper` — Req helper for incrementally appending URL path segments
   and merging params/path_params onto a `Req.Request`.
