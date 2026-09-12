@@ -70,6 +70,7 @@ Different modules use slightly different return conventions:
 | `Registrar.check/3` | `{:ok, %Registrar.CheckResult{}}` | `{:error, reason}` |
 | `Registrar.get_prices/3` | `{:ok, %Registrar.Prices{}}` | `{:error, reason}` |
 | `Registrar.get_transfer_lock/3` | `{:ok, %Registrar.TransferLock{}}` | `{:error, reason}` |
+| `RegistrantChange.get/3` | `{:ok, %RegistrantChange{}}` | `{:error, reason}` |
 | `Registrar.enable_whois_privacy/3` | `{:ok, %Registrar.WhoisPrivacy{}}` | `{:error, reason}` |
 | `Registrar.renew/3,4` | `{:ok, %Registrar.Renewal{}}` | `{:error, reason}` |
 | `Registrar.restore/3,4` | `{:ok, %Registrar.Restore{}}` | `{:error, reason}` |
@@ -230,6 +231,9 @@ The update does not change registrar delegation.
   does not send mail or modify MX records.
 - `ReqDnsimple.DomainPush` — Accept a pending push with an explicit target-account
   contact, or reject it without deleting the source domain.
+- `ReqDnsimple.RegistrantChange` — Typed retrieval of one registrar
+  contact-change request by integer ID. Registry extended attributes retain
+  string keys and values, and the registry lock-lift date may be `nil`.
 - `ReqDnsimple.Registrar` — Check domain availability by name, explicitly
   retrieve registration and lifecycle prices by name, retrieve transfer-lock
   state by name or ID, authorize transfer-out by name, enable or disable

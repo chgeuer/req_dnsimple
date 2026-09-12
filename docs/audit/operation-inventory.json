@@ -3382,7 +3382,7 @@
       "method": "GET",
       "path": "/{account}/registrar/registrant_changes/{registrantchange}",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-053",
       "br_issue_id": "bd-13h",
       "proposed_interfaces": [
@@ -3429,8 +3429,20 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.RegistrantChange",
+          "function": "get",
+          "arity": 3,
+          "signature": "ReqDnsimple.RegistrantChange.get(req, account_id, registrant_change_id)"
+        }
+      ],
+      "contract_tests": [
+        {
+          "file": "test/req_dnsimple/registrant_change_test.exs",
+          "describe": "get/3"
+        }
+      ]
     },
     {
       "operation_id": "getService",

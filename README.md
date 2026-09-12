@@ -346,6 +346,18 @@ name-server list in one request. The supplied order and explicit empty lists are
 preserved; the wrapper does not fetch or merge the old delegation. This is
 separate from hosted-zone apex NS records and `Zone.update_ns_records/4`.
 
+### Registrant changes
+
+```elixir
+{:ok, %ReqDnsimple.RegistrantChange{} = change} =
+  ReqDnsimple.RegistrantChange.get(client, account_id, registrant_change_id)
+```
+
+Registrant-change retrieval returns the current state, dynamic registry
+extended attributes with string keys, and typed date/timestamp fields. A pending
+registry lock-lift date remains `nil`. The operation performs no requirements
+check or mutation.
+
 ### Domain Research
 
 ```elixir
