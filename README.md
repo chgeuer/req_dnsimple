@@ -250,6 +250,14 @@ confirmation.
 ### Delegation-signer records
 
 ```elixir
+{:ok, delegation_signer_record} =
+  ReqDnsimple.DelegationSignerRecord.get(
+    client,
+    account_id,
+    "example.com",
+    ds_record_id
+  )
+
 :ok =
   ReqDnsimple.DelegationSignerRecord.delete(
     client,
@@ -259,6 +267,8 @@ confirmation.
   )
 ```
 
+Retrieval returns a typed `ReqDnsimple.DelegationSignerRecord`; DS and KEY proof
+fields that do not apply to the returned representation are `nil`.
 Deletion removes only the selected registry delegation-signer record. It does
 not disable DNSSEC or delete hosted-zone records.
 
@@ -315,7 +325,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/3` |
 | `ReqDnsimple.Contact` | `/contacts` | `list/3`, `get/3`, `delete/3` |
 | `ReqDnsimple.Domain` | `/domains/:domain` | `get/3`, `delete/3` |
-| `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records/:ds_record` | `delete/4` |
+| `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records/:ds_record` | `get/4`, `delete/4` |
 | `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards/:email_forward` | `delete/4` |
 | `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries/:primary_server` | `get/3`, `delete/3`, `from_json/1` |

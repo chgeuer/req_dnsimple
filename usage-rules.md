@@ -59,6 +59,7 @@ Different modules use slightly different return conventions:
 | `Contact.delete/3` | `:ok` | `{:error, reason}` |
 | `Domain.get/3` | `{:ok, %Domain{}}` | `{:error, reason}` |
 | `Dnssec.disable/3` | `:ok` | `{:error, reason}` |
+| `DelegationSignerRecord.get/4` | `{:ok, %DelegationSignerRecord{}}` | `{:error, reason}` |
 | `DelegationSignerRecord.delete/4` | `:ok` | `{:error, reason}` |
 | `EmailForward.delete/4` | `:ok` | `{:error, reason}` |
 | `DomainPush.accept/4` | `:ok` | `{:error, reason}` |
@@ -201,9 +202,10 @@ The update does not change registrar delegation.
 - `ReqDnsimple.Dnssec` — Explicitly disables DNSSEC by domain name or ID. For
   hosted-only domains, registry delegation-signer records must be removed first;
   this operation does not remove them or prompt for confirmation.
-- `ReqDnsimple.DelegationSignerRecord` — Explicit deletion of one registry
-  delegation-signer record by domain name or ID and record ID. It does not
-  disable DNSSEC or delete hosted-zone records.
+- `ReqDnsimple.DelegationSignerRecord` — Typed retrieval and explicit deletion
+  of one registry delegation-signer record by domain name or ID and record ID.
+  DS and KEY proof fields that do not apply are `nil`. Deletion does not disable
+  DNSSEC or delete hosted-zone records.
 - `ReqDnsimple.EmailForward` — Explicit deletion of one domain email forward by
   domain name or ID and forward ID. It does not send mail or modify MX records.
 - `ReqDnsimple.DomainPush` — Accept a pending push with an explicit target-account contact.

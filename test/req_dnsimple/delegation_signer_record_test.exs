@@ -3,6 +3,173 @@ defmodule ReqDnsimple.DelegationSignerRecordTest do
 
   import ReqDnsimple.TestSupport
 
+  @ds_data %{
+    "id" => 1,
+    "domain_id" => 100,
+    "algorithm" => "13",
+    "digest" => "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "digest_type" => "2",
+    "keytag" => "12345",
+    "public_key" => nil,
+    "created_at" => "2026-09-01T10:00:00+02:00",
+    "updated_at" => "2026-09-01T10:30:00+02:00"
+  }
+
+  describe "get/4" do
+    test "getDomainDelegationSignerRecord sends one bodyless request and returns typed DS data" do
+      assert {:ok,
+              %ReqDnsimple.DelegationSignerRecord{
+                id: 1,
+                domain_id: 100,
+                algorithm: "13",
+                digest: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                digest_type: "2",
+                keytag: "12345",
+                public_key: nil,
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:30:00Z]
+              }} =
+               ReqDnsimple.DelegationSignerRecord.get(
+                 client(200, %{"data" => @ds_data}),
+                 1010,
+                 "example.test",
+                 1
+               )
+
+      assert_request(:get, "/v2/1010/domains/example.test/ds_records/1", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "getDomainDelegationSignerRecord decodes KEY data with unused DS fields null" do
+      data =
+        Map.merge(@ds_data, %{
+          "digest" => nil,
+          "digest_type" => nil,
+          "keytag" => nil,
+          "public_key" => "ZmFrZS1vZmZsaW5lLXB1YmxpYy1rZXk="
+        })
+
+      assert {:ok,
+              %ReqDnsimple.DelegationSignerRecord{
+                algorithm: "13",
+                digest: nil,
+                digest_type: nil,
+                keytag: nil,
+                public_key: "ZmFrZS1vZmZsaW5lLXB1YmxpYy1rZXk="
+              }} =
+               ReqDnsimple.DelegationSignerRecord.get(client(200, %{"data" => data}), 1010, 42, 1)
+
+      assert_request(:get, "/v2/1010/domains/42/ds_records/1", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "getDomainDelegationSignerRecord rejects invalid path parameters before HTTP" do
+      request = client(200, %{"data" => @ds_data})
+
+      for {account_id, domain, ds_record_id} <- [
+            {"1010", "example.test", 1},
+            {nil, "example.test", 1},
+            {1010, nil, 1},
+            {1010, 1.5, 1},
+            {1010, [], 1},
+            {1010, "example.test", "1"},
+            {1010, "example.test", nil}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.DelegationSignerRecord.get(
+                   request,
+                   account_id,
+                   domain,
+                   ds_record_id
+                 )
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "getDomainDelegationSignerRecord preserves explicit zero identifiers" do
+      data = Map.merge(@ds_data, %{"id" => 0, "domain_id" => 0})
+
+      assert {:ok, %ReqDnsimple.DelegationSignerRecord{id: 0, domain_id: 0}} =
+               ReqDnsimple.DelegationSignerRecord.get(
+                 client(200, %{"data" => data}),
+                 0,
+                 0,
+                 0
+               )
+
+      assert_request(:get, "/v2/0/domains/0/ds_records/0", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "getDomainDelegationSignerRecord preserves documented and shared HTTP failures" do
+      for status <- [400, 401, 403, 404, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"ds_record" => ["is unavailable"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.DelegationSignerRecord.get(
+                   client(status, body),
+                   1010,
+                   "example.test",
+                   1
+                 )
+
+        assert_request(:get, "/v2/1010/domains/example.test/ds_records/1", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "getDomainDelegationSignerRecord returns explicit errors for malformed success" do
+      malformed_payloads = [
+        %{},
+        %{"data" => nil},
+        %{"data" => Map.delete(@ds_data, "id")},
+        %{"data" => Map.put(@ds_data, "algorithm", 13)},
+        %{"data" => Map.put(@ds_data, "digest", 123)},
+        %{"data" => Map.put(@ds_data, "created_at", "not-a-timestamp")}
+      ]
+
+      for body <- malformed_payloads do
+        assert {:error, %{status: 200, response: ^body}} =
+                 ReqDnsimple.DelegationSignerRecord.get(
+                   client(200, body),
+                   1010,
+                   "example.test",
+                   1
+                 )
+
+        assert_request(:get, "/v2/1010/domains/example.test/ds_records/1", %{}, nil)
+        refute_received {:request, _request}
+      end
+
+      for {status, body} <- [{201, %{"data" => @ds_data}}, {204, nil}] do
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.DelegationSignerRecord.get(
+                   client(status, body),
+                   1010,
+                   "example.test",
+                   1
+                 )
+
+        assert_request(:get, "/v2/1010/domains/example.test/ds_records/1", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "getDomainDelegationSignerRecord preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.DelegationSignerRecord.get(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test",
+                 1
+               )
+    end
+  end
+
   describe "delete/4" do
     test "deleteDomainDelegationSignerRecord sends one bodyless request and returns :ok" do
       assert :ok =
