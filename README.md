@@ -239,7 +239,8 @@ Domain Research is a paid service requiring the `domain_research_read` OAuth
 scope. It returns the request ID, researched domain, availability
 (`"available"`, `"unavailable"`, or `"unknown"`), and any research errors in a
 typed `ReqDnsimple.DomainResearch` struct. It uses the dedicated research
-endpoint and does not fall back to a registrar availability check.
+endpoint, does not fall back to a registrar availability check, and does not
+automatically retry quota responses.
 
 ### Domain pushes
 

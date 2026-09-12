@@ -132,6 +132,38 @@ defmodule ReqDnsimple.DomainResearchTest do
       refute_received {:request, _request}
     end
 
+    test "getDomainsResearchStatus disables default Req retries for monthly-cap responses" do
+      test_pid = self()
+      body = %{"message" => "Fake monthly research cap reached"}
+
+      adapter = fn request ->
+        send(test_pid, {:request, request})
+
+        response =
+          %Req.Response{status: 429, body: body}
+          |> Req.Response.put_header("retry-after", "0")
+
+        {request, response}
+      end
+
+      request =
+        ReqDnsimple.new_client("dnsimple_u_fake-token")
+        |> Req.merge(adapter: adapter)
+
+      assert {:error, %{status: 429, response: ^body, retry_after: "0"}} =
+               ReqDnsimple.DomainResearch.get_status(
+                 request,
+                 1010,
+                 domain: "example.test"
+               )
+
+      assert_request(:get, "/v2/1010/domains/research/status", %{
+        "domain" => "example.test"
+      })
+
+      refute_received {:request, _request}
+    end
+
     test "getDomainsResearchStatus returns explicit errors for malformed successful responses" do
       malformed_payloads = [
         %{},

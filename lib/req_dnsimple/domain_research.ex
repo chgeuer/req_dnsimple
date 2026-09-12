@@ -36,8 +36,8 @@ defmodule ReqDnsimple.DomainResearch do
   Researches the availability status of the supplied domain.
 
   This calls the dedicated paid Domain Research endpoint and does not fall back
-  to a registrar availability check. The request requires the
-  `domain_research_read` OAuth scope.
+  to a registrar availability check or automatically retry quota responses. The
+  request requires the `domain_research_read` OAuth scope.
   """
   @spec get_status(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, t()} | {:error, term()}
@@ -51,7 +51,8 @@ defmodule ReqDnsimple.DomainResearch do
           url: "/:account_id/domains/research/status",
           path_params_style: :colon,
           path_params: [account_id: account_id],
-          params: %{domain: Keyword.fetch!(validated_opts, :domain)}
+          params: %{domain: Keyword.fetch!(validated_opts, :domain)},
+          retry: false
         )
 
       case Req.request(req) do
