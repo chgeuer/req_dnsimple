@@ -677,15 +677,36 @@ delete hosted-zone records.
 {:ok, email_forward} =
   ReqDnsimple.EmailForward.get(client, account_id, "example.com", email_forward_id)
 
+{:ok, {email_forwards, pagination}} =
+  ReqDnsimple.EmailForward.list_page(
+    client,
+    account_id,
+    "example.com",
+    sort: [id: :asc, alias_email: :desc],
+    page: 2,
+    per_page: 30
+  )
+
+{:ok, all_email_forwards} =
+  ReqDnsimple.EmailForward.list_all(
+    client,
+    account_id,
+    "example.com",
+    sort: [destination_email: :asc]
+  )
+
 :ok = ReqDnsimple.EmailForward.delete(client, account_id, "example.com", email_forward_id)
 ```
 
 Creation sends the local-part `alias_name` unchanged and returns a typed
 `ReqDnsimple.EmailForward` with its full alias email, destination email,
 activation state, and timestamps. The returned `alias_email` is distinct from
-the creation input. Creation does not provision DNS records or send a test
-email. Deletion removes only the selected email forward and does not modify the
-domain's MX records.
+the creation input. `list_page/4` and its `list/4` alias return one typed page
+with string-keyed pagination metadata; `list_all/4` explicitly enumerates from
+page one while retaining `id`/`alias_email`/`destination_email` sorting and page
+size. Creation does not provision DNS records or send a test email. Deletion
+removes only the selected email forward and does not modify the domain's MX
+records.
 
 ### Secondary-DNS primary servers
 

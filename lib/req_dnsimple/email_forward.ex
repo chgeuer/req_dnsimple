@@ -23,6 +23,26 @@ defmodule ReqDnsimple.EmailForward do
           1
         )
 
+  List one page or explicitly enumerate every email forward:
+
+      {:ok, {email_forwards, pagination}} =
+        ReqDnsimple.EmailForward.list_page(
+          client,
+          1010,
+          "example.test",
+          sort: [id: :asc, alias_email: :desc],
+          page: 2,
+          per_page: 30
+        )
+
+      {:ok, all_email_forwards} =
+        ReqDnsimple.EmailForward.list_all(
+          client,
+          1010,
+          "example.test",
+          sort: [destination_email: :asc]
+        )
+
   Delete one email forward:
 
       :ok =
@@ -63,6 +83,15 @@ defmodule ReqDnsimple.EmailForward do
   @create_schema [
     alias_name: [type: :string, required: true],
     destination_email: [type: :string, required: true]
+  ]
+
+  @list_schema [
+    sort: [
+      type: {:custom, ReqDnsimple, :validate_sort, [[:id, :alias_email, :destination_email]]},
+      doc: "Sort by id, alias_email, or destination_email. Format: [id: :asc, alias_email: :desc]"
+    ],
+    page: [type: :pos_integer, doc: "Page number for pagination"],
+    per_page: [type: {:in, 1..100}, doc: "Number of email forwards per page"]
   ]
 
   @doc """
@@ -115,6 +144,81 @@ defmodule ReqDnsimple.EmailForward do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Lists one page of email forwards for a domain.
+
+  Supports ordered `:sort` terms for `:id`, `:alias_email`, and
+  `:destination_email`, plus `:page` and `:per_page`. The returned pagination
+  metadata retains its string keys.
+
+  ## Example
+
+      ReqDnsimple.EmailForward.list_page(
+        req,
+        1010,
+        "example.test",
+        sort: [id: :asc, alias_email: :desc],
+        page: 2,
+        per_page: 30
+      )
+      #=> {:ok, {[%ReqDnsimple.EmailForward{}], %{"current_page" => 2}}}
+  """
+  @spec list_page(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer(),
+          keyword()
+        ) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req, account_id, domain, opts \\ []) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain],
+             @create_path_schema
+           ),
+         {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_schema) do
+      case request_list(req, account_id, domain, validated_opts) do
+        {:ok,
+         %Req.Response{
+           status: 200,
+           body: %{"data" => data, "pagination" => pagination}
+         } = response} ->
+          case decode_page(data, pagination) do
+            {:ok, result} -> {:ok, result}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Lists one page of email forwards for a domain.
+
+  This is a convenience alias for `list_page/4`; it never enumerates additional
+  pages implicitly.
+  """
+  @spec list(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list(req, account_id, domain, opts \\ []), do: list_page(req, account_id, domain, opts)
+
+  @doc """
+  Enumerates every page of email forwards in server order.
+
+  Enumeration always begins at page one, so an explicit `:page` option is
+  rejected. Sorting and `:per_page` are retained for every request.
+  """
+  @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer(), keyword()) ::
+          {:ok, [t()]} | {:error, term()}
+  def list_all(req, account_id, domain, opts \\ []) do
+    ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, domain, &1))
   end
 
   @doc """
@@ -233,6 +337,63 @@ defmodule ReqDnsimple.EmailForward do
   end
 
   defp decode(_data), do: :error
+
+  defp decode_page(data, pagination) when is_list(data) do
+    with {:ok, email_forwards} <- decode_many(data),
+         true <- valid_pagination?(pagination) do
+      {:ok, {email_forwards, pagination}}
+    else
+      _error -> :error
+    end
+  end
+
+  defp decode_page(_data, _pagination), do: :error
+
+  defp decode_many(data) do
+    Enum.reduce_while(data, {:ok, []}, fn item, {:ok, email_forwards} ->
+      case decode(item) do
+        {:ok, email_forward} ->
+          {:cont, {:ok, [email_forward | email_forwards]}}
+
+        :error ->
+          {:halt, :error}
+      end
+    end)
+    |> case do
+      {:ok, email_forwards} -> {:ok, Enum.reverse(email_forwards)}
+      :error -> :error
+    end
+  end
+
+  defp valid_pagination?(%{
+         "current_page" => current_page,
+         "per_page" => per_page,
+         "total_entries" => total_entries,
+         "total_pages" => total_pages
+       })
+       when is_integer(current_page) and current_page >= 0 and is_integer(per_page) and
+              per_page > 0 and is_integer(total_entries) and total_entries >= 0 and
+              is_integer(total_pages) and total_pages >= 0,
+       do: true
+
+  defp valid_pagination?(_pagination), do: false
+
+  defp request_list(req, account_id, domain, opts) do
+    params =
+      opts
+      |> ReqDnsimple.convert_sort_to_string()
+      |> Map.new()
+
+    req
+    |> Req.merge(
+      method: :get,
+      url: "/:account_id/domains/:domain/email_forwards",
+      path_params_style: :colon,
+      path_params: [account_id: account_id, domain: domain],
+      params: params
+    )
+    |> Req.request()
+  end
 
   defp parse_datetime(value) when is_binary(value) do
     case DateTime.from_iso8601(value) do

@@ -296,11 +296,14 @@ not contact the callback URL, inspect deliveries, or list registrations first.
   size. Creation accepts a string algorithm with either a complete DS tuple or
   KEY public key. DS and KEY proof fields that do not apply are `nil`. Deletion
   does not disable DNSSEC or delete hosted-zone records.
-- `ReqDnsimple.EmailForward` — Typed creation, retrieval, and explicit deletion
-  of domain email forwards. Creation sends the local-part alias unchanged and
-  neither provisions DNS records nor sends test email. Responses preserve the
-  full alias email, destination, activation state, and timestamps. Deletion
-  does not modify MX records.
+- `ReqDnsimple.EmailForward` — Typed creation, retrieval, paginated listing,
+  deliberate complete enumeration, and explicit deletion of domain email
+  forwards. `list_page/4` and `list/4` return one page; `list_all/4` starts at
+  page one while retaining `id`/`alias_email`/`destination_email` sorting and
+  page size. Creation sends the local-part alias unchanged and neither provisions
+  DNS records nor sends test email. Responses preserve the full alias email,
+  destination, activation state, and timestamps. Deletion does not modify MX
+  records.
 - `ReqDnsimple.DomainPush` — Accept a pending push with an explicit target-account
   contact, or reject it without deleting the source domain.
 - `ReqDnsimple.VanityNameServer` — Enable or disable a domain's vanity A and
