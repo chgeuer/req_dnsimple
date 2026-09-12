@@ -421,17 +421,8 @@ defmodule ReqDnsimple.Certificate do
     end
   end
 
-  defp validate_purchase_attrs(attrs) when is_list(attrs) do
-    NimbleOptions.validate(attrs, @purchase_schema)
-  end
-
-  defp validate_purchase_attrs(attrs) do
-    {:error,
-     %NimbleOptions.ValidationError{
-       message: "expected a keyword list",
-       value: attrs
-     }}
-  end
+  defp validate_purchase_attrs(attrs),
+    do: ReqDnsimple.validate_options(attrs, @purchase_schema)
 
   defp validate_attrs(attrs, schema) when is_list(attrs) do
     NimbleOptions.validate(attrs, schema)

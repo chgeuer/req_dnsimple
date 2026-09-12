@@ -543,6 +543,39 @@ defmodule ReqDnsimple.CertificateTest do
       refute_received {:request, _request}
     end
 
+    test "purchaseLetsencryptCertificate rejects malformed keyword containers before HTTP" do
+      request = client(201, %{"data" => @purchase_data})
+
+      for attrs <- [[:invalid], [{:name}]] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Certificate.purchase_letsencrypt(
+                   request,
+                   1010,
+                   "example.test",
+                   attrs
+                 )
+
+        refute_received {:request, _request}
+      end
+
+      assert {:ok, %ReqDnsimple.Certificate.Purchase{}} =
+               ReqDnsimple.Certificate.purchase_letsencrypt(
+                 request,
+                 1010,
+                 "example.test",
+                 name: "api"
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/domains/example.test/certificates/letsencrypt",
+        %{},
+        %{name: "api"}
+      )
+
+      refute_received {:request, _request}
+    end
+
     test "purchaseLetsencryptCertificate preserves HTTP failures and disables retries" do
       for status <- [400, 412, 401, 403, 429, 500, 418] do
         body = %{
