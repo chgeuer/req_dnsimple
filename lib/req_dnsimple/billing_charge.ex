@@ -13,10 +13,10 @@ defmodule ReqDnsimple.BillingCharge do
     Billing charge item structure.
     """
     @type t :: %__MODULE__{
-            amount: number(),
+            amount: String.t(),
             description: binary(),
-            product_id: integer(),
-            product_reference: binary(),
+            product_id: integer() | nil,
+            product_reference: String.t() | nil,
             product_type: binary()
           }
 
@@ -32,12 +32,12 @@ defmodule ReqDnsimple.BillingCharge do
   end
 
   @type t :: %__MODULE__{
-          balance_amount: number(),
+          balance_amount: String.t(),
           invoiced_at: DateTime.t(),
           items: [ReqDnsimple.BillingCharge.Item.t()],
           reference: binary(),
           state: binary(),
-          total_amount: number()
+          total_amount: String.t()
         }
 
   defstruct ~w(balance_amount items reference state total_amount invoiced_at)a

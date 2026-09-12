@@ -140,7 +140,10 @@ domain's registrar delegation and from the explicit zone-NS-update API.
   `name`, `content`, `ttl`, `priority`, `type`, `regions`, `parent_id`,
   `system_record`, timestamps.
 - `ReqDnsimple.BillingCharge` — Billing charge listing with date range filters.
-  Contains nested `ReqDnsimple.BillingCharge.Item` structs.
+  Contains nested `ReqDnsimple.BillingCharge.Item` structs. Monetary values remain
+  exact decimal strings; parse them explicitly with an arbitrary-precision decimal
+  library when arithmetic is required. Manual-charge item product identifiers and
+  references may be `nil`.
 - `ReqDnsimple.Contact` — Contact listing and retrieval. 14 contact fields + timestamps.
 - `ReqDnsimple.NsRecord` — Name server record struct and JSON parsing.
 - `ReqDnsimple.Helper` — Req helper for incrementally appending URL path segments

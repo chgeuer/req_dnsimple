@@ -154,6 +154,10 @@ declares integers only.
 )
 ```
 
+Billing amounts are returned as exact decimal strings, including trailing zeroes.
+Callers that need arithmetic should parse them explicitly with their chosen
+arbitrary-precision decimal library.
+
 ### Contacts
 
 ```elixir
