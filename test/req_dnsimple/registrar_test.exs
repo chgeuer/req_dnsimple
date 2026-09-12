@@ -723,6 +723,290 @@ defmodule ReqDnsimple.RegistrarTest do
     end
   end
 
+  describe "register/4" do
+    test "registerDomain sends all attributes once and returns the typed 201 payload" do
+      body = %{
+        "data" => %{
+          "id" => 1,
+          "domain_id" => 100,
+          "registrant_id" => 11,
+          "period" => 1,
+          "state" => "registered",
+          "auto_renew" => false,
+          "whois_privacy" => false,
+          "trustee" => false,
+          "created_at" => "2026-09-01T10:00:00+02:00",
+          "updated_at" => "2026-09-01T10:01:00+02:00"
+        }
+      }
+
+      attrs = [
+        registrant_id: 11,
+        whois_privacy: false,
+        auto_renew: false,
+        trustee: false,
+        extended_attributes: %{"uk_legal_type" => "IND"},
+        premium_price: "12.00",
+        linked_provider: "fake-linked-provider"
+      ]
+
+      assert {:ok,
+              %ReqDnsimple.Registrar.Registration{
+                id: 1,
+                domain_id: 100,
+                registrant_id: 11,
+                period: 1,
+                state: "registered",
+                auto_renew: false,
+                whois_privacy: false,
+                trustee: false,
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:01:00Z]
+              }} =
+               ReqDnsimple.Registrar.register(
+                 client(201, body),
+                 1010,
+                 "example.test",
+                 attrs
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/registrar/domains/example.test/registrations",
+        %{},
+        Map.new(attrs)
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "registerDomain sends only required fields and returns the typed 202 payload" do
+      body = %{
+        "data" => %{
+          "id" => 2,
+          "domain_id" => 101,
+          "registrant_id" => 0,
+          "period" => 10,
+          "state" => "registering",
+          "auto_renew" => false,
+          "whois_privacy" => false,
+          "trustee" => false,
+          "created_at" => "2026-09-01T10:00:00Z",
+          "updated_at" => "2026-09-01T10:00:00Z"
+        }
+      }
+
+      assert {:ok, %ReqDnsimple.Registrar.Registration{state: "registering", period: 10}} =
+               ReqDnsimple.Registrar.register(client(202, body), 0, "", registrant_id: 0)
+
+      assert_request(
+        :post,
+        "/v2/0/registrar/domains//registrations",
+        %{},
+        %{registrant_id: 0}
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "registerDomain preserves empty optional values and all documented states" do
+      for {state, status} <- [
+            {"cancelled", 201},
+            {"new", 202},
+            {"failed", 201}
+          ] do
+        body = %{
+          "data" => %{
+            "id" => 3,
+            "domain_id" => 102,
+            "registrant_id" => 11,
+            "period" => 1,
+            "state" => state,
+            "auto_renew" => false,
+            "whois_privacy" => false,
+            "trustee" => false,
+            "created_at" => "2026-09-01T10:00:00Z",
+            "updated_at" => "2026-09-01T10:00:00Z"
+          }
+        }
+
+        assert {:ok, %ReqDnsimple.Registrar.Registration{state: ^state}} =
+                 ReqDnsimple.Registrar.register(
+                   client(status, body),
+                   1010,
+                   "example.test",
+                   registrant_id: 11,
+                   extended_attributes: %{},
+                   premium_price: "",
+                   linked_provider: ""
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/registrar/domains/example.test/registrations",
+          %{},
+          %{
+            registrant_id: 11,
+            extended_attributes: %{},
+            premium_price: "",
+            linked_provider: ""
+          }
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "registerDomain rejects invalid inputs before HTTP" do
+      request =
+        client(201, %{
+          "data" => %{
+            "id" => 1,
+            "domain_id" => 100,
+            "registrant_id" => 11,
+            "period" => 1,
+            "state" => "registered",
+            "auto_renew" => false,
+            "whois_privacy" => false,
+            "trustee" => false,
+            "created_at" => "2026-09-01T10:00:00Z",
+            "updated_at" => "2026-09-01T10:00:00Z"
+          }
+        })
+
+      invalid_calls = [
+        {"1010", "example.test", [registrant_id: 11]},
+        {nil, "example.test", [registrant_id: 11]},
+        {1010, nil, [registrant_id: 11]},
+        {1010, 42, [registrant_id: 11]},
+        {1010, "example.test", []},
+        {1010, "example.test", [registrant_id: nil]},
+        {1010, "example.test", [registrant_id: "11"]},
+        {1010, "example.test", [registrant_id: 11, whois_privacy: nil]},
+        {1010, "example.test", [registrant_id: 11, auto_renew: 0]},
+        {1010, "example.test", [registrant_id: 11, trustee: "false"]},
+        {1010, "example.test", [registrant_id: 11, extended_attributes: []]},
+        {1010, "example.test", [registrant_id: 11, extended_attributes: %{country: "GB"}]},
+        {1010, "example.test", [registrant_id: 11, premium_price: 12.0]},
+        {1010, "example.test", [registrant_id: 11, linked_provider: nil]},
+        {1010, "example.test", [registrant_id: 11, period: 1]},
+        {1010, "example.test", %{"registrant_id" => 11}}
+      ]
+
+      for {account_id, domain_name, attrs} <- invalid_calls do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Registrar.register(request, account_id, domain_name, attrs)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "registerDomain preserves documented and shared HTTP failures" do
+      for status <- [400, 402, 401, 403, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"premium_price" => ["does not match"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Registrar.register(
+                   client(status, body),
+                   1010,
+                   "example.test",
+                   registrant_id: 11,
+                   premium_price: "12.00"
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/registrar/domains/example.test/registrations",
+          %{},
+          %{registrant_id: 11, premium_price: "12.00"}
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "registerDomain disables retries for the mutation" do
+      body = %{"message" => "Fake offline request failure"}
+      request = client(500, body) |> Req.merge(retry: :transient)
+
+      assert {:error, %{status: 500, response: ^body}} =
+               ReqDnsimple.Registrar.register(request, 1010, "example.test", registrant_id: 11)
+
+      assert_request(
+        :post,
+        "/v2/1010/registrar/domains/example.test/registrations",
+        %{},
+        %{registrant_id: 11}
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "registerDomain returns explicit errors for malformed successful responses" do
+      valid_data = %{
+        "id" => 1,
+        "domain_id" => 100,
+        "registrant_id" => 11,
+        "period" => 1,
+        "state" => "registered",
+        "auto_renew" => false,
+        "whois_privacy" => false,
+        "trustee" => false,
+        "created_at" => "2026-09-01T10:00:00Z",
+        "updated_at" => "2026-09-01T10:00:00Z"
+      }
+
+      malformed_payloads = [
+        %{},
+        %{"data" => nil},
+        %{"data" => Map.delete(valid_data, "id")},
+        %{"data" => Map.put(valid_data, "id", "1")},
+        %{"data" => Map.put(valid_data, "domain_id", nil)},
+        %{"data" => Map.put(valid_data, "registrant_id", "11")},
+        %{"data" => Map.put(valid_data, "period", 0)},
+        %{"data" => Map.put(valid_data, "period", 11)},
+        %{"data" => Map.put(valid_data, "state", "unknown")},
+        %{"data" => Map.put(valid_data, "auto_renew", nil)},
+        %{"data" => Map.put(valid_data, "whois_privacy", 0)},
+        %{"data" => Map.put(valid_data, "trustee", "false")},
+        %{"data" => Map.put(valid_data, "created_at", "not-a-timestamp")},
+        %{"data" => Map.put(valid_data, "updated_at", nil)}
+      ]
+
+      for status <- [201, 202], body <- malformed_payloads do
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Registrar.register(
+                   client(status, body),
+                   1010,
+                   "example.test",
+                   registrant_id: 11
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/registrar/domains/example.test/registrations",
+          %{},
+          %{registrant_id: 11}
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "registerDomain preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Registrar.register(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test",
+                 registrant_id: 11
+               )
+    end
+  end
+
   describe "renew/3 and renew/4" do
     test "domainRenew sends all supplied attributes once and returns the typed 201 payload" do
       body = %{

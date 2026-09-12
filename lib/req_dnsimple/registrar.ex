@@ -25,6 +25,13 @@ defmodule ReqDnsimple.Registrar do
       ReqDnsimple.Registrar.enable_whois_privacy(req, 1010, "example.test")
       #=> {:ok, %ReqDnsimple.Registrar.WhoisPrivacy{}}
 
+      ReqDnsimple.Registrar.register(req, 1010, "example.test",
+        registrant_id: 11,
+        whois_privacy: false,
+        premium_price: "12.00"
+      )
+      #=> {:ok, %ReqDnsimple.Registrar.Registration{}}
+
       ReqDnsimple.Registrar.renew(req, 1010, "example.test",
         period: 2,
         premium_price: "20.00"
@@ -96,6 +103,40 @@ defmodule ReqDnsimple.Registrar do
     defstruct [:enabled]
   end
 
+  defmodule Registration do
+    @moduledoc """
+    A domain-registration job returned by the registrar API.
+    """
+
+    @type state :: String.t()
+
+    @type t :: %__MODULE__{
+            id: integer(),
+            domain_id: integer(),
+            registrant_id: integer(),
+            period: 1..10,
+            state: state(),
+            auto_renew: boolean(),
+            whois_privacy: boolean(),
+            trustee: boolean(),
+            created_at: DateTime.t(),
+            updated_at: DateTime.t()
+          }
+
+    defstruct [
+      :id,
+      :domain_id,
+      :registrant_id,
+      :period,
+      :state,
+      :auto_renew,
+      :whois_privacy,
+      :trustee,
+      :created_at,
+      :updated_at
+    ]
+  end
+
   defmodule Renewal do
     @moduledoc """
     A domain-renewal job returned by the registrar API.
@@ -157,6 +198,7 @@ defmodule ReqDnsimple.Registrar do
   # https://developer.dnsimple.com/v2/registrar/auto-renewal/#disableDomainAutoRenewal
   # https://developer.dnsimple.com/v2/registrar/auto-renewal/#enableDomainAutoRenewal
   # https://developer.dnsimple.com/v2/registrar/whois-privacy/#enableWhoisPrivacy
+  # https://developer.dnsimple.com/v2/registrar/#registerDomain
   # https://developer.dnsimple.com/v2/registrar/#renewDomain
   # https://developer.dnsimple.com/v2/registrar/#restoreDomain
 
@@ -177,6 +219,16 @@ defmodule ReqDnsimple.Registrar do
   @renewal_schema [
     period: [type: :integer],
     premium_price: [type: :string]
+  ]
+
+  @registration_schema [
+    registrant_id: [type: :integer, required: true],
+    whois_privacy: [type: :boolean],
+    auto_renew: [type: :boolean],
+    trustee: [type: :boolean],
+    extended_attributes: [type: :any],
+    premium_price: [type: :string],
+    linked_provider: [type: :string]
   ]
 
   @restore_schema [
@@ -553,6 +605,62 @@ defmodule ReqDnsimple.Registrar do
   end
 
   @doc """
+  Submits a domain registration for an existing contact.
+
+  `:registrant_id` is required. Optional settings are `:whois_privacy`,
+  `:auto_renew`, `:trustee`, `:extended_attributes`, `:premium_price`, and
+  `:linked_provider`. Extended-attribute keys must be strings, and a supplied
+  premium price remains an exact string.
+
+  Returns a typed `Registration` for immediate HTTP 201 and asynchronous HTTP
+  202 responses without polling. Registration, service, trustee, and premium
+  charges are determined by DNSimple. Callers must confirm any premium price
+  before invoking this operation. The function sends exactly one request and
+  does not check availability or prices, fetch or create contacts, create a
+  hosted domain, or perform any other preflight or follow-up operation.
+  """
+  @spec register(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          String.t(),
+          keyword()
+        ) ::
+          {:ok, Registration.t()} | {:error, term()}
+  def register(req, account_id, domain_name, attrs) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain_name: domain_name],
+             @path_schema
+           ),
+         {:ok, validated_attrs} <- validate_registration_attrs(attrs) do
+      req =
+        Req.merge(req,
+          method: :post,
+          url: "/:account_id/registrar/domains/:domain_name/registrations",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain_name: domain_name],
+          json: Map.new(validated_attrs),
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: status, body: %{"data" => data}} = response}
+        when status in [201, 202] ->
+          case decode_registration(data) do
+            {:ok, registration} -> {:ok, registration}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
   Submits an expired-domain restore.
 
   Premium domains can include the caller-confirmed `:premium_price`, which is
@@ -734,6 +842,45 @@ defmodule ReqDnsimple.Registrar do
      }}
   end
 
+  defp validate_registration_attrs(attrs) when is_list(attrs) do
+    with {:ok, validated_attrs} <- NimbleOptions.validate(attrs, @registration_schema),
+         :ok <- validate_extended_attributes(validated_attrs[:extended_attributes]) do
+      {:ok, validated_attrs}
+    end
+  end
+
+  defp validate_registration_attrs(attrs) do
+    {:error,
+     %NimbleOptions.ValidationError{
+       message: "expected a keyword list",
+       value: attrs
+     }}
+  end
+
+  defp validate_extended_attributes(nil), do: :ok
+
+  defp validate_extended_attributes(map) when is_map(map) do
+    if Enum.all?(map, fn {key, _value} -> is_binary(key) end) do
+      :ok
+    else
+      {:error,
+       %NimbleOptions.ValidationError{
+         message: "expected :extended_attributes to have string keys",
+         key: :extended_attributes,
+         value: map
+       }}
+    end
+  end
+
+  defp validate_extended_attributes(value) do
+    {:error,
+     %NimbleOptions.ValidationError{
+       message: "expected :extended_attributes to be a map with string keys",
+       key: :extended_attributes,
+       value: value
+     }}
+  end
+
   defp validate_restore_attrs(attrs) when is_list(attrs) do
     NimbleOptions.validate(attrs, @restore_schema)
   end
@@ -771,6 +918,42 @@ defmodule ReqDnsimple.Registrar do
   end
 
   defp decode_renewal(_data), do: :error
+
+  defp decode_registration(%{
+         "id" => id,
+         "domain_id" => domain_id,
+         "registrant_id" => registrant_id,
+         "period" => period,
+         "state" => state,
+         "auto_renew" => auto_renew,
+         "whois_privacy" => whois_privacy,
+         "trustee" => trustee,
+         "created_at" => created_at,
+         "updated_at" => updated_at
+       })
+       when is_integer(id) and is_integer(domain_id) and is_integer(registrant_id) and
+              period in 1..10 and
+              state in ["cancelled", "new", "registering", "registered", "failed"] and
+              is_boolean(auto_renew) and is_boolean(whois_privacy) and is_boolean(trustee) do
+    with {:ok, created_at} <- parse_datetime(created_at),
+         {:ok, updated_at} <- parse_datetime(updated_at) do
+      {:ok,
+       %Registration{
+         id: id,
+         domain_id: domain_id,
+         registrant_id: registrant_id,
+         period: period,
+         state: state,
+         auto_renew: auto_renew,
+         whois_privacy: whois_privacy,
+         trustee: trustee,
+         created_at: created_at,
+         updated_at: updated_at
+       }}
+    end
+  end
+
+  defp decode_registration(_data), do: :error
 
   defp decode_restore(%{
          "id" => id,
