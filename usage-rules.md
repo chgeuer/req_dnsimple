@@ -223,9 +223,11 @@ The update does not change registrar delegation.
   does not send mail or modify MX records.
 - `ReqDnsimple.DomainPush` — Accept a pending push with an explicit target-account
   contact, or reject it without deleting the source domain.
-- `ReqDnsimple.Registrar` — Explicitly authorize transfer-out by domain name.
-  DNSimple unlocks the domain and emails the authorization code to its
-  administrative contact; the wrapper performs no follow-up request.
+- `ReqDnsimple.Registrar` — Explicitly authorize transfer-out by domain name or
+  replace registrar delegation by domain name or ID. Delegation replacement
+  preserves the supplied order and explicit empty lists, sends one request, and
+  does not read or merge the prior delegation. It is distinct from hosted-zone
+  apex NS records and `Zone.update_ns_records/4`.
 - `ReqDnsimple.PrimaryServer` — Secondary-DNS primary server retrieval and
   explicit deletion. Struct: `id`, `account_id`, `name`, `ip`, integer `port`,
   ordered `linked_secondary_zones`, and timestamps. Deletion does not unlink
