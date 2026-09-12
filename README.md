@@ -125,6 +125,21 @@ list, including an empty list, is sent unchanged. The endpoint documentation
 and examples support `"dnsimple"` even though the OpenAPI item schema currently
 declares integers only.
 
+**Apply an atomic batch:**
+
+```elixir
+{:ok, %ReqDnsimple.ZoneRecord.BatchResult{} = result} =
+  ReqDnsimple.ZoneRecord.batch_change(client, account_id, "example.com",
+    creates: [[name: "", type: "A", content: "192.0.2.1"]],
+    updates: [[id: record_id, ttl: 0, regions: []]],
+    deletes: [[id: obsolete_record_id]]
+  )
+```
+
+Batch changes are sent in one non-retried request. DNSimple processes deletes,
+then updates, then creates, while preserving operation order within each list.
+Each list is optional; explicitly empty lists are sent unchanged.
+
 **Delete a record:**
 
 ```elixir
@@ -190,7 +205,7 @@ from the separate API that explicitly replaces a zone's NS records.
 | `ReqDnsimple` | Client, `/whoami`, apex NS record enumeration | `new_client/1`, `whoami/1`, `token_type/1`, `ns_records/3` |
 | `ReqDnsimple.Account` | `/accounts` | `list/1` |
 | `ReqDnsimple.Zone` | `/zones` | `list/3`, `get_zone_file/3`, `check_zone_distribution/3` |
-| `ReqDnsimple.ZoneRecord` | `/zones/:zone/records` | `list/4`, `get/4`, `create/4`, `update/5`, `delete/4` |
+| `ReqDnsimple.ZoneRecord` | `/zones/:zone/records`, `/zones/:zone/batch` | `list/4`, `get/4`, `create/4`, `update/5`, `delete/4`, `batch_change/4` |
 | `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/3` |
 | `ReqDnsimple.Contact` | `/contacts` | `list/3`, `get/3` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |

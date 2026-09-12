@@ -41,9 +41,12 @@ defmodule ReqDnsimple.TestSupport do
     end
   end
 
-  defp stringify_keys(map) do
-    Map.new(map, fn {key, value} -> {to_string(key), value} end)
+  defp stringify_keys(map) when is_map(map) do
+    Map.new(map, fn {key, value} -> {to_string(key), stringify_keys(value)} end)
   end
+
+  defp stringify_keys(list) when is_list(list), do: Enum.map(list, &stringify_keys/1)
+  defp stringify_keys(value), do: value
 
   defp stringify_values(map) do
     Map.new(map, fn {key, value} -> {to_string(key), to_string(value)} end)

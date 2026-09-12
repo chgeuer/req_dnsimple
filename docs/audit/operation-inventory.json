@@ -311,7 +311,7 @@
       "method": "POST",
       "path": "/{account}/zones/{zone}/batch",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-006",
       "br_issue_id": "bd-1jv",
       "proposed_interfaces": [
@@ -363,8 +363,20 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "batch_change",
+          "arity": 4,
+          "signature": "ReqDnsimple.ZoneRecord.batch_change(req, account_id, zone, attrs)"
+        }
+      ],
+      "contract_tests": [
+        {
+          "file": "test/zone_record_test.exs",
+          "describe": "batch_change/4"
+        }
+      ]
     },
     {
       "operation_id": "cancelDomainTransfer",

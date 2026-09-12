@@ -35,6 +35,7 @@ Different modules use slightly different return conventions:
 | `ZoneRecord.update/5` | `{:ok, %ZoneRecord{}}` | `{:error, reason}` |
 | `ZoneRecord.delete/4` | `:ok` | `{:error, reason}` |
 | `ZoneRecord.get/4` | `{:ok, %ZoneRecord{}}` | `{:error, :not_found}` |
+| `ZoneRecord.batch_change/4` | `{:ok, %ZoneRecord.BatchResult{}}` | `{:error, reason}` |
 | `Contact.list/3` | `{:ok, [%Contact{}, ...]}` | `{:error, reason}` |
 | `Contact.get/3` | `{:ok, %Contact{}}` | `{:error, :not_found}` |
 | `BillingCharge.list/3` | `{:ok, [%BillingCharge{}, ...]}` | `{:error, reason}` |
@@ -100,6 +101,14 @@ by `ReqDnsimple.convert_sort_to_string/1`.
 
 # Delete
 :ok = ReqDnsimple.ZoneRecord.delete(client, account_id, "example.com", record_id)
+
+# Atomic batch; each operation list is optional
+{:ok, %ReqDnsimple.ZoneRecord.BatchResult{} = result} =
+  ReqDnsimple.ZoneRecord.batch_change(client, account_id, "example.com",
+    creates: [[name: "", type: "A", content: "192.0.2.1"]],
+    updates: [[id: record_id, ttl: 0, regions: []]],
+    deletes: [[id: obsolete_record_id]]
+  )
 ```
 
 Record `ttl` and `priority` values are non-negative integers. Explicit zero
@@ -109,6 +118,9 @@ Omitting the option preserves the API's default target propagation, while an
 explicit list (including `[]`) is transmitted unchanged. The published endpoint
 prose and examples support the `"dnsimple"` sentinel despite the OpenAPI item's
 integer-only declaration.
+Batch changes never include `integrated_zones`, never change a record's type,
+and are sent as one non-retried request. DNSimple processes deletes, updates,
+and creates in that order while retaining the caller's order within each list.
 
 ### Typical Account Discovery Flow
 
@@ -137,9 +149,11 @@ domain's registrar delegation and from the explicit zone-NS-update API.
 - `ReqDnsimple.Zone` — Zone listing, zone file retrieval, distribution checks.
   Struct: `id`, `account_id`, `name`, `active`, `reverse`, `secondary`, timestamps.
   `last_transferred_at` is `nil` when a zone has not been transferred.
-- `ReqDnsimple.ZoneRecord` — Full CRUD for DNS records. Struct: `id`, `zone_id`,
+- `ReqDnsimple.ZoneRecord` — Full CRUD and atomic batch changes for DNS records.
+  Record struct: `id`, `zone_id`,
   `name`, `content`, `ttl`, `priority`, `type`, `regions`, `parent_id`,
-  `system_record`, timestamps.
+  `system_record`, timestamps. Batch responses use `ZoneRecord.BatchResult` and
+  `ZoneRecord.DeletedRecord`.
 - `ReqDnsimple.BillingCharge` — Billing charge listing with date range filters.
   Contains nested `ReqDnsimple.BillingCharge.Item` structs. Monetary values remain
   exact decimal strings; parse them explicitly with an arbitrary-precision decimal

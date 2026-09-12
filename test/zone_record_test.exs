@@ -229,4 +229,229 @@ defmodule ReqDnsimple.ZoneRecordTest do
 
     refute_received {:request, _request}
   end
+
+  describe "batch_change/4" do
+    test "sends all operations once and returns typed results" do
+      attrs = [
+        creates: [
+          [
+            name: "",
+            type: "MX",
+            content: "mail.example.test",
+            ttl: 0,
+            priority: 0,
+            regions: ["global"]
+          ]
+        ],
+        updates: [
+          [
+            id: 302,
+            name: "www",
+            content: "192.0.2.2",
+            ttl: 0,
+            priority: 0,
+            regions: []
+          ]
+        ],
+        deletes: [[id: 303]]
+      ]
+
+      created = Map.put(@record_data, "id", 301)
+
+      updated =
+        Map.merge(@record_data, %{
+          "id" => 302,
+          "name" => "www",
+          "content" => "192.0.2.2",
+          "type" => "A",
+          "regions" => []
+        })
+
+      assert {:ok,
+              %ReqDnsimple.ZoneRecord.BatchResult{
+                creates: [%ReqDnsimple.ZoneRecord{id: 301, parent_id: nil, ttl: 0}],
+                updates: [%ReqDnsimple.ZoneRecord{id: 302, regions: []}],
+                deletes: [%ReqDnsimple.ZoneRecord.DeletedRecord{id: 303}]
+              }} =
+               ReqDnsimple.ZoneRecord.batch_change(
+                 client(200, %{
+                   "data" => %{
+                     "creates" => [created],
+                     "updates" => [updated],
+                     "deletes" => [%{"id" => 303}]
+                   }
+                 }),
+                 1010,
+                 "example.test",
+                 attrs
+               )
+
+      assert_request(:post, "/v2/1010/zones/example.test/batch", %{}, %{
+        creates: [
+          %{
+            name: "",
+            type: "MX",
+            content: "mail.example.test",
+            ttl: 0,
+            priority: 0,
+            regions: ["global"]
+          }
+        ],
+        updates: [
+          %{
+            id: 302,
+            name: "www",
+            content: "192.0.2.2",
+            ttl: 0,
+            priority: 0,
+            regions: []
+          }
+        ],
+        deletes: [%{id: 303}]
+      })
+
+      refute_received {:request, _request}
+    end
+
+    test "preserves omitted and explicit empty operation arrays" do
+      empty_result = %{
+        "data" => %{"creates" => [], "updates" => [], "deletes" => []}
+      }
+
+      for attrs <- [
+            [],
+            [creates: [[name: "", type: "A", content: "192.0.2.1"]]],
+            [creates: [%{name: "", type: "A", content: "192.0.2.1"}]],
+            [updates: [[id: 0]], deletes: [[id: 0]]],
+            [creates: [], updates: [], deletes: []]
+          ] do
+        assert {:ok, %ReqDnsimple.ZoneRecord.BatchResult{}} =
+                 ReqDnsimple.ZoneRecord.batch_change(
+                   client(200, empty_result),
+                   1010,
+                   "example.test",
+                   attrs
+                 )
+
+        expected =
+          attrs
+          |> Map.new(fn {operation, items} ->
+            {operation, Enum.map(items, &Map.new/1)}
+          end)
+          |> Jason.encode!()
+          |> Jason.decode!()
+
+        assert_request(:post, "/v2/1010/zones/example.test/batch", %{}, expected)
+      end
+    end
+
+    test "rejects invalid and unknown operation attributes before HTTP" do
+      request = client(200, %{})
+
+      invalid_attrs = [
+        [creates: [[type: "A", content: "192.0.2.1"]]],
+        [creates: [[name: "", type: "INVALID", content: "192.0.2.1"]]],
+        [creates: [[name: "", type: "A", content: nil]]],
+        [creates: [[name: "", type: "A", content: "192.0.2.1", ttl: -1]]],
+        [creates: [[name: "", type: "A", content: "192.0.2.1", regions: ["moon"]]]],
+        [updates: [[content: "192.0.2.2"]]],
+        [updates: [[id: 302, type: "AAAA"]]],
+        [deletes: [303]],
+        [deletes: [[id: "303"]]],
+        [unknown: []]
+      ]
+
+      for attrs <- invalid_attrs do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.ZoneRecord.batch_change(request, 1010, "example.test", attrs)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "preserves indexed validation errors and generic HTTP failures" do
+      validation_body = %{
+        "message" => "Fake offline validation failure",
+        "errors" => %{
+          "creates" => [
+            %{
+              "index" => 0,
+              "message" => "Fake duplicate record",
+              "errors" => %{"base" => ["Fake duplicate record"]}
+            }
+          ],
+          "updates" => nil,
+          "deletes" => []
+        }
+      }
+
+      assert {:error,
+              %{
+                status: 400,
+                message: "Fake offline validation failure",
+                errors: errors
+              }} =
+               ReqDnsimple.ZoneRecord.batch_change(
+                 client(400, validation_body),
+                 1010,
+                 "example.test",
+                 []
+               )
+
+      assert errors == validation_body["errors"]
+
+      for status <- [401, 403, 404, 412, 429, 500] do
+        body = %{"message" => "failure #{status}"}
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.ZoneRecord.batch_change(
+                   client(status, body),
+                   1010,
+                   "example.test",
+                   []
+                 )
+      end
+    end
+
+    test "returns explicit errors for malformed success and transport failures" do
+      malformed = %{"data" => %{"creates" => [], "updates" => []}}
+
+      assert {:error, %{status: 200, response: ^malformed}} =
+               ReqDnsimple.ZoneRecord.batch_change(
+                 client(200, malformed),
+                 1010,
+                 "example.test",
+                 []
+               )
+
+      malformed_timestamp =
+        put_in(
+          %{
+            "data" => %{
+              "creates" => [@record_data],
+              "updates" => [],
+              "deletes" => []
+            }
+          },
+          ["data", "creates", Access.at(0), "created_at"],
+          "not-a-timestamp"
+        )
+
+      assert {:error, %{status: 200, response: ^malformed_timestamp}} =
+               ReqDnsimple.ZoneRecord.batch_change(
+                 client(200, malformed_timestamp),
+                 1010,
+                 "example.test",
+                 []
+               )
+
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.ZoneRecord.batch_change(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test",
+                 []
+               )
+    end
+  end
 end
