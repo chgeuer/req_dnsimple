@@ -176,15 +176,24 @@ merging existing records. To retain vanity name-server configuration, include
 its names or sets in the call. This hosted-zone operation does not change the
 domain's registrar delegation.
 
-### Disable vanity name servers
+### Enable and disable vanity name servers
+
+```elixir
+{:ok, vanity_name_servers} =
+  ReqDnsimple.VanityNameServer.enable(client, account_id, "example.com")
+```
+
+Enabling sends one bodyless request and returns the typed vanity A and AAAA
+records created by DNSimple. The API can reject the request when the account's
+plan or payment state does not permit vanity name servers.
 
 ```elixir
 :ok = ReqDnsimple.VanityNameServer.disable(client, account_id, "example.com")
 ```
 
-This sends one bodyless request to remove the domain's vanity A and AAAA
-configuration. It does not change registrar delegation or delete records
-individually.
+Disabling sends one bodyless request to remove the domain's vanity A and AAAA
+configuration. Neither operation changes registrar delegation, and disabling
+does not delete records individually.
 
 ### Get a zone file
 
@@ -646,7 +655,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records/:ds_record` | `get/4`, `delete/4` |
 | `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards/:email_forward` | `get/4`, `delete/4` |
 | `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4`, `reject/3` |
-| `ReqDnsimple.VanityNameServer` | `/vanity/:domain` | `disable/3` |
+| `ReqDnsimple.VanityNameServer` | `/vanity/:domain` | `enable/3`, `disable/3` |
 | `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `get_prices/3`, `get_transfer_lock/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `enable_auto_renewal/3`, `enable_whois_privacy/3`, `register/4`, `transfer/4`, `renew/3`, `renew/4`, `restore/3`, `restore/4`, `get_delegation/3`, `change_delegation/4` |
 | `ReqDnsimple.Tld` | `/tlds/:tld`, `/tlds/:tld/extended_attributes` | `get/2`, `list_extended_attributes/2` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries/:primary_server` | `get/3`, `delete/3`, `from_json/1` |

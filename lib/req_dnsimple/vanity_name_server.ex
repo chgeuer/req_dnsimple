@@ -4,16 +4,70 @@ defmodule ReqDnsimple.VanityNameServer do
 
   ## Example
 
+      ReqDnsimple.VanityNameServer.enable(req, 1010, "example.test")
+      #=> {:ok, [%ReqDnsimple.VanityNameServer{}]}
+
       ReqDnsimple.VanityNameServer.disable(req, 1010, "example.test")
       #=> :ok
   """
 
   # https://developer.dnsimple.com/v2/vanity/
 
+  @type t :: %__MODULE__{
+          id: integer(),
+          name: binary(),
+          ipv4: binary(),
+          ipv6: binary(),
+          created_at: DateTime.t(),
+          updated_at: DateTime.t()
+        }
+
+  defstruct ~w(id name ipv4 ipv6 created_at updated_at)a
+
   @path_schema [
     account_id: [type: :integer, required: true],
     domain: [type: {:or, [:string, :integer]}, required: true]
   ]
+
+  @doc """
+  Enables vanity name-server records for a domain by name or ID.
+
+  This creates the domain's vanity A and AAAA records in one bodyless request
+  and returns the resulting records. It does not change registrar delegation.
+  DNSimple may return plan or payment errors when the feature is unavailable.
+  """
+  @spec enable(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer()) ::
+          {:ok, [t()]} | {:error, term()}
+  def enable(req, account_id, domain) do
+    with {:ok, _validated_params} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain],
+             @path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :put,
+          url: "/:account_id/vanity/:domain",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain: domain]
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response}
+        when is_list(data) ->
+          case decode_list(data) do
+            {:ok, name_servers} -> {:ok, name_servers}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
 
   @doc """
   Disables vanity name-server records for a domain by name or ID.
@@ -49,4 +103,53 @@ defmodule ReqDnsimple.VanityNameServer do
       end
     end
   end
+
+  defp decode_list(data) do
+    Enum.reduce_while(data, {:ok, []}, fn item, {:ok, name_servers} ->
+      case decode(item) do
+        {:ok, name_server} -> {:cont, {:ok, [name_server | name_servers]}}
+        :error -> {:halt, :error}
+      end
+    end)
+    |> case do
+      {:ok, name_servers} -> {:ok, Enum.reverse(name_servers)}
+      :error -> :error
+    end
+  end
+
+  defp decode(%{
+         "id" => id,
+         "name" => name,
+         "ipv4" => ipv4,
+         "ipv6" => ipv6,
+         "created_at" => created_at,
+         "updated_at" => updated_at
+       })
+       when is_integer(id) and is_binary(name) and is_binary(ipv4) and is_binary(ipv6) do
+    with {:ok, created_at} <- parse_datetime(created_at),
+         {:ok, updated_at} <- parse_datetime(updated_at) do
+      {:ok,
+       %__MODULE__{
+         id: id,
+         name: name,
+         ipv4: ipv4,
+         ipv6: ipv6,
+         created_at: created_at,
+         updated_at: updated_at
+       }}
+    else
+      _invalid -> :error
+    end
+  end
+
+  defp decode(_data), do: :error
+
+  defp parse_datetime(value) when is_binary(value) do
+    case DateTime.from_iso8601(value) do
+      {:ok, datetime, _offset} -> {:ok, datetime}
+      {:error, _reason} -> :error
+    end
+  end
+
+  defp parse_datetime(_value), do: :error
 end

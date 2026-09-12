@@ -201,12 +201,17 @@ preserves explicit empty lists and performs no lookup or merge, so callers
 retaining vanity configuration must include those names or sets themselves.
 The update does not change registrar delegation.
 
-### Disabling Vanity Name Servers
+### Enabling and Disabling Vanity Name Servers
+
+`ReqDnsimple.VanityNameServer.enable/3` sends one bodyless request and returns
+the typed vanity A and AAAA records created by DNSimple. It accepts a domain
+name or integer ID. DNSimple can return plan or payment errors when the feature
+is unavailable.
 
 `ReqDnsimple.VanityNameServer.disable/3` sends one bodyless request to remove a
 domain's vanity A and AAAA configuration. It accepts a domain name or integer
-ID, does not inspect or change registrar delegation, and does not delete records
-individually.
+ID. Neither operation inspects or changes registrar delegation, and disabling
+does not delete records individually.
 
 ## Module Reference
 
@@ -262,7 +267,7 @@ individually.
   does not send mail or modify MX records.
 - `ReqDnsimple.DomainPush` — Accept a pending push with an explicit target-account
   contact, or reject it without deleting the source domain.
-- `ReqDnsimple.VanityNameServer` — Explicitly disable a domain's vanity A and
+- `ReqDnsimple.VanityNameServer` — Enable or disable a domain's vanity A and
   AAAA configuration by name or ID without changing registrar delegation.
 - `ReqDnsimple.Certificate` — Order typed Let's Encrypt purchases and renewals
   without automatic issuance or deployment; renewal orders preserve distinct
