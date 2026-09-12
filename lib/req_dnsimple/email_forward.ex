@@ -2,6 +2,17 @@ defmodule ReqDnsimple.EmailForward do
   @moduledoc """
   Operations for domain email forwards.
 
+  Create one email forward:
+
+      {:ok, email_forward} =
+        ReqDnsimple.EmailForward.create(
+          client,
+          1010,
+          "example.test",
+          alias_name: "support",
+          destination_email: "recipient@example.test"
+        )
+
   Retrieve one email forward:
 
       {:ok, email_forward} =
@@ -43,6 +54,68 @@ defmodule ReqDnsimple.EmailForward do
     domain: [type: {:or, [:string, :integer]}, required: true],
     email_forward_id: [type: :integer, required: true]
   ]
+
+  @create_path_schema [
+    account_id: [type: :integer, required: true],
+    domain: [type: {:or, [:string, :integer]}, required: true]
+  ]
+
+  @create_schema [
+    alias_name: [type: :string, required: true],
+    destination_email: [type: :string, required: true]
+  ]
+
+  @doc """
+  Creates an email forward for a domain.
+
+  `alias_name` is sent unchanged as the receiving local part; DNSimple appends
+  the domain. The operation sends one request and does not provision DNS
+  records or send a test email.
+
+  ## Example
+
+      ReqDnsimple.EmailForward.create(
+        req,
+        1010,
+        "example.test",
+        alias_name: "support",
+        destination_email: "recipient@example.test"
+      )
+      #=> {:ok, %ReqDnsimple.EmailForward{}}
+  """
+  @spec create(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer(), keyword()) ::
+          {:ok, t()} | {:error, term()}
+  def create(req, account_id, domain, attrs) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain],
+             @create_path_schema
+           ),
+         {:ok, validated_attrs} <- ReqDnsimple.validate_options(attrs, @create_schema) do
+      req =
+        Req.merge(req,
+          method: :post,
+          url: "/:account_id/domains/:domain/email_forwards",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain: domain],
+          json: Map.new(validated_attrs)
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
+          case decode(data) do
+            {:ok, email_forward} -> {:ok, email_forward}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
 
   @doc """
   Retrieves one email forward from a domain.

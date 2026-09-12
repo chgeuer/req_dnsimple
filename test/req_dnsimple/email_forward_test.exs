@@ -13,6 +13,190 @@ defmodule ReqDnsimple.EmailForwardTest do
     "active" => false
   }
 
+  describe "create/4" do
+    test "createEmailForward sends the local alias and returns a typed result" do
+      attrs = [
+        alias_name: "support",
+        destination_email: "recipient@example.test"
+      ]
+
+      assert {:ok,
+              %ReqDnsimple.EmailForward{
+                id: 1,
+                domain_id: 100,
+                alias_email: "support@example.test",
+                destination_email: "recipient@example.test",
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:30:00Z],
+                active: false
+              }} =
+               ReqDnsimple.EmailForward.create(
+                 client(201, %{"data" => @email_forward_data}),
+                 1010,
+                 "example.test",
+                 attrs
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/domains/example.test/email_forwards",
+        %{},
+        Map.new(attrs)
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "createEmailForward accepts integer and zero identifiers without altering empty strings" do
+      data = Map.merge(@email_forward_data, %{"id" => 0, "domain_id" => 0})
+
+      assert {:ok, %ReqDnsimple.EmailForward{id: 0, domain_id: 0}} =
+               ReqDnsimple.EmailForward.create(
+                 client(201, %{"data" => data}),
+                 0,
+                 0,
+                 alias_name: "",
+                 destination_email: ""
+               )
+
+      assert_request(
+        :post,
+        "/v2/0/domains/0/email_forwards",
+        %{},
+        %{"alias_name" => "", "destination_email" => ""}
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "createEmailForward rejects invalid paths and attributes before HTTP" do
+      request = client(201, %{"data" => @email_forward_data})
+
+      for {account_id, domain, attrs} <- [
+            {"1010", "example.test",
+             alias_name: "support", destination_email: "recipient@example.test"},
+            {nil, "example.test",
+             alias_name: "support", destination_email: "recipient@example.test"},
+            {1010, nil, alias_name: "support", destination_email: "recipient@example.test"},
+            {1010, 1.5, alias_name: "support", destination_email: "recipient@example.test"},
+            {1010, [], alias_name: "support", destination_email: "recipient@example.test"},
+            {1010, "example.test", [:invalid]},
+            {1010, "example.test", [{:alias_name}]},
+            {1010, "example.test", []},
+            {1010, "example.test", alias_name: "support"},
+            {1010, "example.test", destination_email: "recipient@example.test"},
+            {1010, "example.test", alias_name: nil, destination_email: "recipient@example.test"},
+            {1010, "example.test",
+             alias_name: false, destination_email: "recipient@example.test"},
+            {1010, "example.test", alias_name: 0, destination_email: "recipient@example.test"},
+            {1010, "example.test", alias_name: [], destination_email: "recipient@example.test"},
+            {1010, "example.test", alias_name: %{}, destination_email: "recipient@example.test"},
+            {1010, "example.test", alias_name: "support", destination_email: nil},
+            {1010, "example.test", alias_name: "support", destination_email: false},
+            {1010, "example.test", alias_name: "support", destination_email: 0},
+            {1010, "example.test", alias_name: "support", destination_email: []},
+            {1010, "example.test", alias_name: "support", destination_email: %{}},
+            {1010, "example.test",
+             alias_name: "support", destination_email: "recipient@example.test", active: true}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.EmailForward.create(request, account_id, domain, attrs)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "createEmailForward preserves documented and shared HTTP failures" do
+      attrs = [alias_name: "support", destination_email: "recipient@example.test"]
+
+      for status <- [400, 401, 403, 404, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"destination_email" => ["is invalid"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.EmailForward.create(
+                   client(status, body),
+                   1010,
+                   "example.test",
+                   attrs
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/domains/example.test/email_forwards",
+          %{},
+          Map.new(attrs)
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "createEmailForward returns explicit errors for malformed success" do
+      attrs = [alias_name: "support", destination_email: "recipient@example.test"]
+
+      malformed_payloads = [
+        %{},
+        %{"data" => nil},
+        %{"data" => Map.delete(@email_forward_data, "id")},
+        %{"data" => Map.put(@email_forward_data, "alias_email", nil)},
+        %{"data" => Map.put(@email_forward_data, "active", 0)},
+        %{"data" => Map.put(@email_forward_data, "created_at", "not-a-timestamp")}
+      ]
+
+      for body <- malformed_payloads do
+        assert {:error, %{status: 201, response: ^body}} =
+                 ReqDnsimple.EmailForward.create(
+                   client(201, body),
+                   1010,
+                   "example.test",
+                   attrs
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/domains/example.test/email_forwards",
+          %{},
+          Map.new(attrs)
+        )
+
+        refute_received {:request, _request}
+      end
+
+      body = %{"data" => @email_forward_data}
+
+      assert {:error, %{status: 200, response: ^body}} =
+               ReqDnsimple.EmailForward.create(
+                 client(200, body),
+                 1010,
+                 "example.test",
+                 attrs
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/domains/example.test/email_forwards",
+        %{},
+        Map.new(attrs)
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "createEmailForward preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.EmailForward.create(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test",
+                 alias_name: "support",
+                 destination_email: "recipient@example.test"
+               )
+    end
+  end
+
   describe "get/4" do
     test "getEmailForward sends one bodyless request and returns a typed result" do
       assert {:ok,

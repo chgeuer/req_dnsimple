@@ -627,16 +627,26 @@ not disable DNSSEC or delete hosted-zone records.
 
 ```elixir
 {:ok, email_forward} =
+  ReqDnsimple.EmailForward.create(
+    client,
+    account_id,
+    "example.com",
+    alias_name: "support",
+    destination_email: "recipient@example.test"
+  )
+
+{:ok, email_forward} =
   ReqDnsimple.EmailForward.get(client, account_id, "example.com", email_forward_id)
 
 :ok = ReqDnsimple.EmailForward.delete(client, account_id, "example.com", email_forward_id)
 ```
 
-Retrieval returns a typed `ReqDnsimple.EmailForward` with its full alias email,
-destination email, activation state, and timestamps. The returned `alias_email`
-is distinct from the local-part `alias_name` used when creating a forward.
-Deletion removes only the selected email forward. It does not send mail or
-modify the domain's MX records.
+Creation sends the local-part `alias_name` unchanged and returns a typed
+`ReqDnsimple.EmailForward` with its full alias email, destination email,
+activation state, and timestamps. The returned `alias_email` is distinct from
+the creation input. Creation does not provision DNS records or send a test
+email. Deletion removes only the selected email forward and does not modify the
+domain's MX records.
 
 ### Secondary-DNS primary servers
 
@@ -759,7 +769,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.Domain` | `/domains`, `/domains/:domain` | `create/3`, `get/3`, `delete/3` |
 | `ReqDnsimple.DomainResearch` | `/domains/research/status` | `get_status/3` |
 | `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records[/:ds_record]` | `create/4`, `get/4`, `delete/4` |
-| `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards/:email_forward` | `get/4`, `delete/4` |
+| `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards[/:email_forward]` | `create/4`, `get/4`, `delete/4` |
 | `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4`, `reject/3` |
 | `ReqDnsimple.VanityNameServer` | `/vanity/:domain` | `enable/3`, `disable/3` |
 | `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `get_prices/3`, `get_transfer_lock/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `enable_auto_renewal/3`, `enable_whois_privacy/3`, `register/4`, `transfer/4`, `renew/3`, `renew/4`, `restore/3`, `restore/4`, `get_delegation/3`, `change_delegation/4` |

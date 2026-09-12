@@ -74,6 +74,7 @@ Different modules use slightly different return conventions:
 | `DelegationSignerRecord.create/4` | `{:ok, %DelegationSignerRecord{}}` | `{:error, reason}` |
 | `DelegationSignerRecord.get/4` | `{:ok, %DelegationSignerRecord{}}` | `{:error, reason}` |
 | `DelegationSignerRecord.delete/4` | `:ok` | `{:error, reason}` |
+| `EmailForward.create/4` | `{:ok, %EmailForward{}}` | `{:error, reason}` |
 | `EmailForward.get/4` | `{:ok, %EmailForward{}}` | `{:error, reason}` |
 | `EmailForward.delete/4` | `:ok` | `{:error, reason}` |
 | `Webhook.get/3` | `{:ok, %Webhook{}}` | `{:error, reason}` |
@@ -283,10 +284,11 @@ not contact the callback URL, inspect deliveries, or list registrations first.
   accepts a string algorithm with either a complete DS tuple or KEY public key.
   DS and KEY proof fields that do not apply are `nil`. Deletion does not disable
   DNSSEC or delete hosted-zone records.
-- `ReqDnsimple.EmailForward` — Typed retrieval and explicit deletion of one
-  domain email forward by domain name or ID and forward ID. Retrieval preserves
-  the full alias email, destination, activation state, and timestamps. Deletion
-  does not send mail or modify MX records.
+- `ReqDnsimple.EmailForward` — Typed creation, retrieval, and explicit deletion
+  of domain email forwards. Creation sends the local-part alias unchanged and
+  neither provisions DNS records nor sends test email. Responses preserve the
+  full alias email, destination, activation state, and timestamps. Deletion
+  does not modify MX records.
 - `ReqDnsimple.DomainPush` — Accept a pending push with an explicit target-account
   contact, or reject it without deleting the source domain.
 - `ReqDnsimple.VanityNameServer` — Enable or disable a domain's vanity A and
