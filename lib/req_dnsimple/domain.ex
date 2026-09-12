@@ -41,7 +41,8 @@ defmodule ReqDnsimple.Domain do
   Retrieves one hosted or registered domain by name or ID.
 
   Registration, privacy, renewal, and expiry fields are returned without
-  inferring state from nullable expiry values.
+  inferring state from nullable expiry values. Optional `trustee` and
+  `expires_on` fields are `nil` when omitted by older API responses.
   """
   @spec get(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer()) ::
           {:ok, t()} | {:error, term()}
@@ -118,7 +119,6 @@ defmodule ReqDnsimple.Domain do
            "auto_renew" => auto_renew,
            "private_whois" => private_whois,
            "expires_at" => expires_at,
-           "expires_on" => expires_on,
            "created_at" => created_at,
            "updated_at" => updated_at
          } = data
@@ -128,6 +128,7 @@ defmodule ReqDnsimple.Domain do
               is_binary(unicode_name) and state in ["hosted", "registered", "expired"] and
               is_boolean(auto_renew) and is_boolean(private_whois) do
     trustee = Map.get(data, "trustee")
+    expires_on = Map.get(data, "expires_on")
 
     with true <- is_boolean(trustee) or is_nil(trustee),
          {:ok, expires_at} <- parse_optional_datetime(expires_at),

@@ -81,6 +81,19 @@ defmodule ReqDnsimple.DomainTest do
       assert_request(:get, "/v2/1010/domains/example.test")
     end
 
+    test "getDomain accepts older payloads omitting expires_on and trustee" do
+      for omitted_fields <- [["expires_on"], ["expires_on", "trustee"]] do
+        data = Map.drop(@domain_data, omitted_fields)
+
+        assert {:ok, %ReqDnsimple.Domain{expires_on: nil, state: "hosted"} = domain} =
+                 ReqDnsimple.Domain.get(client(200, %{"data" => data}), 1010, "example.test")
+
+        if "trustee" in omitted_fields, do: assert(domain.trustee == nil)
+        assert_request(:get, "/v2/1010/domains/example.test")
+        refute_received {:request, _request}
+      end
+    end
+
     test "getDomain rejects invalid path parameters before HTTP" do
       request = client(200, %{"data" => @domain_data})
 
