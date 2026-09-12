@@ -1,8 +1,19 @@
 defmodule ReqDnsimple.RegistrantChange do
   @moduledoc """
-  Retrieves registrar contact-change requests.
+  Creates and retrieves registrar contact-change requests.
 
   ## Example
+
+      ReqDnsimple.RegistrantChange.create(
+        req,
+        1010,
+        domain_id: "example.test",
+        contact_id: "11",
+        extended_attributes: %{
+          "x-fi-registrant-idnumber" => "fake-offline-id"
+        }
+      )
+      #=> {:ok, %ReqDnsimple.RegistrantChange{}}
 
       ReqDnsimple.RegistrantChange.get(req, 1010, 1)
       #=> {:ok, %ReqDnsimple.RegistrantChange{}}
@@ -41,7 +52,74 @@ defmodule ReqDnsimple.RegistrantChange do
     registrant_change_id: [type: :integer, required: true]
   ]
 
+  @create_path_schema [
+    account_id: [type: :integer, required: true]
+  ]
+
+  @create_schema [
+    domain_id: [type: {:or, [:string, :integer]}, required: true],
+    contact_id: [type: {:or, [:string, :integer]}, required: true],
+    extended_attributes: [type: :any]
+  ]
+
   @states ~w(new pending cancelling cancelled completed)
+
+  @doc """
+  Starts a registrar contact-change request.
+
+  `domain_id` and `contact_id` accept their integer IDs or string forms; a
+  domain name is also accepted for `domain_id`. Optional `extended_attributes`
+  must be a map of registry-defined string keys and string values. An omitted
+  map remains omitted, while an explicit empty map is sent unchanged.
+
+  The function returns both immediately completed (`201`) and pending (`202`)
+  requests without polling. It performs no requirements check or follow-up
+  mutation.
+
+  ## Example
+
+      ReqDnsimple.RegistrantChange.create(
+        req,
+        1010,
+        domain_id: "example.test",
+        contact_id: "11",
+        extended_attributes: %{
+          "x-fi-registrant-idnumber" => "fake-offline-id"
+        }
+      )
+      #=> {:ok, %ReqDnsimple.RegistrantChange{}}
+  """
+  @spec create(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
+          {:ok, t()} | {:error, term()}
+  def create(req, account_id, attrs) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate([account_id: account_id], @create_path_schema),
+         {:ok, validated_attrs} <- validate_create_attrs(attrs) do
+      req =
+        Req.merge(req,
+          method: :post,
+          url: "/:account_id/registrar/registrant_changes",
+          path_params_style: :colon,
+          path_params: [account_id: account_id],
+          json: Map.new(validated_attrs)
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: status, body: %{"data" => data}} = response}
+        when status in [201, 202] ->
+          case decode(data) do
+            {:ok, registrant_change} -> {:ok, registrant_change}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
 
   @doc """
   Retrieves a registrar contact-change request.
@@ -149,4 +227,40 @@ defmodule ReqDnsimple.RegistrantChange do
   end
 
   defp parse_datetime(_value), do: :error
+
+  defp validate_create_attrs(attrs) do
+    with {:ok, validated_attrs} <- ReqDnsimple.validate_options(attrs, @create_schema),
+         :ok <- validate_extended_attributes(validated_attrs) do
+      {:ok, validated_attrs}
+    end
+  end
+
+  defp validate_extended_attributes(attrs) do
+    case Keyword.fetch(attrs, :extended_attributes) do
+      :error -> :ok
+      {:ok, extended_attributes} -> validate_extended_attributes_map(extended_attributes)
+    end
+  end
+
+  defp validate_extended_attributes_map(map) when is_map(map) and not is_struct(map) do
+    if Enum.all?(map, fn {key, value} -> is_binary(key) and is_binary(value) end) do
+      :ok
+    else
+      {:error,
+       %NimbleOptions.ValidationError{
+         message: "expected :extended_attributes to have string keys and values",
+         key: :extended_attributes,
+         value: map
+       }}
+    end
+  end
+
+  defp validate_extended_attributes_map(value) do
+    {:error,
+     %NimbleOptions.ValidationError{
+       message: "expected :extended_attributes to be a map with string keys and values",
+       key: :extended_attributes,
+       value: value
+     }}
+  end
 end

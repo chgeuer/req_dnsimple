@@ -16,6 +16,208 @@ defmodule ReqDnsimple.RegistrantChangeTest do
     "updated_at" => "2026-09-01T10:30:00+02:00"
   }
 
+  describe "create/3" do
+    test "createRegistrantChange sends every supplied field once and returns a typed change" do
+      completed_data = Map.put(@registrant_change_data, "state", "completed")
+
+      assert {:ok,
+              %ReqDnsimple.RegistrantChange{
+                id: 1,
+                account_id: 1010,
+                contact_id: 11,
+                domain_id: 100,
+                state: "completed",
+                extended_attributes: %{
+                  "x-fi-registrant-idnumber" => "fake-offline-id"
+                },
+                registry_owner_change: true,
+                irt_lock_lifted_by: nil,
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:30:00Z]
+              }} =
+               ReqDnsimple.RegistrantChange.create(
+                 client(201, %{"data" => completed_data}),
+                 1010,
+                 domain_id: "example.test",
+                 contact_id: "11",
+                 extended_attributes: %{
+                   "x-fi-registrant-idnumber" => "fake-offline-id"
+                 }
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/registrar/registrant_changes",
+        %{},
+        %{
+          "domain_id" => "example.test",
+          "contact_id" => "11",
+          "extended_attributes" => %{
+            "x-fi-registrant-idnumber" => "fake-offline-id"
+          }
+        }
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "createRegistrantChange accepts 202 and preserves omission, zero, empty strings and maps" do
+      assert {:ok, %ReqDnsimple.RegistrantChange{state: "pending"}} =
+               ReqDnsimple.RegistrantChange.create(
+                 client(202, %{"data" => @registrant_change_data}),
+                 0,
+                 domain_id: "",
+                 contact_id: 0
+               )
+
+      assert_request(
+        :post,
+        "/v2/0/registrar/registrant_changes",
+        %{},
+        %{"domain_id" => "", "contact_id" => 0}
+      )
+
+      assert {:ok, %ReqDnsimple.RegistrantChange{extended_attributes: %{}}} =
+               ReqDnsimple.RegistrantChange.create(
+                 client(201, %{
+                   "data" => Map.put(@registrant_change_data, "extended_attributes", %{})
+                 }),
+                 1010,
+                 domain_id: 100,
+                 contact_id: "11",
+                 extended_attributes: %{}
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/registrar/registrant_changes",
+        %{},
+        %{"domain_id" => 100, "contact_id" => "11", "extended_attributes" => %{}}
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "createRegistrantChange rejects invalid attributes before HTTP" do
+      request = client(201, %{"data" => @registrant_change_data})
+
+      for {account_id, attrs} <- [
+            {"1010", [domain_id: "example.test", contact_id: 11]},
+            {nil, [domain_id: "example.test", contact_id: 11]},
+            {1010, [:invalid]},
+            {1010, [{:domain_id}]},
+            {1010, []},
+            {1010, [domain_id: "example.test"]},
+            {1010, [contact_id: 11]},
+            {1010, [domain_id: nil, contact_id: 11]},
+            {1010, [domain_id: false, contact_id: 11]},
+            {1010, [domain_id: [], contact_id: 11]},
+            {1010, [domain_id: "example.test", contact_id: nil]},
+            {1010, [domain_id: "example.test", contact_id: false]},
+            {1010, [domain_id: "example.test", contact_id: []]},
+            {1010,
+             [
+               domain_id: "example.test",
+               contact_id: 11,
+               extended_attributes: nil
+             ]},
+            {1010,
+             [
+               domain_id: "example.test",
+               contact_id: 11,
+               extended_attributes: %{"key" => 1}
+             ]},
+            {1010,
+             [
+               domain_id: "example.test",
+               contact_id: 11,
+               extended_attributes: %{key: "value"}
+             ]},
+            {1010,
+             [
+               domain_id: "example.test",
+               contact_id: 11,
+               extended_attributes: MapSet.new()
+             ]},
+            {1010, [domain_id: "example.test", contact_id: 11, unknown: true]}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.RegistrantChange.create(request, account_id, attrs)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "createRegistrantChange preserves documented and shared HTTP failures" do
+      for status <- [400, 401, 403, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"contact_id" => ["is invalid"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.RegistrantChange.create(
+                   client(status, body),
+                   1010,
+                   domain_id: "example.test",
+                   contact_id: 11
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/registrar/registrant_changes",
+          %{},
+          %{"domain_id" => "example.test", "contact_id" => 11}
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "createRegistrantChange returns explicit errors for malformed success" do
+      malformed_payloads = [
+        %{},
+        %{"data" => nil},
+        %{"data" => Map.delete(@registrant_change_data, "id")},
+        %{"data" => Map.put(@registrant_change_data, "state", "unknown")},
+        %{"data" => Map.put(@registrant_change_data, "extended_attributes", %{"key" => 1})},
+        %{"data" => Map.put(@registrant_change_data, "irt_lock_lifted_by", "not-a-date")},
+        %{"data" => Map.put(@registrant_change_data, "updated_at", nil)}
+      ]
+
+      for {status, body} <-
+            Enum.map(malformed_payloads, &{201, &1}) ++
+              [{202, %{"data" => nil}}, {200, %{"data" => @registrant_change_data}}] do
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.RegistrantChange.create(
+                   client(status, body),
+                   1010,
+                   domain_id: "example.test",
+                   contact_id: 11
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/registrar/registrant_changes",
+          %{},
+          %{"domain_id" => "example.test", "contact_id" => 11}
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "createRegistrantChange preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.RegistrantChange.create(
+                 transport_error_client(:timeout),
+                 1010,
+                 domain_id: "example.test",
+                 contact_id: 11
+               )
+    end
+  end
+
   describe "get/3" do
     test "getRegistrantChange sends one bodyless request and returns a typed change" do
       assert {:ok,

@@ -97,6 +97,7 @@ Different modules use slightly different return conventions:
 | `Registrar.check/3` | `{:ok, %Registrar.CheckResult{}}` | `{:error, reason}` |
 | `Registrar.get_prices/3` | `{:ok, %Registrar.Prices{}}` | `{:error, reason}` |
 | `Registrar.get_transfer_lock/3` | `{:ok, %Registrar.TransferLock{}}` | `{:error, reason}` |
+| `RegistrantChange.create/3` | `{:ok, %RegistrantChange{}}` | `{:error, reason}` |
 | `RegistrantChange.get/3` | `{:ok, %RegistrantChange{}}` | `{:error, reason}` |
 | `Registrar.enable_whois_privacy/3` | `{:ok, %Registrar.WhoisPrivacy{}}` | `{:error, reason}` |
 | `Registrar.register/4` | `{:ok, %Registrar.Registration{}}` | `{:error, reason}` |
@@ -323,9 +324,11 @@ not contact the callback URL, inspect deliveries, or list registrations first.
   pending nullable CSR/expiry values; download its server, nullable root, and
   ordered intermediate chain; or retrieve its private key as byte-preserved PEM
   strings without parsing, logging, persisting, or writing files.
-- `ReqDnsimple.RegistrantChange` — Typed retrieval of one registrar
-  contact-change request by integer ID. Registry extended attributes retain
-  string keys and values, and the registry lock-lift date may be `nil`.
+- `ReqDnsimple.RegistrantChange` — Start a registrar contact-change request from
+  explicit domain/contact identifiers, or retrieve one by integer ID. Creation
+  returns immediate and pending responses without polling or a requirements
+  check. Registry extended attributes retain string keys and values, and the
+  registry lock-lift date may be `nil`.
 - `ReqDnsimple.Tld` — Retrieve one TLD's capabilities or its non-paginated,
   typed registry extended-attribute definitions. Arbitrary attribute names and
   option values remain strings, free-text attributes retain empty option lists,

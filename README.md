@@ -552,13 +552,27 @@ separate from hosted-zone apex NS records and `Zone.update_ns_records/4`.
 
 ```elixir
 {:ok, %ReqDnsimple.RegistrantChange{} = change} =
+  ReqDnsimple.RegistrantChange.create(
+    client,
+    account_id,
+    domain_id: "example.test",
+    contact_id: "11",
+    extended_attributes: %{
+      "x-fi-registrant-idnumber" => "fake-offline-id"
+    }
+  )
+
+{:ok, %ReqDnsimple.RegistrantChange{} = change} =
   ReqDnsimple.RegistrantChange.get(client, account_id, registrant_change_id)
 ```
 
-Registrant-change retrieval returns the current state, dynamic registry
-extended attributes with string keys, and typed date/timestamp fields. A pending
-registry lock-lift date remains `nil`. The operation performs no requirements
-check or mutation.
+Registrant-change creation accepts domain/contact integer IDs or string forms,
+including a domain name, and returns either an immediately completed or pending
+request without polling. Creation preserves omitted versus explicitly empty
+registry extended attributes and performs no requirements check. Retrieval
+returns the current state, dynamic registry extended attributes with string
+keys, and typed date/timestamp fields. A pending registry lock-lift date remains
+`nil`.
 
 ### Domain Research
 
