@@ -4009,7 +4009,7 @@
       "method": "POST",
       "path": "/{account}/domains/{domain}/pushes",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-061",
       "br_issue_id": "bd-3g2",
       "proposed_interfaces": [
@@ -4061,8 +4061,19 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.DomainPush",
+          "function": "initiate",
+          "arity": 4
+        }
+      ],
+      "contract_tests": [
+        {
+          "file": "test/req_dnsimple/domain_push_test.exs",
+          "describe": "initiate/4"
+        }
+      ]
     },
     {
       "operation_id": "issueLetsencryptCertificate",

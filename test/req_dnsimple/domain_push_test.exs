@@ -20,6 +20,154 @@ defmodule ReqDnsimple.DomainPushTest do
     "total_pages" => 1
   }
 
+  describe "initiate/4" do
+    test "initiateDomainPush sends one request and returns the typed pending push" do
+      assert {:ok,
+              %ReqDnsimple.DomainPush{
+                id: 1,
+                domain_id: 100,
+                contact_id: nil,
+                account_id: 2020,
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:30:00Z],
+                accepted_at: nil
+              }} =
+               ReqDnsimple.DomainPush.initiate(
+                 client(201, %{"data" => @push_data}),
+                 1010,
+                 "example.test",
+                 new_account_identifier: "00000000-0000-7000-8000-000000000002"
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/domains/example.test/pushes",
+        %{},
+        %{new_account_identifier: "00000000-0000-7000-8000-000000000002"}
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "initiateDomainPush supports the deprecated email target and numeric domain IDs" do
+      assert {:ok, %ReqDnsimple.DomainPush{}} =
+               ReqDnsimple.DomainPush.initiate(
+                 client(201, %{"data" => @push_data}),
+                 0,
+                 0,
+                 new_account_email: ""
+               )
+
+      assert_request(
+        :post,
+        "/v2/0/domains/0/pushes",
+        %{},
+        %{new_account_email: ""}
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "initiateDomainPush rejects invalid paths and attributes before HTTP" do
+      request = client(201, %{"data" => @push_data})
+
+      invalid_arguments = [
+        {"1010", "example.test", [new_account_identifier: "target"]},
+        {nil, "example.test", [new_account_identifier: "target"]},
+        {1010, nil, [new_account_identifier: "target"]},
+        {1010, false, [new_account_identifier: "target"]},
+        {1010, [], [new_account_identifier: "target"]},
+        {1010, %{}, [new_account_identifier: "target"]},
+        {1010, "example.test", []},
+        {1010, "example.test", [new_account_identifier: nil]},
+        {1010, "example.test", [new_account_identifier: 0]},
+        {1010, "example.test", [new_account_identifier: false]},
+        {1010, "example.test", [new_account_identifier: []]},
+        {1010, "example.test", [new_account_identifier: %{}]},
+        {1010, "example.test", [new_account_email: nil]},
+        {1010, "example.test", [new_account_email: 0]},
+        {1010, "example.test",
+         [new_account_identifier: "target", new_account_email: "target@example.test"]},
+        {1010, "example.test", [unknown: true]},
+        {1010, "example.test", [:invalid]},
+        {1010, "example.test", [{:name}]},
+        {1010, "example.test", %{new_account_identifier: "target"}}
+      ]
+
+      for {account_id, domain, attrs} <- invalid_arguments do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.DomainPush.initiate(request, account_id, domain, attrs)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "initiateDomainPush preserves documented and shared HTTP failures" do
+      for status <- [400, 401, 403, 404, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"new_account_identifier" => ["is not eligible"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.DomainPush.initiate(
+                   client(status, body),
+                   1010,
+                   "example.test",
+                   new_account_identifier: "target"
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/domains/example.test/pushes",
+          %{},
+          %{new_account_identifier: "target"}
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "initiateDomainPush rejects malformed successful responses" do
+      malformed_bodies = [
+        %{},
+        %{"data" => nil},
+        %{"data" => Map.delete(@push_data, "id")},
+        %{"data" => %{@push_data | "contact_id" => "11"}},
+        %{"data" => %{@push_data | "accepted_at" => "not-a-date"}}
+      ]
+
+      for body <- malformed_bodies do
+        assert {:error, %{status: 201, response: ^body}} =
+                 ReqDnsimple.DomainPush.initiate(
+                   client(201, body),
+                   1010,
+                   "example.test",
+                   new_account_identifier: "target"
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/domains/example.test/pushes",
+          %{},
+          %{new_account_identifier: "target"}
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "initiateDomainPush preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.DomainPush.initiate(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test",
+                 new_account_identifier: "target"
+               )
+    end
+  end
+
   describe "list_page/3 and list/3" do
     test "listPushes sends pagination once and returns typed pending pushes" do
       pagination = %{@pagination | "current_page" => 2, "total_entries" => 2, "total_pages" => 2}

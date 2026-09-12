@@ -4,6 +4,14 @@ defmodule ReqDnsimple.DomainPush do
 
   ## Example
 
+      ReqDnsimple.DomainPush.initiate(
+        req,
+        1010,
+        "example.test",
+        new_account_identifier: "00000000-0000-7000-8000-000000000002"
+      )
+      #=> {:ok, %ReqDnsimple.DomainPush{}}
+
       ReqDnsimple.DomainPush.list_page(req, 2020, page: 1, per_page: 30)
       #=> {:ok, {[%ReqDnsimple.DomainPush{}], %{"current_page" => 1}}}
 
@@ -17,6 +25,7 @@ defmodule ReqDnsimple.DomainPush do
       #=> :ok
   """
 
+  # https://developer.dnsimple.com/v2/domains/pushes/#initiateDomainPush
   # https://developer.dnsimple.com/v2/domains/pushes/#listPushes
   # https://developer.dnsimple.com/v2/domains/pushes/#acceptPush
   # https://developer.dnsimple.com/v2/domains/pushes/#rejectPush
@@ -37,9 +46,19 @@ defmodule ReqDnsimple.DomainPush do
     account_id: [type: :integer, required: true]
   ]
 
+  @initiate_path_schema [
+    account_id: [type: :integer, required: true],
+    domain: [type: {:or, [:string, :integer]}, required: true]
+  ]
+
   @path_schema [
     account_id: [type: :integer, required: true],
     push_id: [type: :integer, required: true]
+  ]
+
+  @initiate_schema [
+    new_account_identifier: [type: :string],
+    new_account_email: [type: :string]
   ]
 
   @accept_schema [
@@ -50,6 +69,52 @@ defmodule ReqDnsimple.DomainPush do
     page: [type: :pos_integer, doc: "Page number for pagination"],
     per_page: [type: {:in, 1..100}, doc: "Number of pushes per page"]
   ]
+
+  @doc """
+  Initiates a domain push from the source account to another account.
+
+  Exactly one of `:new_account_identifier` or the deprecated
+  `:new_account_email` must be provided. This sends one request and returns the
+  pending push without looking up the target account, selecting a contact, or
+  accepting the push.
+  """
+  @spec initiate(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          String.t() | integer(),
+          keyword()
+        ) :: {:ok, t()} | {:error, term()}
+  def initiate(req, account_id, domain, attrs) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain],
+             @initiate_path_schema
+           ),
+         {:ok, validated_attrs} <- validate_initiate_attrs(attrs) do
+      req =
+        Req.merge(req,
+          method: :post,
+          url: "/:account_id/domains/:domain/pushes",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain: domain],
+          json: Map.new(validated_attrs)
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
+          case decode(data) do
+            {:ok, push} -> {:ok, push}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
 
   @doc """
   Lists one page of pending domain pushes for the target account.
@@ -128,7 +193,7 @@ defmodule ReqDnsimple.DomainPush do
              [account_id: account_id, push_id: push_id],
              @path_schema
            ),
-         {:ok, validated_attrs} <- validate_attrs(attrs) do
+         {:ok, validated_attrs} <- validate_accept_attrs(attrs) do
       req =
         Req.merge(req,
           method: :post,
@@ -265,7 +330,32 @@ defmodule ReqDnsimple.DomainPush do
 
   defp parse_datetime(_value), do: :error
 
-  defp validate_attrs(attrs) do
+  defp validate_initiate_attrs(attrs) do
+    with {:ok, validated_attrs} <- ReqDnsimple.validate_options(attrs, @initiate_schema),
+         :ok <- validate_push_target(validated_attrs) do
+      {:ok, validated_attrs}
+    end
+  end
+
+  defp validate_push_target(attrs) do
+    case {Keyword.has_key?(attrs, :new_account_identifier),
+          Keyword.has_key?(attrs, :new_account_email)} do
+      {true, false} ->
+        :ok
+
+      {false, true} ->
+        :ok
+
+      _other ->
+        {:error,
+         %NimbleOptions.ValidationError{
+           message: "expected exactly one of :new_account_identifier or :new_account_email",
+           value: attrs
+         }}
+    end
+  end
+
+  defp validate_accept_attrs(attrs) do
     ReqDnsimple.validate_options(attrs, @accept_schema)
   end
 end

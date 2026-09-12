@@ -84,6 +84,7 @@ Different modules use slightly different return conventions:
 | `EmailForward.delete/4` | `:ok` | `{:error, reason}` |
 | `Webhook.get/3` | `{:ok, %Webhook{}}` | `{:error, reason}` |
 | `Webhook.delete/3` | `:ok` | `{:error, reason}` |
+| `DomainPush.initiate/4` | `{:ok, %DomainPush{}}` | `{:error, reason}` |
 | `DomainPush.list_page/3` | `{:ok, {[%DomainPush{}], pagination}}` | `{:error, reason}` |
 | `DomainPush.list_all/3` | `{:ok, [%DomainPush{}]}` | `{:error, reason}` |
 | `DomainPush.accept/4` | `:ok` | `{:error, reason}` |
@@ -306,10 +307,11 @@ not contact the callback URL, inspect deliveries, or list registrations first.
   DNS records nor sends test email. Responses preserve the full alias email,
   destination, activation state, and timestamps. Deletion does not modify MX
   records.
-- `ReqDnsimple.DomainPush` — List typed pending incoming pushes for a target
-  account one page at a time or by deliberate complete enumeration, accept one
-  with an explicit target-account contact, or reject it without deleting the
-  source domain.
+- `ReqDnsimple.DomainPush` — Initiate a push from a source account using exactly
+  one target-account identifier or deprecated email, list typed pending incoming
+  pushes for a target account one page at a time or by deliberate complete
+  enumeration, accept one with an explicit target-account contact, or reject it
+  without deleting the source domain.
 - `ReqDnsimple.VanityNameServer` — Enable or disable a domain's vanity A and
   AAAA configuration by name or ID without changing registrar delegation.
 - `ReqDnsimple.Webhook` — Retrieve a typed webhook registration or explicitly

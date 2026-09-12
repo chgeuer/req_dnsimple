@@ -577,6 +577,14 @@ automatically retry quota responses.
 ### Domain pushes
 
 ```elixir
+{:ok, push} =
+  ReqDnsimple.DomainPush.initiate(
+    client,
+    source_account_id,
+    domain,
+    new_account_identifier: target_account_identifier
+  )
+
 {:ok, {pushes, pagination}} =
   ReqDnsimple.DomainPush.list_page(client, account_id, page: 1, per_page: 30)
 
@@ -585,12 +593,14 @@ automatically retry quota responses.
 :ok = ReqDnsimple.DomainPush.reject(client, account_id, push_id)
 ```
 
-Pending pushes are target-account scoped. `list_page/3` and `list/3` return one
-typed page with string-keyed pagination metadata; `list_all/3` deliberately
-enumerates from page one and accepts only `:per_page`. Accepting a push sends
-exactly one request using the selected target-account contact. Rejecting a push
-sends a bodyless request and does not delete the source domain. None of these
-operations performs a preflight request.
+Initiating a push is source-account scoped and requires exactly one target:
+`:new_account_identifier`, or the deprecated `:new_account_email`. Pending-push
+listing and acceptance are target-account scoped. `list_page/3` and `list/3`
+return one typed page with string-keyed pagination metadata; `list_all/3`
+deliberately enumerates from page one and accepts only `:per_page`. Accepting a
+push sends exactly one request using the selected target-account contact.
+Rejecting a push sends a bodyless request and does not delete the source domain.
+None of these operations performs a preflight request.
 
 ### DNSSEC
 
@@ -837,7 +847,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.DomainResearch` | `/domains/research/status` | `get_status/3` |
 | `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records[/:ds_record]` | `create/4`, `get/4`, `list/4`, `list_page/4`, `list_all/4`, `delete/4` |
 | `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards[/:email_forward]` | `create/4`, `get/4`, `delete/4` |
-| `ReqDnsimple.DomainPush` | `/pushes[/:push]` | `list/3`, `list_page/3`, `list_all/3`, `accept/4`, `reject/3` |
+| `ReqDnsimple.DomainPush` | `/domains/:domain/pushes`, `/pushes[/:push]` | `initiate/4`, `list/3`, `list_page/3`, `list_all/3`, `accept/4`, `reject/3` |
 | `ReqDnsimple.VanityNameServer` | `/vanity/:domain` | `enable/3`, `disable/3` |
 | `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `get_prices/3`, `get_transfer_lock/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `enable_auto_renewal/3`, `enable_whois_privacy/3`, `register/4`, `transfer/4`, `renew/3`, `renew/4`, `restore/3`, `restore/4`, `get_delegation/3`, `change_delegation/4` |
 | `ReqDnsimple.Tld` | `/tlds/:tld`, `/tlds/:tld/extended_attributes` | `get/2`, `list_extended_attributes/2` |
