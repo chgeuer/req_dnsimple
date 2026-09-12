@@ -74,6 +74,8 @@ Different modules use slightly different return conventions:
 | `TemplateRecord.delete/4` | `:ok` | `{:error, reason}` |
 | `DelegationSignerRecord.create/4` | `{:ok, %DelegationSignerRecord{}}` | `{:error, reason}` |
 | `DelegationSignerRecord.get/4` | `{:ok, %DelegationSignerRecord{}}` | `{:error, reason}` |
+| `DelegationSignerRecord.list_page/4` | `{:ok, {[%DelegationSignerRecord{}], pagination}}` | `{:error, reason}` |
+| `DelegationSignerRecord.list_all/4` | `{:ok, [%DelegationSignerRecord{}]}` | `{:error, reason}` |
 | `DelegationSignerRecord.delete/4` | `:ok` | `{:error, reason}` |
 | `EmailForward.create/4` | `{:ok, %EmailForward{}}` | `{:error, reason}` |
 | `EmailForward.get/4` | `{:ok, %EmailForward{}}` | `{:error, reason}` |
@@ -283,11 +285,13 @@ not contact the callback URL, inspect deliveries, or list registrations first.
   For hosted-only domains, registry delegation-signer records must be removed
   before disablement; disablement does not remove them or prompt for
   confirmation.
-- `ReqDnsimple.DelegationSignerRecord` — Typed creation, retrieval, and explicit
-  deletion of registry delegation-signer records by domain name or ID. Creation
-  accepts a string algorithm with either a complete DS tuple or KEY public key.
-  DS and KEY proof fields that do not apply are `nil`. Deletion does not disable
-  DNSSEC or delete hosted-zone records.
+- `ReqDnsimple.DelegationSignerRecord` — Typed creation, retrieval, paginated
+  listing, and explicit deletion of registry delegation-signer records by domain
+  name or ID. `list_page/4` and `list/4` return one page; `list_all/4` explicitly
+  enumerates from page one while retaining `id`/`created_at` sorting and page
+  size. Creation accepts a string algorithm with either a complete DS tuple or
+  KEY public key. DS and KEY proof fields that do not apply are `nil`. Deletion
+  does not disable DNSSEC or delete hosted-zone records.
 - `ReqDnsimple.EmailForward` — Typed creation, retrieval, and explicit deletion
   of domain email forwards. Creation sends the local-part alias unchanged and
   neither provisions DNS records nor sends test email. Responses preserve the

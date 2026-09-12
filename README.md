@@ -613,6 +613,24 @@ confirmation.
     ds_record_id
   )
 
+{:ok, {delegation_signer_records, pagination}} =
+  ReqDnsimple.DelegationSignerRecord.list_page(
+    client,
+    account_id,
+    "example.com",
+    sort: [id: :asc, created_at: :desc],
+    page: 2,
+    per_page: 30
+  )
+
+{:ok, all_delegation_signer_records} =
+  ReqDnsimple.DelegationSignerRecord.list_all(
+    client,
+    account_id,
+    "example.com",
+    sort: [created_at: :desc]
+  )
+
 :ok =
   ReqDnsimple.DelegationSignerRecord.delete(
     client,
@@ -625,8 +643,11 @@ confirmation.
 Creation accepts a string algorithm with either a complete DS tuple or KEY
 `public_key`, and returns a typed `ReqDnsimple.DelegationSignerRecord`. DS and
 KEY proof fields that do not apply to the returned representation are `nil`.
-Deletion removes only the selected registry delegation-signer record. It does
-not disable DNSSEC or delete hosted-zone records.
+`list_page/4` and its `list/4` alias return one typed page with string-keyed
+pagination metadata; `list_all/4` explicitly enumerates from page one while
+retaining `id`/`created_at` sorting and page size. Deletion removes only the
+selected registry delegation-signer record. It does not disable DNSSEC or
+delete hosted-zone records.
 
 ### Email forwards
 
@@ -773,7 +794,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.Contact` | `/contacts` | `list/3`, `get/3`, `delete/3` |
 | `ReqDnsimple.Domain` | `/domains`, `/domains/:domain` | `create/3`, `get/3`, `delete/3` |
 | `ReqDnsimple.DomainResearch` | `/domains/research/status` | `get_status/3` |
-| `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records[/:ds_record]` | `create/4`, `get/4`, `delete/4` |
+| `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records[/:ds_record]` | `create/4`, `get/4`, `list/4`, `list_page/4`, `list_all/4`, `delete/4` |
 | `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards[/:email_forward]` | `create/4`, `get/4`, `delete/4` |
 | `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4`, `reject/3` |
 | `ReqDnsimple.VanityNameServer` | `/vanity/:domain` | `enable/3`, `disable/3` |
