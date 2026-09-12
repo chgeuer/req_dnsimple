@@ -1660,7 +1660,7 @@
       "method": "DELETE",
       "path": "/{account}/templates/{template}",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-026",
       "br_issue_id": "bd-275",
       "proposed_interfaces": [
@@ -1707,8 +1707,12 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.Template.delete/3"
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/template_test.exs: delete/3"
+      ]
     },
     {
       "operation_id": "deleteTemplateRecord",

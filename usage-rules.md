@@ -64,6 +64,7 @@ Different modules use slightly different return conventions:
 | `Service.get/2` | `{:ok, %Service{}}` | `{:error, reason}` |
 | `Service.apply/4,5` | `:ok` | `{:error, reason}` |
 | `Template.apply/4` | `:ok` | `{:error, reason}` |
+| `Template.delete/3` | `:ok` | `{:error, reason}` |
 | `DelegationSignerRecord.get/4` | `{:ok, %DelegationSignerRecord{}}` | `{:error, reason}` |
 | `DelegationSignerRecord.delete/4` | `:ok` | `{:error, reason}` |
 | `EmailForward.get/4` | `{:ok, %EmailForward{}}` | `{:error, reason}` |
@@ -218,9 +219,9 @@ The update does not change registrar delegation.
   library when arithmetic is required. Manual-charge item product identifiers and
   references may be `nil`.
 - `ReqDnsimple.Contact` — Contact listing and retrieval. 14 contact fields + timestamps.
-- `ReqDnsimple.Template` — Applying an account template to a domain with one
-  bodyless request. Domain and template identifiers accept short names or
-  integer IDs.
+- `ReqDnsimple.Template` — Applying an account template to a domain or deleting
+  an account template, each with one bodyless request. Domain and template
+  identifiers accept short names or integer IDs.
 - `ReqDnsimple.Domain` — Retrieval and explicit deletion by name or ID.
   Retrieval returns registration state, privacy, renewal, and nullable expiry
   metadata. Deletion is irreversible within the account, but does not delete a
