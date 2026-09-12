@@ -116,8 +116,18 @@ defmodule ReqDnsimple.RegistrarTest do
         "domain" => "example.test",
         "available" => true,
         "premium" => false,
-        "trustee" => nil
+        "trustee" => false
       }
+
+      assert {:ok, %ReqDnsimple.Registrar.CheckResult{}} =
+               ReqDnsimple.Registrar.check(
+                 client(200, %{"data" => valid_data}),
+                 1010,
+                 "example.test"
+               )
+
+      assert_request(:get, "/v2/1010/registrar/domains/example.test/check", %{}, nil)
+      refute_received {:request, _request}
 
       malformed_payloads = [
         %{},
@@ -128,6 +138,7 @@ defmodule ReqDnsimple.RegistrarTest do
         %{"data" => Map.put(valid_data, "domain", 42)},
         %{"data" => Map.put(valid_data, "available", nil)},
         %{"data" => Map.put(valid_data, "premium", "false")},
+        %{"data" => Map.put(valid_data, "trustee", nil)},
         %{"data" => Map.put(valid_data, "trustee", 0)}
       ]
 
