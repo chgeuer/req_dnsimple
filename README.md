@@ -64,6 +64,19 @@ Filter and sort:
 )
 ```
 
+Use `list_page/3` when pagination metadata is needed, or `list_all/3` to fetch
+every page from page one:
+
+```elixir
+{:ok, {zones, pagination}} = ReqDnsimple.Zone.list_page(client, account_id, per_page: 50)
+{:ok, all_zones} = ReqDnsimple.Zone.list_all(client, account_id, name_like: "example")
+```
+
+`Contact` and `BillingCharge` provide the same `list_page/3` and `list_all/3`
+interfaces. `ZoneRecord` provides `list_page/4` and `list_all/4`. `list_all`
+preserves filters, sorting, and `per_page`, but rejects `page` because complete
+enumeration always begins at page one.
+
 ### Manage DNS records
 
 **List records for a zone:**

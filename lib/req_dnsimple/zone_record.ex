@@ -47,6 +47,13 @@ defmodule ReqDnsimple.ZoneRecord do
           {:ok, {[ReqDnsimple.ZoneRecord.t()], map()}}
           | {:error, term()}
   def list(req, account_id, zone_id, opts \\ []) do
+    list_page(req, account_id, zone_id, opts)
+  end
+
+  @spec list_page(Req.Request.t(), ReqDnsimple.account_id(), binary(), keyword()) ::
+          {:ok, {[ReqDnsimple.ZoneRecord.t()], ReqDnsimple.Pagination.metadata()}}
+          | {:error, term()}
+  def list_page(req, account_id, zone_id, opts \\ []) do
     # https://developer.dnsimple.com/v2/zones/records/#listZoneRecords
 
     with {:ok, validated_opts} <- NimbleOptions.validate(opts, @list_zone_records_schema) do
@@ -81,6 +88,12 @@ defmodule ReqDnsimple.ZoneRecord do
           {:error, e}
       end
     end
+  end
+
+  @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), binary(), keyword()) ::
+          {:ok, [ReqDnsimple.ZoneRecord.t()]} | {:error, term()}
+  def list_all(req, account_id, zone_id, opts \\ []) do
+    ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, zone_id, &1))
   end
 
   @spec get(

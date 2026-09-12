@@ -41,24 +41,24 @@ defmodule ReqDnsimple.Zone do
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, [__MODULE__.t()]} | {:error, term()}
   def list(req, account_id, opts \\ []) do
+    with {:ok, validated_opts} <- NimbleOptions.validate(opts, @list_zones_schema),
+         {:ok, %Req.Response{status: 200, body: %{"data" => data}}} <-
+           request_list(req, account_id, validated_opts) do
+      {:ok, Enum.map(data, &from_json/1)}
+    else
+      {:ok, %Req.Response{status: 404}} -> {:error, :not_found}
+      {:ok, response} -> ReqDnsimple.response_error(response)
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  @spec list_page(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
+          {:ok, {[__MODULE__.t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req, account_id, opts \\ []) do
     with {:ok, validated_opts} <- NimbleOptions.validate(opts, @list_zones_schema) do
-      params =
-        validated_opts
-        |> ReqDnsimple.convert_sort_to_string()
-        |> Map.new()
-
-      req =
-        Req.merge(req,
-          method: :get,
-          url: "/:account_id/zones",
-          path_params_style: :colon,
-          path_params: [account_id: account_id],
-          params: params
-        )
-
-      case Req.request(req) do
-        {:ok, %Req.Response{status: 200, body: %{"data" => data}}} ->
-          {:ok, data |> Enum.map(&from_json/1)}
+      case request_list(req, account_id, validated_opts) do
+        {:ok, %Req.Response{status: 200, body: %{"data" => data, "pagination" => pagination}}} ->
+          {:ok, {Enum.map(data, &from_json/1), pagination}}
 
         {:ok, %Req.Response{status: 404}} ->
           {:error, :not_found}
@@ -70,6 +70,29 @@ defmodule ReqDnsimple.Zone do
           {:error, e}
       end
     end
+  end
+
+  @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
+          {:ok, [__MODULE__.t()]} | {:error, term()}
+  def list_all(req, account_id, opts \\ []) do
+    ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, &1))
+  end
+
+  defp request_list(req, account_id, opts) do
+    params =
+      opts
+      |> ReqDnsimple.convert_sort_to_string()
+      |> Map.new()
+
+    req
+    |> Req.merge(
+      method: :get,
+      url: "/:account_id/zones",
+      path_params_style: :colon,
+      path_params: [account_id: account_id],
+      params: params
+    )
+    |> Req.request()
   end
 
   @spec get_zone_file(Req.Request.t(), ReqDnsimple.account_id(), ReqDnsimple.zone_name()) ::

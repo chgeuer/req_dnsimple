@@ -42,6 +42,11 @@ Different modules use slightly different return conventions:
 | `Zone.check_zone_distribution/3` | `{:ok, boolean()}` | `{:error, reason}` |
 
 Note that `Account.list/1` returns a bare list, not an `{:ok, list}` tuple.
+For `Zone`, `Contact`, and `BillingCharge`, `list_page/3` returns
+`{:ok, {items, pagination}}` and `list_all/3` returns every item as
+`{:ok, items}`. `ZoneRecord` provides the corresponding `list_page/4` and
+`list_all/4` interfaces. Every `list_all` starts at page one, preserves other
+filters and pagination size, and rejects an explicit `page` option.
 Ordinary HTTP failures return
 `{:error, %{status: status, response: response_body}}`. Existing
 endpoint-specific mappings such as `:not_found`, `:unauthorized`, and `:timeout`
