@@ -2285,7 +2285,8 @@
         "ReqDnsimple.Registrar.restore/4"
       ],
       "contract_tests": [
-        "test/req_dnsimple/registrar_test.exs: domainRestore"
+        "test/req_dnsimple/registrar_test.exs: domainRestore sends the premium price once and returns the typed 201 payload",
+        "test/req_dnsimple/registrar_test.exs: domainRestore rejects malformed keyword containers before HTTP"
       ]
     },
     {

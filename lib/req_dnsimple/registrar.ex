@@ -993,16 +993,8 @@ defmodule ReqDnsimple.Registrar do
      }}
   end
 
-  defp validate_restore_attrs(attrs) when is_list(attrs) do
-    NimbleOptions.validate(attrs, @restore_schema)
-  end
-
   defp validate_restore_attrs(attrs) do
-    {:error,
-     %NimbleOptions.ValidationError{
-       message: "expected a keyword list",
-       value: attrs
-     }}
+    ReqDnsimple.validate_options(attrs, @restore_schema)
   end
 
   defp decode_renewal(%{
