@@ -136,6 +136,7 @@ domain's registrar delegation and from the explicit zone-NS-update API.
   SDK include `name` even though its OpenAPI schema omits it.
 - `ReqDnsimple.Zone` — Zone listing, zone file retrieval, distribution checks.
   Struct: `id`, `account_id`, `name`, `active`, `reverse`, `secondary`, timestamps.
+  `last_transferred_at` is `nil` when a zone has not been transferred.
 - `ReqDnsimple.ZoneRecord` — Full CRUD for DNS records. Struct: `id`, `zone_id`,
   `name`, `content`, `ttl`, `priority`, `type`, `regions`, `parent_id`,
   `system_record`, timestamps.

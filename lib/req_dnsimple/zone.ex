@@ -15,7 +15,7 @@ defmodule ReqDnsimple.Zone do
           secondary: boolean(),
           created_at: DateTime.t(),
           updated_at: DateTime.t(),
-          last_transferred_at: DateTime.t()
+          last_transferred_at: DateTime.t() | nil
         }
 
   defstruct ~w(id account_id name active reverse secondary created_at updated_at last_transferred_at)a
