@@ -13,6 +13,12 @@ defmodule ReqDnsimple.Registrar do
       ReqDnsimple.Registrar.disable_auto_renewal(req, 1010, "example.test")
       #=> :ok
 
+      ReqDnsimple.Registrar.renew(req, 1010, "example.test",
+        period: 2,
+        premium_price: "20.00"
+      )
+      #=> {:ok, %ReqDnsimple.Registrar.Renewal{}}
+
       ReqDnsimple.Registrar.change_delegation(req, 1010, "example.test",
         name_servers: ["ns1.example.test", "ns2.example.test"]
       )
@@ -34,9 +40,29 @@ defmodule ReqDnsimple.Registrar do
     defstruct [:domain, :available, :premium, :trustee]
   end
 
+  defmodule Renewal do
+    @moduledoc """
+    A domain-renewal job returned by the registrar API.
+    """
+
+    @type state :: String.t()
+
+    @type t :: %__MODULE__{
+            id: integer(),
+            domain_id: integer(),
+            period: 1..9,
+            state: state(),
+            created_at: DateTime.t(),
+            updated_at: DateTime.t()
+          }
+
+    defstruct [:id, :domain_id, :period, :state, :created_at, :updated_at]
+  end
+
   # https://developer.dnsimple.com/v2/registrar/#checkDomain
   # https://developer.dnsimple.com/v2/registrar/#authorizeDomainTransferOut
   # https://developer.dnsimple.com/v2/registrar/auto-renewal/#disableDomainAutoRenewal
+  # https://developer.dnsimple.com/v2/registrar/#renewDomain
 
   @path_schema [
     account_id: [type: :integer, required: true],
@@ -50,6 +76,11 @@ defmodule ReqDnsimple.Registrar do
 
   @delegation_schema [
     name_servers: [type: {:list, :string}, required: true]
+  ]
+
+  @renewal_schema [
+    period: [type: :integer],
+    premium_price: [type: :string]
   ]
 
   @doc """
@@ -180,6 +211,66 @@ defmodule ReqDnsimple.Registrar do
   end
 
   @doc """
+  Submits a domain renewal.
+
+  The optional `:period` is sent unchanged; when omitted, DNSimple chooses the
+  TLD-specific period. Premium domains can include the caller-confirmed
+  `:premium_price`, which is preserved as an exact string. Empty attributes send
+  no request body.
+
+  Returns a typed `Renewal` for immediate HTTP 201 and asynchronous HTTP 202
+  responses without polling. The function sends exactly one request and does
+  not look up prices or registration metadata.
+  """
+  @spec renew(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          String.t(),
+          keyword()
+        ) ::
+          {:ok, Renewal.t()} | {:error, term()}
+  def renew(req, account_id, domain_name, attrs \\ []) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain_name: domain_name],
+             @path_schema
+           ),
+         {:ok, validated_attrs} <- validate_renewal_attrs(attrs) do
+      request_options = [
+        method: :post,
+        url: "/:account_id/registrar/domains/:domain_name/renewals",
+        path_params_style: :colon,
+        path_params: [account_id: account_id, domain_name: domain_name],
+        retry: false
+      ]
+
+      request_options =
+        if validated_attrs == [] do
+          request_options
+        else
+          Keyword.put(request_options, :json, Map.new(validated_attrs))
+        end
+
+      req = Req.merge(req, request_options)
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: status, body: %{"data" => data}} = response}
+        when status in [201, 202] ->
+          case decode_renewal(data) do
+            {:ok, renewal} -> {:ok, renewal}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
   Replaces a domain's registrar delegation.
 
   The required `:name_servers` option is sent as the root JSON array, including
@@ -242,6 +333,44 @@ defmodule ReqDnsimple.Registrar do
      }}
   end
 
+  defp validate_renewal_attrs(attrs) when is_list(attrs) do
+    NimbleOptions.validate(attrs, @renewal_schema)
+  end
+
+  defp validate_renewal_attrs(attrs) do
+    {:error,
+     %NimbleOptions.ValidationError{
+       message: "expected a keyword list",
+       value: attrs
+     }}
+  end
+
+  defp decode_renewal(%{
+         "id" => id,
+         "domain_id" => domain_id,
+         "period" => period,
+         "state" => state,
+         "created_at" => created_at,
+         "updated_at" => updated_at
+       })
+       when is_integer(id) and is_integer(domain_id) and period in 1..9 and
+              state in ["cancelled", "new", "renewing", "renewed", "failed"] do
+    with {:ok, created_at} <- parse_datetime(created_at),
+         {:ok, updated_at} <- parse_datetime(updated_at) do
+      {:ok,
+       %Renewal{
+         id: id,
+         domain_id: domain_id,
+         period: period,
+         state: state,
+         created_at: created_at,
+         updated_at: updated_at
+       }}
+    end
+  end
+
+  defp decode_renewal(_data), do: :error
+
   defp decode_name_servers(name_servers) when is_list(name_servers) do
     if Enum.all?(name_servers, &is_binary/1), do: {:ok, name_servers}, else: :error
   end
@@ -281,4 +410,13 @@ defmodule ReqDnsimple.Registrar do
   end
 
   defp decode_check_result(_data), do: :error
+
+  defp parse_datetime(value) when is_binary(value) do
+    case DateTime.from_iso8601(value) do
+      {:ok, datetime, _offset} -> {:ok, datetime}
+      {:error, _reason} -> :error
+    end
+  end
+
+  defp parse_datetime(_value), do: :error
 end

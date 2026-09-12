@@ -2112,7 +2112,7 @@
       "method": "POST",
       "path": "/{account}/registrar/domains/{domain}/renewals",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-034",
       "br_issue_id": "bd-n3l",
       "proposed_interfaces": [
@@ -2172,8 +2172,13 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.Registrar.renew/3",
+        "ReqDnsimple.Registrar.renew/4"
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/registrar_test.exs: domainRenew"
+      ]
     },
     {
       "operation_id": "domainRestore",

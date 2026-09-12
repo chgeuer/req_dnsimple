@@ -228,7 +228,7 @@ Domain retrieval accepts a name or integer ID and returns registration state,
 privacy, renewal, and nullable expiry metadata in a typed
 `ReqDnsimple.Domain` struct.
 
-### Registrar delegation
+### Registrar operations
 
 Check a domain before registration or transfer:
 
@@ -250,6 +250,23 @@ Disable future automatic renewal without modifying the domain otherwise:
 
 The operation accepts a domain name or integer ID, sends one bodyless request,
 and returns registry or TLD refusal responses as explicit errors.
+
+Submit a renewal without a price lookup or follow-up polling:
+
+```elixir
+{:ok, %ReqDnsimple.Registrar.Renewal{} = renewal} =
+  ReqDnsimple.Registrar.renew(
+    client,
+    account_id,
+    "example.com",
+    period: 2,
+    premium_price: "20.00"
+  )
+```
+
+The period is optional and otherwise selected by the TLD. A supplied premium
+price remains an exact string. Both immediate and asynchronous responses return
+the typed renewal job and preserve its state.
 
 ```elixir
 {:ok, name_servers} =
@@ -393,7 +410,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records/:ds_record` | `get/4`, `delete/4` |
 | `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards/:email_forward` | `get/4`, `delete/4` |
 | `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4`, `reject/3` |
-| `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `change_delegation/4` |
+| `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `renew/3`, `renew/4`, `change_delegation/4` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries/:primary_server` | `get/3`, `delete/3`, `from_json/1` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |
 | `ReqDnsimple.Helper` | Req utilities | `append/2` (URL/param merging) |

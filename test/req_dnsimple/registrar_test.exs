@@ -388,6 +388,216 @@ defmodule ReqDnsimple.RegistrarTest do
     end
   end
 
+  describe "renew/3 and renew/4" do
+    test "domainRenew sends all supplied attributes once and returns the typed 201 payload" do
+      body = %{
+        "data" => %{
+          "id" => 1,
+          "domain_id" => 100,
+          "period" => 2,
+          "state" => "renewed",
+          "created_at" => "2026-09-01T10:00:00+02:00",
+          "updated_at" => "2026-09-01T10:01:00+02:00"
+        }
+      }
+
+      assert {:ok,
+              %ReqDnsimple.Registrar.Renewal{
+                id: 1,
+                domain_id: 100,
+                period: 2,
+                state: "renewed",
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:01:00Z]
+              }} =
+               ReqDnsimple.Registrar.renew(
+                 client(201, body),
+                 1010,
+                 "example.test",
+                 period: 2,
+                 premium_price: "20.00"
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/registrar/domains/example.test/renewals",
+        %{},
+        %{period: 2, premium_price: "20.00"}
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "domainRenew permits an omitted body and returns the typed 202 payload" do
+      body = %{
+        "data" => %{
+          "id" => 2,
+          "domain_id" => 101,
+          "period" => 1,
+          "state" => "renewing",
+          "created_at" => "2026-09-01T10:00:00Z",
+          "updated_at" => "2026-09-01T10:00:00Z"
+        }
+      }
+
+      assert {:ok, %ReqDnsimple.Registrar.Renewal{state: "renewing"}} =
+               ReqDnsimple.Registrar.renew(client(202, body), 0, "")
+
+      assert_request(:post, "/v2/0/registrar/domains//renewals", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "domainRenew preserves zero periods and empty premium prices" do
+      body = %{
+        "data" => %{
+          "id" => 3,
+          "domain_id" => 102,
+          "period" => 1,
+          "state" => "new",
+          "created_at" => "2026-09-01T10:00:00Z",
+          "updated_at" => "2026-09-01T10:00:00Z"
+        }
+      }
+
+      assert {:ok, %ReqDnsimple.Registrar.Renewal{state: "new"}} =
+               ReqDnsimple.Registrar.renew(
+                 client(201, body),
+                 1010,
+                 "example.test",
+                 period: 0,
+                 premium_price: ""
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/registrar/domains/example.test/renewals",
+        %{},
+        %{period: 0, premium_price: ""}
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "domainRenew rejects invalid inputs before HTTP" do
+      request =
+        client(201, %{
+          "data" => %{
+            "id" => 1,
+            "domain_id" => 100,
+            "period" => 1,
+            "state" => "renewed",
+            "created_at" => "2026-09-01T10:00:00Z",
+            "updated_at" => "2026-09-01T10:00:00Z"
+          }
+        })
+
+      invalid_calls = [
+        {"1010", "example.test", []},
+        {nil, "example.test", []},
+        {1010, nil, []},
+        {1010, 42, []},
+        {1010, "example.test", [unknown: true]},
+        {1010, "example.test", [period: nil]},
+        {1010, "example.test", [period: 1.5]},
+        {1010, "example.test", [period: false]},
+        {1010, "example.test", [premium_price: nil]},
+        {1010, "example.test", [premium_price: 20]},
+        {1010, "example.test", [premium_price: []]},
+        {1010, "example.test", %{"period" => 1}}
+      ]
+
+      for {account_id, domain_name, attrs} <- invalid_calls do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Registrar.renew(request, account_id, domain_name, attrs)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "domainRenew preserves documented and shared HTTP failures" do
+      for status <- [400, 402, 401, 403, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"premium_price" => ["does not match"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Registrar.renew(
+                   client(status, body),
+                   1010,
+                   "example.test",
+                   premium_price: "20.00"
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/registrar/domains/example.test/renewals",
+          %{},
+          %{premium_price: "20.00"}
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "domainRenew disables retries for the mutation" do
+      body = %{"message" => "Fake offline request failure"}
+      request = client(500, body) |> Req.merge(retry: :transient)
+
+      assert {:error, %{status: 500, response: ^body}} =
+               ReqDnsimple.Registrar.renew(request, 1010, "example.test")
+
+      assert_request(:post, "/v2/1010/registrar/domains/example.test/renewals", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "domainRenew returns explicit errors for malformed successful responses" do
+      valid_data = %{
+        "id" => 1,
+        "domain_id" => 100,
+        "period" => 2,
+        "state" => "renewed",
+        "created_at" => "2026-09-01T10:00:00Z",
+        "updated_at" => "2026-09-01T10:00:00Z"
+      }
+
+      malformed_payloads = [
+        %{},
+        %{"data" => nil},
+        %{"data" => Map.delete(valid_data, "id")},
+        %{"data" => Map.put(valid_data, "id", "1")},
+        %{"data" => Map.put(valid_data, "domain_id", nil)},
+        %{"data" => Map.put(valid_data, "period", 0)},
+        %{"data" => Map.put(valid_data, "period", 10)},
+        %{"data" => Map.put(valid_data, "state", "unknown")},
+        %{"data" => Map.put(valid_data, "created_at", nil)},
+        %{"data" => Map.put(valid_data, "created_at", "not-a-timestamp")},
+        %{"data" => Map.put(valid_data, "updated_at", 0)}
+      ]
+
+      for status <- [201, 202], body <- malformed_payloads do
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Registrar.renew(
+                   client(status, body),
+                   1010,
+                   "example.test"
+                 )
+
+        assert_request(:post, "/v2/1010/registrar/domains/example.test/renewals", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "domainRenew preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Registrar.renew(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test"
+               )
+    end
+  end
+
   describe "change_delegation/4" do
     test "changeDomainDelegation sends the root name-server array once and returns it" do
       name_servers = ["ns1.example.test", "ns2.example.test"]
