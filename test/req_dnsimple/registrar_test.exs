@@ -256,6 +256,138 @@ defmodule ReqDnsimple.RegistrarTest do
     end
   end
 
+  describe "disable_auto_renewal/3" do
+    test "disableDomainAutoRenewal sends one bodyless request and returns :ok" do
+      assert :ok =
+               ReqDnsimple.Registrar.disable_auto_renewal(
+                 client(204, ""),
+                 1010,
+                 "example.test"
+               )
+
+      assert_request(
+        :delete,
+        "/v2/1010/registrar/domains/example.test/auto_renewal",
+        %{},
+        nil
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "disableDomainAutoRenewal accepts integer, zero, and empty identifiers" do
+      for {account_id, domain} <- [{1010, 42}, {0, 0}, {1010, ""}] do
+        assert :ok =
+                 ReqDnsimple.Registrar.disable_auto_renewal(
+                   client(204, nil),
+                   account_id,
+                   domain
+                 )
+
+        assert_request(
+          :delete,
+          "/v2/#{account_id}/registrar/domains/#{domain}/auto_renewal",
+          %{},
+          nil
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "disableDomainAutoRenewal rejects invalid path parameters before HTTP" do
+      request = client(204, "")
+
+      for {account_id, domain} <- [
+            {"1010", "example.test"},
+            {nil, "example.test"},
+            {1010, nil},
+            {1010, 1.5},
+            {1010, []}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Registrar.disable_auto_renewal(request, account_id, domain)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "disableDomainAutoRenewal preserves documented and shared HTTP failures" do
+      for status <- [400, 401, 403, 404, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"auto_renewal" => ["cannot be disabled"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Registrar.disable_auto_renewal(
+                   client(status, body),
+                   1010,
+                   "example.test"
+                 )
+
+        assert_request(
+          :delete,
+          "/v2/1010/registrar/domains/example.test/auto_renewal",
+          %{},
+          nil
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "disableDomainAutoRenewal disables retries for the mutation" do
+      body = %{"message" => "Fake offline request failure"}
+      request = client(500, body) |> Req.merge(retry: :transient)
+
+      assert {:error, %{status: 500, response: ^body}} =
+               ReqDnsimple.Registrar.disable_auto_renewal(
+                 request,
+                 1010,
+                 "example.test"
+               )
+
+      assert_request(
+        :delete,
+        "/v2/1010/registrar/domains/example.test/auto_renewal",
+        %{},
+        nil
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "disableDomainAutoRenewal rejects non-204 successful responses" do
+      for {status, body} <- [{200, %{}}, {200, nil}, {201, %{"data" => %{}}}] do
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Registrar.disable_auto_renewal(
+                   client(status, body),
+                   1010,
+                   "example.test"
+                 )
+
+        assert_request(
+          :delete,
+          "/v2/1010/registrar/domains/example.test/auto_renewal",
+          %{},
+          nil
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "disableDomainAutoRenewal preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Registrar.disable_auto_renewal(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test"
+               )
+    end
+  end
+
   describe "change_delegation/4" do
     test "changeDomainDelegation sends the root name-server array once and returns it" do
       name_servers = ["ns1.example.test", "ns2.example.test"]

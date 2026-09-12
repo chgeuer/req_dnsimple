@@ -10,6 +10,9 @@ defmodule ReqDnsimple.Registrar do
       ReqDnsimple.Registrar.authorize_transfer_out(req, 1010, "example.test")
       #=> :ok
 
+      ReqDnsimple.Registrar.disable_auto_renewal(req, 1010, "example.test")
+      #=> :ok
+
       ReqDnsimple.Registrar.change_delegation(req, 1010, "example.test",
         name_servers: ["ns1.example.test", "ns2.example.test"]
       )
@@ -33,6 +36,7 @@ defmodule ReqDnsimple.Registrar do
 
   # https://developer.dnsimple.com/v2/registrar/#checkDomain
   # https://developer.dnsimple.com/v2/registrar/#authorizeDomainTransferOut
+  # https://developer.dnsimple.com/v2/registrar/auto-renewal/#disableDomainAutoRenewal
 
   @path_schema [
     account_id: [type: :integer, required: true],
@@ -116,6 +120,50 @@ defmodule ReqDnsimple.Registrar do
           url: "/:account_id/registrar/domains/:domain_name/authorize_transfer_out",
           path_params_style: :colon,
           path_params: [account_id: account_id, domain_name: domain_name]
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 204}} ->
+          :ok
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Disables automatic renewal for a domain.
+
+  This function sends exactly one bodyless request. It does not renew, delete,
+  or otherwise modify the domain.
+
+  Returns `:ok` only for the API's empty HTTP 204 response. Registry or TLD
+  refusal responses, other HTTP responses, validation failures, and transport
+  failures are returned as explicit error tuples.
+  """
+  @spec disable_auto_renewal(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer()
+        ) ::
+          :ok | {:error, term()}
+  def disable_auto_renewal(req, account_id, domain) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain],
+             @delegation_path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :delete,
+          url: "/:account_id/registrar/domains/:domain/auto_renewal",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain: domain],
+          retry: false
         )
 
       case Req.request(req) do

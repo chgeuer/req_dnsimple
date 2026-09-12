@@ -1821,7 +1821,7 @@
       "method": "DELETE",
       "path": "/{account}/registrar/domains/{domain}/auto_renewal",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-029",
       "br_issue_id": "bd-9kx",
       "proposed_interfaces": [
@@ -1868,8 +1868,12 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.Registrar.disable_auto_renewal/3"
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/registrar_test.exs: disable_auto_renewal/3"
+      ]
     },
     {
       "operation_id": "disableDomainDnssec",
