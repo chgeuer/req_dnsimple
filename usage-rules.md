@@ -60,6 +60,7 @@ Different modules use slightly different return conventions:
 | `Contact.list/3` | `{:ok, [%Contact{}, ...]}` | `{:error, reason}` |
 | `Contact.get/3` | `{:ok, %Contact{}}` | `{:error, :not_found}` |
 | `Contact.delete/3` | `:ok` | `{:error, reason}` |
+| `Domain.create/3` | `{:ok, %Domain{}}` | `{:error, reason}` |
 | `Domain.get/3` | `{:ok, %Domain{}}` | `{:error, reason}` |
 | `DomainResearch.get_status/3` | `{:ok, %DomainResearch{}}` | `{:error, reason}` |
 | `Dnssec.get/3` | `{:ok, %Dnssec{}}` | `{:error, reason}` |
@@ -260,10 +261,13 @@ not contact the callback URL, inspect deliveries, or list registrations first.
   literal placeholders, zero TTL/priority values, and nullable priority while
   returning parsed timestamps. Deletion does not remove the template or records
   previously applied to domains.
-- `ReqDnsimple.Domain` — Retrieval and explicit deletion by name or ID.
-  Retrieval returns registration state, privacy, renewal, and nullable expiry
-  metadata. Deletion is irreversible within the account, but does not delete a
-  registration at the registry or produce a refund.
+- `ReqDnsimple.Domain` — Hosted-domain creation, retrieval, and explicit deletion
+  by name or ID. Creation sends one request and may incur the DNS-service
+  subscription charge; it does not register or purchase the domain, change
+  delegation, verify ownership, or create a zone separately. Retrieval returns
+  registration state, privacy, renewal, and nullable expiry metadata. Deletion
+  is irreversible within the account, but does not delete a registration at the
+  registry or produce a refund.
 - `ReqDnsimple.DomainResearch` — Paid domain-availability research through the
   dedicated endpoint. Requires the `domain_research_read` OAuth scope and
   returns request ID, domain, availability, and research errors without falling

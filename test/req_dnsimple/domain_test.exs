@@ -19,6 +19,133 @@ defmodule ReqDnsimple.DomainTest do
     "updated_at" => "2026-09-01T10:30:00+02:00"
   }
 
+  describe "create/3" do
+    test "createDomain sends one name and returns the typed hosted domain" do
+      assert {:ok,
+              %ReqDnsimple.Domain{
+                id: 1,
+                account_id: 1010,
+                registrant_id: nil,
+                name: "example.test",
+                unicode_name: "example.test",
+                state: "hosted",
+                auto_renew: false,
+                private_whois: false,
+                expires_at: nil,
+                trustee: false,
+                expires_on: nil,
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:30:00Z]
+              }} =
+               ReqDnsimple.Domain.create(
+                 client(201, %{"data" => @domain_data}),
+                 1010,
+                 name: "example.test"
+               )
+
+      assert_request(:post, "/v2/1010/domains", %{}, %{"name" => "example.test"})
+      refute_received {:request, _request}
+    end
+
+    test "createDomain preserves empty names and accepts older optional response omissions" do
+      data = Map.drop(@domain_data, ["trustee", "expires_on"])
+
+      assert {:ok, %ReqDnsimple.Domain{trustee: nil, expires_on: nil}} =
+               ReqDnsimple.Domain.create(client(201, %{"data" => data}), 0, name: "")
+
+      assert_request(:post, "/v2/0/domains", %{}, %{"name" => ""})
+      refute_received {:request, _request}
+    end
+
+    test "createDomain rejects invalid attributes before HTTP" do
+      request = client(201, %{"data" => @domain_data})
+
+      for {account_id, attrs} <- [
+            {"1010", [name: "example.test"]},
+            {nil, [name: "example.test"]},
+            {1010, [:invalid]},
+            {1010, [{:name}]},
+            {1010, []},
+            {1010, [name: nil]},
+            {1010, [name: false]},
+            {1010, [name: 0]},
+            {1010, [name: []]},
+            {1010, [name: %{}]},
+            {1010, [name: "example.test", unknown: true]}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Domain.create(request, account_id, attrs)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "createDomain preserves documented and shared HTTP failures" do
+      for status <- [400, 402, 406, 401, 403, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"name" => ["must be verified"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Domain.create(
+                   client(status, body),
+                   1010,
+                   name: "example.test"
+                 )
+
+        assert_request(:post, "/v2/1010/domains", %{}, %{"name" => "example.test"})
+        refute_received {:request, _request}
+      end
+    end
+
+    test "createDomain returns explicit errors for malformed successful responses" do
+      malformed_payloads = [
+        %{},
+        %{"data" => nil},
+        %{"data" => Map.delete(@domain_data, "name")},
+        %{"data" => Map.put(@domain_data, "state", "unknown")},
+        %{"data" => Map.put(@domain_data, "expires_at", "not-a-timestamp")},
+        %{"data" => Map.put(@domain_data, "expires_on", "not-a-date")}
+      ]
+
+      for body <- malformed_payloads do
+        assert {:error, %{status: 201, response: ^body}} =
+                 ReqDnsimple.Domain.create(
+                   client(201, body),
+                   1010,
+                   name: "example.test"
+                 )
+
+        assert_request(:post, "/v2/1010/domains", %{}, %{"name" => "example.test"})
+        refute_received {:request, _request}
+      end
+    end
+
+    test "createDomain rejects an unexpected success status" do
+      body = %{"data" => @domain_data}
+
+      assert {:error, %{status: 200, response: ^body}} =
+               ReqDnsimple.Domain.create(
+                 client(200, body),
+                 1010,
+                 name: "example.test"
+               )
+
+      assert_request(:post, "/v2/1010/domains", %{}, %{"name" => "example.test"})
+      refute_received {:request, _request}
+    end
+
+    test "createDomain preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Domain.create(
+                 transport_error_client(:timeout),
+                 1010,
+                 name: "example.test"
+               )
+    end
+  end
+
   describe "get/3" do
     test "getDomain sends one bodyless request and returns a typed hosted domain" do
       assert {:ok,

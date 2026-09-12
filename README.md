@@ -340,12 +340,18 @@ arbitrary-precision decimal library.
 ### Domains
 
 ```elixir
+{:ok, hosted_domain} =
+  ReqDnsimple.Domain.create(client, account_id, name: "example.test")
+
 {:ok, domain} = ReqDnsimple.Domain.get(client, account_id, "example.com")
 ```
 
-Domain retrieval accepts a name or integer ID and returns registration state,
-privacy, renewal, and nullable expiry metadata in a typed
-`ReqDnsimple.Domain` struct.
+Domain creation adds the named domain and its hosted zone in one request and
+returns a typed `ReqDnsimple.Domain` struct. DNSimple may charge for the DNS
+service subscription. It does not register or purchase the domain, change
+delegation, verify ownership, or issue a separate zone-creation request.
+Retrieval accepts a name or integer ID and returns registration state, privacy,
+renewal, and nullable expiry metadata.
 
 ### TLD extended attributes
 
@@ -738,7 +744,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.ZoneRecord` | `/zones/:zone/records`, `/zones/:zone/batch` | `list/4`, `get/4`, `create/4`, `update/5`, `delete/4`, `check_distribution/4`, `batch_change/4` |
 | `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/3` |
 | `ReqDnsimple.Contact` | `/contacts` | `list/3`, `get/3`, `delete/3` |
-| `ReqDnsimple.Domain` | `/domains/:domain` | `get/3`, `delete/3` |
+| `ReqDnsimple.Domain` | `/domains`, `/domains/:domain` | `create/3`, `get/3`, `delete/3` |
 | `ReqDnsimple.DomainResearch` | `/domains/research/status` | `get_status/3` |
 | `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records/:ds_record` | `get/4`, `delete/4` |
 | `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards/:email_forward` | `get/4`, `delete/4` |

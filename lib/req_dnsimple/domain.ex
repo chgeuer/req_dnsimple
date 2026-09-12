@@ -4,6 +4,9 @@ defmodule ReqDnsimple.Domain do
 
   ## Example
 
+      ReqDnsimple.Domain.create(req, 1010, name: "example.test")
+      #=> {:ok, %ReqDnsimple.Domain{}}
+
       ReqDnsimple.Domain.get(req, 1010, "example.test")
       #=> {:ok, %ReqDnsimple.Domain{}}
 
@@ -11,7 +14,9 @@ defmodule ReqDnsimple.Domain do
       #=> :ok
   """
 
-  # https://developer.dnsimple.com/v2/domains/
+  # https://developer.dnsimple.com/v2/domains/#createDomain
+  # https://developer.dnsimple.com/v2/domains/#getDomain
+  # https://developer.dnsimple.com/v2/domains/#deleteDomain
 
   @type t :: %__MODULE__{
           id: integer(),
@@ -36,6 +41,57 @@ defmodule ReqDnsimple.Domain do
     account_id: [type: :integer, required: true],
     domain: [type: {:or, [:string, :integer]}, required: true]
   ]
+
+  @create_path_schema [
+    account_id: [type: :integer, required: true]
+  ]
+
+  @create_schema [
+    name: [type: :string, required: true]
+  ]
+
+  @doc """
+  Adds a hosted domain to an account.
+
+  The required `name` is sent in one request. DNSimple may charge for the DNS
+  service subscription. This operation does not register or purchase the
+  domain, change delegation, verify ownership, or create a zone separately.
+
+  ## Example
+
+      ReqDnsimple.Domain.create(req, 1010, name: "example.test")
+      #=> {:ok, %ReqDnsimple.Domain{}}
+  """
+  @spec create(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
+          {:ok, t()} | {:error, term()}
+  def create(req, account_id, attrs) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate([account_id: account_id], @create_path_schema),
+         {:ok, validated_attrs} <- ReqDnsimple.validate_options(attrs, @create_schema) do
+      req =
+        Req.merge(req,
+          method: :post,
+          url: "/:account_id/domains",
+          path_params_style: :colon,
+          path_params: [account_id: account_id],
+          json: Map.new(validated_attrs)
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
+          case decode(data) do
+            {:ok, domain} -> {:ok, domain}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
 
   @doc """
   Retrieves one hosted or registered domain by name or ID.
