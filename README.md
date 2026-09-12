@@ -654,6 +654,14 @@ modify the domain's MX records.
     zone: "secondary.example.test"
   )
 
+{:ok, primary_server} =
+  ReqDnsimple.PrimaryServer.unlink(
+    client,
+    account_id,
+    primary_server_id,
+    zone: "secondary.example.test"
+  )
+
 :ok = ReqDnsimple.PrimaryServer.delete(client, account_id, primary_server_id)
 ```
 
@@ -666,8 +674,10 @@ return one typed page with string-keyed pagination metadata; `list_all/3`
 explicitly enumerates from page one while retaining sorting and page size.
 Listing supports ordered `id` and `name` sorting. Linking sends the required
 secondary-zone name in one request without looking up or creating either
-resource. Deletion removes only the selected primary-server configuration; it
-does not unlink zones or perform DNS requests.
+resource. Unlinking removes only that zone association while retaining both
+resources and returns the updated primary server. Deletion removes only the
+selected primary-server configuration; it does not unlink zones or perform DNS
+requests.
 
 ### One-click services
 
@@ -736,7 +746,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.VanityNameServer` | `/vanity/:domain` | `enable/3`, `disable/3` |
 | `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `get_prices/3`, `get_transfer_lock/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `enable_auto_renewal/3`, `enable_whois_privacy/3`, `register/4`, `transfer/4`, `renew/3`, `renew/4`, `restore/3`, `restore/4`, `get_delegation/3`, `change_delegation/4` |
 | `ReqDnsimple.Tld` | `/tlds/:tld`, `/tlds/:tld/extended_attributes` | `get/2`, `list_extended_attributes/2` |
-| `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries` | `create/3`, `get/3`, `list/3`, `list_page/3`, `list_all/3`, `link/4`, `delete/3`, `from_json/1` |
+| `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries` | `create/3`, `get/3`, `list/3`, `list_page/3`, `list_all/3`, `link/4`, `unlink/4`, `delete/3`, `from_json/1` |
 | `ReqDnsimple.Service` | `/services/:service`, `/domains/:domain/services/:service` | `get/2`, `apply/4`, `apply/5`, `unapply/4` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |
 | `ReqDnsimple.Helper` | Req utilities | `append/2` (URL/param merging) |

@@ -83,6 +83,7 @@ defmodule ReqDnsimple.DocumentationContractTest do
       {ReqDnsimple.PrimaryServer, :list, 3},
       {ReqDnsimple.PrimaryServer, :list_page, 3},
       {ReqDnsimple.PrimaryServer, :list_all, 3},
+      {ReqDnsimple.PrimaryServer, :unlink, 4},
       {ReqDnsimple.PrimaryServer, :delete, 3}
     ]
 

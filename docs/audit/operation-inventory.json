@@ -6949,7 +6949,7 @@
       "method": "PUT",
       "path": "/{account}/secondary_dns/primaries/{primaryserver}/unlink",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-087",
       "br_issue_id": "bd-131",
       "proposed_interfaces": [
@@ -7001,8 +7001,20 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "unlink",
+          "arity": 4,
+          "signature": "ReqDnsimple.PrimaryServer.unlink(req, account_id, primary_server_id, attrs)"
+        }
+      ],
+      "contract_tests": [
+        {
+          "file": "test/primary_server_test.exs",
+          "describe": "unlink/4"
+        }
+      ]
     },
     {
       "operation_id": "updateContact",

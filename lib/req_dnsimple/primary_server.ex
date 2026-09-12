@@ -29,6 +29,9 @@ defmodule ReqDnsimple.PrimaryServer do
       ReqDnsimple.PrimaryServer.link(req, 1010, 1, zone: "secondary.example.test")
       #=> {:ok, %ReqDnsimple.PrimaryServer{}}
 
+      ReqDnsimple.PrimaryServer.unlink(req, 1010, 1, zone: "secondary.example.test")
+      #=> {:ok, %ReqDnsimple.PrimaryServer{}}
+
       ReqDnsimple.PrimaryServer.delete(req, 1010, 1)
       #=> :ok
   """
@@ -37,6 +40,7 @@ defmodule ReqDnsimple.PrimaryServer do
   # https://developer.dnsimple.com/v2/secondary-dns/#getPrimaryServer
   # https://developer.dnsimple.com/v2/secondary-dns/#listPrimaryServers
   # https://developer.dnsimple.com/v2/secondary-dns/#linkPrimaryServer
+  # https://developer.dnsimple.com/v2/secondary-dns/#unlinkPrimaryServer
   # https://developer.dnsimple.com/v2/secondary-dns/#removePrimaryServer
 
   @type t :: %__MODULE__{
@@ -252,6 +256,59 @@ defmodule ReqDnsimple.PrimaryServer do
         Req.merge(req,
           method: :put,
           url: "/:account_id/secondary_dns/primaries/:primary_server_id/link",
+          path_params_style: :colon,
+          path_params: [
+            account_id: account_id,
+            primary_server_id: primary_server_id
+          ],
+          json: Map.new(validated_attrs)
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
+          case decode(data) do
+            {:ok, primary_server} -> {:ok, primary_server}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Unlinks a secondary-DNS primary server from one secondary zone.
+
+  `zone` is required and is sent in one request. The primary server and zone
+  remain configured, and no lookup or additional mutation is performed.
+
+  ## Example
+
+      ReqDnsimple.PrimaryServer.unlink(
+        req,
+        1010,
+        1,
+        zone: "secondary.example.test"
+      )
+      #=> {:ok, %ReqDnsimple.PrimaryServer{}}
+  """
+  @spec unlink(Req.Request.t(), ReqDnsimple.account_id(), integer(), keyword()) ::
+          {:ok, t()} | {:error, term()}
+  def unlink(req, account_id, primary_server_id, attrs) do
+    with {:ok, _validated_params} <-
+           NimbleOptions.validate(
+             [account_id: account_id, primary_server_id: primary_server_id],
+             @path_schema
+           ),
+         {:ok, validated_attrs} <- ReqDnsimple.validate_options(attrs, @link_schema) do
+      req =
+        Req.merge(req,
+          method: :put,
+          url: "/:account_id/secondary_dns/primaries/:primary_server_id/unlink",
           path_params_style: :colon,
           path_params: [
             account_id: account_id,

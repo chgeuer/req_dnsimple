@@ -31,6 +31,13 @@ defmodule ReqDnsimple.PublicTypespecTest do
       "{:ok, [t()]} | {:error, term()}"
     )
 
+    assert_spec(
+      ReqDnsimple.PrimaryServer,
+      :unlink,
+      4,
+      "{:ok, t()} | {:error, term()}"
+    )
+
     assert_spec(ReqDnsimple.PrimaryServer, :delete, 3, ":ok | {:error, term()}")
     assert_spec(ReqDnsimple.Registrar, :disable_auto_renewal, 3, ":ok | {:error, term()}")
 
