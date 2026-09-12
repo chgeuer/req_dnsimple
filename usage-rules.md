@@ -190,6 +190,9 @@ The update does not change registrar delegation.
   library when arithmetic is required. Manual-charge item product identifiers and
   references may be `nil`.
 - `ReqDnsimple.Contact` — Contact listing and retrieval. 14 contact fields + timestamps.
+- `ReqDnsimple.Domain` — Explicit domain deletion by name or ID. Deletion is
+  irreversible within the account, but does not delete a registration at the
+  registry or produce a refund.
 - `ReqDnsimple.DomainPush` — Accept a pending push with an explicit target-account contact.
 - `ReqDnsimple.PrimaryServer` — Secondary-DNS primary server retrieval and
   explicit deletion. Struct: `id`, `account_id`, `name`, `ip`, integer `port`,
