@@ -290,7 +290,7 @@ contact the callback URL, inspect deliveries, or list registrations first.
 - `ReqDnsimple.Tld` — Retrieve one TLD's capabilities or its non-paginated,
   typed registry extended-attribute definitions. Arbitrary attribute names and
   option values remain strings, free-text attributes retain empty option lists,
-  and omitted display titles remain `nil`.
+  omitted display titles remain `nil`, and present titles are strings.
 - `ReqDnsimple.Registrar` — Check domain availability by name, explicitly
   retrieve registration and lifecycle prices by name, retrieve transfer-lock
   state by name or ID, authorize transfer-out by name, enable or disable

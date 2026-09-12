@@ -12,8 +12,8 @@ defmodule ReqDnsimple.Tld do
 
   Name-server bounds are normalized to integers when DNSimple returns numeric
   strings. A bound omitted by the registry remains `nil`. Extended attributes
-  may omit their display title, and free-text attributes have an empty options
-  list.
+  may omit their display title, but a present title must be a string. Free-text
+  attributes have an empty options list.
   """
 
   defmodule ExtendedAttribute do
@@ -241,9 +241,7 @@ defmodule ReqDnsimple.Tld do
        )
        when is_binary(name) and is_binary(description) and is_boolean(required) and
               is_list(options) do
-    title = Map.get(data, "title")
-
-    with true <- is_nil(title) or is_binary(title),
+    with {:ok, title} <- decode_optional_title(data),
          {:ok, options} <- decode_extended_attribute_options(options) do
       {:ok,
        %ExtendedAttribute{
@@ -259,6 +257,14 @@ defmodule ReqDnsimple.Tld do
   end
 
   defp decode_extended_attribute(_data), do: :error
+
+  defp decode_optional_title(data) do
+    case Map.fetch(data, "title") do
+      :error -> {:ok, nil}
+      {:ok, title} when is_binary(title) -> {:ok, title}
+      {:ok, _invalid} -> :error
+    end
+  end
 
   defp decode_extended_attribute_options(options) do
     Enum.reduce_while(options, {:ok, []}, fn

@@ -193,6 +193,16 @@ defmodule ReqDnsimple.TldTest do
       refute_received {:request, _request}
     end
 
+    test "getTldExtendedAttributes preserves an explicitly empty title" do
+      body = put_in(extended_attributes_body(), ["data", Access.at(0), "title"], "")
+
+      assert {:ok, [%ReqDnsimple.Tld.ExtendedAttribute{title: ""}, _free_text]} =
+               ReqDnsimple.Tld.list_extended_attributes(client(200, body), "co.uk")
+
+      assert_request(:get, "/v2/tlds/co.uk/extended_attributes", %{}, nil)
+      refute_received {:request, _request}
+    end
+
     test "getTldExtendedAttributes rejects malformed successful envelopes and payloads" do
       malformed_bodies = [
         %{},
@@ -214,6 +224,28 @@ defmodule ReqDnsimple.TldTest do
         assert_request(:get, "/v2/tlds/com/extended_attributes", %{}, nil)
         refute_received {:request, _request}
       end
+    end
+
+    test "getTldExtendedAttributes rejects an explicit null title without partial success" do
+      body =
+        update_in(extended_attributes_body(), ["data"], fn attributes ->
+          attributes ++
+            [
+              %{
+                "name" => "x-registry-null-title",
+                "description" => "Malformed later attribute",
+                "required" => false,
+                "title" => nil,
+                "options" => []
+              }
+            ]
+        end)
+
+      assert {:error, %{status: 200, response: ^body}} =
+               ReqDnsimple.Tld.list_extended_attributes(client(200, body), "co.uk")
+
+      assert_request(:get, "/v2/tlds/co.uk/extended_attributes", %{}, nil)
+      refute_received {:request, _request}
     end
 
     test "getTldExtendedAttributes preserves documented and shared HTTP failures" do

@@ -327,8 +327,9 @@ privacy, renewal, and nullable expiry metadata in a typed
 The non-paginated result contains typed
 `ReqDnsimple.Tld.ExtendedAttribute` values and their typed options. Registry
 attribute names and values remain strings, free-text attributes retain
-`options: []`, and an omitted display title is `nil`. This retrieval does not
-submit registrant data or initiate a registration or transfer.
+`options: []`, and an omitted display title is `nil`; a present title is always
+a string. This retrieval does not submit registrant data or initiate a
+registration or transfer.
 
 ### Registrar operations
 
