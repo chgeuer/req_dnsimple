@@ -71,6 +71,7 @@ Different modules use slightly different return conventions:
 | `Registrar.enable_whois_privacy/3` | `{:ok, %Registrar.WhoisPrivacy{}}` | `{:error, reason}` |
 | `Registrar.renew/3,4` | `{:ok, %Registrar.Renewal{}}` | `{:error, reason}` |
 | `Registrar.restore/3,4` | `{:ok, %Registrar.Restore{}}` | `{:error, reason}` |
+| `Registrar.get_delegation/3` | `{:ok, [String.t()]}` | `{:error, reason}` |
 | `BillingCharge.list/3` | `{:ok, [%BillingCharge{}, ...]}` | `{:error, reason}` |
 | `Zone.get_zone_file/3` | `{:ok, binary()}` | `{:error, reason}` |
 | `Zone.check_zone_distribution/3` | `{:ok, boolean()}` | `{:error, reason}` |
@@ -230,7 +231,7 @@ The update does not change registrar delegation.
 - `ReqDnsimple.Registrar` — Check domain availability by name, explicitly
   authorize transfer-out by name, enable or disable automatic renewal by name
   or ID, enable WHOIS privacy by name or ID, submit a renewal or expired-domain
-  restore by name, or replace registrar delegation by name or ID.
+  restore by name, or retrieve or replace registrar delegation by name or ID.
   The low-volume check preserves availability, premium, and optional trustee
   flags without using paid Domain Research, registering the domain, or retrying
   rate limits. Changing auto-renewal is a single bodyless request and preserves
@@ -241,9 +242,10 @@ The update does not change registrar delegation.
   exact premium-price string and returns a typed immediate or asynchronous
   restore job; DNSimple determines charges and eligibility, and refusals remain
   explicit errors without an automatic renewal, purchase, or poll. Delegation
+  retrieval returns the ordered hostnames exactly as supplied. Delegation
   replacement preserves the supplied order and explicit empty lists, sends one
-  request, and does not read or merge the prior delegation. It is distinct from
-  hosted-zone apex NS records and `Zone.update_ns_records/4`.
+  request, and does not read or merge the prior delegation. Both are distinct
+  from hosted-zone apex NS records and `Zone.update_ns_records/4`.
 - `ReqDnsimple.PrimaryServer` — Secondary-DNS primary server retrieval and
   explicit deletion. Struct: `id`, `account_id`, `name`, `ip`, integer `port`,
   ordered `linked_secondary_zones`, and timestamps. Deletion does not unlink

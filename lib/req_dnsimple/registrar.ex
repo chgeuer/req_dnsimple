@@ -30,6 +30,9 @@ defmodule ReqDnsimple.Registrar do
       )
       #=> {:ok, %ReqDnsimple.Registrar.Restore{}}
 
+      ReqDnsimple.Registrar.get_delegation(req, 1010, "example.test")
+      #=> {:ok, ["ns1.example.test", "ns2.example.test"]}
+
       ReqDnsimple.Registrar.change_delegation(req, 1010, "example.test",
         name_servers: ["ns1.example.test", "ns2.example.test"]
       )
@@ -464,6 +467,53 @@ defmodule ReqDnsimple.Registrar do
         when status in [201, 202] ->
           case decode_restore(data) do
             {:ok, restore} -> {:ok, restore}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Retrieves a domain's registrar delegation.
+
+  The ordered list of name-server hostnames is returned exactly as supplied by
+  DNSimple. This is distinct from hosted-zone apex NS records.
+
+  This function sends exactly one bodyless request. Other HTTP responses,
+  malformed success bodies, validation failures, and transport failures are
+  returned as explicit error tuples.
+  """
+  @spec get_delegation(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer()
+        ) ::
+          {:ok, [String.t()]} | {:error, term()}
+  def get_delegation(req, account_id, domain) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain],
+             @delegation_path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :get,
+          url: "/:account_id/registrar/domains/:domain/delegation",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain: domain],
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
+          case decode_name_servers(data) do
+            {:ok, name_servers} -> {:ok, name_servers}
             :error -> ReqDnsimple.response_error(response)
           end
 

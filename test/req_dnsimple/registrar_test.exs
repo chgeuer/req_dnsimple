@@ -1128,6 +1128,123 @@ defmodule ReqDnsimple.RegistrarTest do
     end
   end
 
+  describe "get_delegation/3" do
+    test "getDomainDelegation sends one bodyless request and preserves ordered hostnames" do
+      name_servers = [
+        "ns1.dnsimple-edge.com",
+        "ns2.dnsimple.com",
+        "ns3.example.test"
+      ]
+
+      assert {:ok, ^name_servers} =
+               ReqDnsimple.Registrar.get_delegation(
+                 client(200, %{"data" => name_servers}),
+                 1010,
+                 "example.test"
+               )
+
+      assert_request(
+        :get,
+        "/v2/1010/registrar/domains/example.test/delegation",
+        %{},
+        nil
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "getDomainDelegation accepts integer, zero, and empty identifiers" do
+      assert {:ok, []} =
+               ReqDnsimple.Registrar.get_delegation(client(200, %{"data" => []}), 0, 42)
+
+      assert_request(:get, "/v2/0/registrar/domains/42/delegation", %{}, nil)
+      refute_received {:request, _request}
+
+      assert {:ok, []} =
+               ReqDnsimple.Registrar.get_delegation(client(200, %{"data" => []}), 1010, "")
+
+      assert_request(:get, "/v2/1010/registrar/domains//delegation", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "getDomainDelegation rejects invalid path parameters before HTTP" do
+      request = client(200, %{"data" => []})
+
+      for {account_id, domain} <- [
+            {"1010", "example.test"},
+            {nil, "example.test"},
+            {1010, nil},
+            {1010, 1.0},
+            {1010, []}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Registrar.get_delegation(request, account_id, domain)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "getDomainDelegation preserves documented and shared HTTP failures" do
+      for status <- [401, 403, 404, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"domain" => ["is unavailable"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Registrar.get_delegation(
+                   client(status, body),
+                   1010,
+                   "example.test"
+                 )
+
+        assert_request(
+          :get,
+          "/v2/1010/registrar/domains/example.test/delegation",
+          %{},
+          nil
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "getDomainDelegation returns explicit errors for malformed success" do
+      for body <- [
+            %{},
+            %{"data" => nil},
+            %{"data" => %{}},
+            %{"data" => ["ns1.example.test", nil]},
+            %{"data" => [42]}
+          ] do
+        assert {:error, %{status: 200, response: ^body}} =
+                 ReqDnsimple.Registrar.get_delegation(
+                   client(200, body),
+                   1010,
+                   "example.test"
+                 )
+
+        assert_request(
+          :get,
+          "/v2/1010/registrar/domains/example.test/delegation",
+          %{},
+          nil
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "getDomainDelegation preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Registrar.get_delegation(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test"
+               )
+    end
+  end
+
   describe "change_delegation/4" do
     test "changeDomainDelegation sends the root name-server array once and returns it" do
       name_servers = ["ns1.example.test", "ns2.example.test"]
