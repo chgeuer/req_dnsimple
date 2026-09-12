@@ -3622,7 +3622,7 @@
       "method": "GET",
       "path": "/{account}/templates/{template}/records/{templaterecord}",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-056",
       "br_issue_id": "bd-3v1",
       "proposed_interfaces": [
@@ -3674,8 +3674,12 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.TemplateRecord.get/4"
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/template_record_test.exs: get/4"
+      ]
     },
     {
       "operation_id": "getTld",

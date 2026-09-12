@@ -65,6 +65,7 @@ Different modules use slightly different return conventions:
 | `Service.apply/4,5` | `:ok` | `{:error, reason}` |
 | `Template.apply/4` | `:ok` | `{:error, reason}` |
 | `Template.delete/3` | `:ok` | `{:error, reason}` |
+| `TemplateRecord.get/4` | `{:ok, %TemplateRecord{}}` | `{:error, reason}` |
 | `TemplateRecord.delete/4` | `:ok` | `{:error, reason}` |
 | `DelegationSignerRecord.get/4` | `{:ok, %DelegationSignerRecord{}}` | `{:error, reason}` |
 | `DelegationSignerRecord.delete/4` | `:ok` | `{:error, reason}` |
@@ -226,9 +227,11 @@ The update does not change registrar delegation.
 - `ReqDnsimple.Template` — Retrieving, applying, or deleting an account template,
   each with one bodyless request. Retrieval returns a typed template with parsed
   timestamps. Domain and template identifiers accept short names or integer IDs.
-- `ReqDnsimple.TemplateRecord` — Deleting one record from an account template by
-  template short name or ID and record ID. Deletion does not remove the template
-  or records previously applied to domains.
+- `ReqDnsimple.TemplateRecord` — Retrieving or deleting one record from an account
+  template by template short name or ID and record ID. Retrieval preserves
+  literal placeholders, zero TTL/priority values, and nullable priority while
+  returning parsed timestamps. Deletion does not remove the template or records
+  previously applied to domains.
 - `ReqDnsimple.Domain` — Retrieval and explicit deletion by name or ID.
   Retrieval returns registration state, privacy, renewal, and nullable expiry
   metadata. Deletion is irreversible within the account, but does not delete a
