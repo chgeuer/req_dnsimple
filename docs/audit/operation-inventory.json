@@ -3477,7 +3477,7 @@
       "method": "GET",
       "path": "/services/{service}",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-054",
       "br_issue_id": "bd-yhr",
       "proposed_interfaces": [
@@ -3519,8 +3519,20 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.Service",
+          "function": "get",
+          "arity": 2,
+          "signature": "ReqDnsimple.Service.get(req, service)"
+        }
+      ],
+      "contract_tests": [
+        {
+          "file": "test/req_dnsimple/service_test.exs",
+          "describe": "get/2"
+        }
+      ]
     },
     {
       "operation_id": "getTemplate",

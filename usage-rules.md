@@ -61,6 +61,7 @@ Different modules use slightly different return conventions:
 | `DomainResearch.get_status/3` | `{:ok, %DomainResearch{}}` | `{:error, reason}` |
 | `Dnssec.get/3` | `{:ok, %Dnssec{}}` | `{:error, reason}` |
 | `Dnssec.disable/3` | `:ok` | `{:error, reason}` |
+| `Service.get/2` | `{:ok, %Service{}}` | `{:error, reason}` |
 | `Service.apply/4,5` | `:ok` | `{:error, reason}` |
 | `DelegationSignerRecord.get/4` | `{:ok, %DelegationSignerRecord{}}` | `{:error, reason}` |
 | `DelegationSignerRecord.delete/4` | `:ok` | `{:error, reason}` |
@@ -285,10 +286,11 @@ The update does not change registrar delegation.
   explicit deletion. Struct: `id`, `account_id`, `name`, `ip`, integer `port`,
   ordered `linked_secondary_zones`, and timestamps. Deletion does not unlink
   zones or perform DNS requests.
-- `ReqDnsimple.Service` — Apply a one-click service to a domain by name or ID.
+- `ReqDnsimple.Service` — Retrieve a global one-click service by sid or ID,
+  including typed timestamps and setting definitions, or apply one to a domain.
   Optional dynamic settings use string keys. Omitted settings send no body,
-  while an explicit empty map is preserved. Applying performs no catalog
-  lookup or per-record requests.
+  while an explicit empty map is preserved. Applying performs no catalog lookup
+  or per-record requests.
 - `ReqDnsimple.NsRecord` — Name server record struct and JSON parsing.
 - `ReqDnsimple.Helper` — Req helper for incrementally appending URL path segments
   and merging params/path_params onto a `Req.Request`.

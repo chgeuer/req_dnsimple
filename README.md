@@ -564,6 +564,8 @@ configuration; it does not unlink zones or perform DNS requests.
 ### One-click services
 
 ```elixir
+{:ok, service} = ReqDnsimple.Service.get(client, "service-sid")
+
 :ok = ReqDnsimple.Service.apply(client, account_id, "example.com", "service-sid")
 
 :ok =
@@ -576,6 +578,8 @@ configuration; it does not unlink zones or perform DNS requests.
   )
 ```
 
+Service retrieval accepts a sid or integer ID and returns a typed
+`ReqDnsimple.Service` with typed nested setting definitions and timestamps.
 Omitting `settings` sends no request body; an explicit empty map sends
 `{"settings": {}}`. Setting names remain strings. Applying a service performs
 one request without fetching the service or creating records individually.
@@ -618,7 +622,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.DomainPush` | `/pushes/:push` | `accept/4`, `reject/3` |
 | `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `get_prices/3`, `get_transfer_lock/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `enable_auto_renewal/3`, `enable_whois_privacy/3`, `register/4`, `transfer/4`, `renew/3`, `renew/4`, `restore/3`, `restore/4`, `get_delegation/3`, `change_delegation/4` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries/:primary_server` | `get/3`, `delete/3`, `from_json/1` |
-| `ReqDnsimple.Service` | `/domains/:domain/services/:service` | `apply/4`, `apply/5` |
+| `ReqDnsimple.Service` | `/services/:service`, `/domains/:domain/services/:service` | `get/2`, `apply/4`, `apply/5` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |
 | `ReqDnsimple.Helper` | Req utilities | `append/2` (URL/param merging) |
 
