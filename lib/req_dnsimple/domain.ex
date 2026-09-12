@@ -10,12 +10,24 @@ defmodule ReqDnsimple.Domain do
       ReqDnsimple.Domain.get(req, 1010, "example.test")
       #=> {:ok, %ReqDnsimple.Domain{}}
 
+      ReqDnsimple.Domain.list_page(req, 1010,
+        name_like: "example",
+        sort: [name: :asc],
+        page: 1,
+        per_page: 30
+      )
+      #=> {:ok, {[%ReqDnsimple.Domain{}], %{"current_page" => 1}}}
+
+      ReqDnsimple.Domain.list_all(req, 1010, registrant_id: 42)
+      #=> {:ok, [%ReqDnsimple.Domain{}]}
+
       ReqDnsimple.Domain.delete(req, 1010, "example.test")
       #=> :ok
   """
 
   # https://developer.dnsimple.com/v2/domains/#createDomain
   # https://developer.dnsimple.com/v2/domains/#getDomain
+  # https://developer.dnsimple.com/v2/domains/#listDomains
   # https://developer.dnsimple.com/v2/domains/#deleteDomain
 
   @type t :: %__MODULE__{
@@ -48,6 +60,17 @@ defmodule ReqDnsimple.Domain do
 
   @create_schema [
     name: [type: :string, required: true]
+  ]
+
+  @list_schema [
+    name_like: [type: :string, doc: "Include domain names containing this substring"],
+    registrant_id: [type: :integer, doc: "Include domains with this registrant ID"],
+    sort: [
+      type: {:custom, ReqDnsimple, :validate_sort, [[:id, :name, :expiration]]},
+      doc: "Sort by id, name, or expiration"
+    ],
+    page: [type: :pos_integer, doc: "Page number for pagination"],
+    per_page: [type: {:in, 1..100}, doc: "Number of domains per page"]
   ]
 
   @doc """
@@ -91,6 +114,61 @@ defmodule ReqDnsimple.Domain do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Lists one page of domains accessible to an account.
+
+  Supports `:name_like` and `:registrant_id` filters, ordered `:sort` terms for
+  `:id`, `:name`, and `:expiration`, plus `:page` and `:per_page`. Pagination
+  metadata retains its string keys.
+  """
+  @spec list_page(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req, account_id, opts \\ []) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate([account_id: account_id], @create_path_schema),
+         {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_schema) do
+      case request_list(req, account_id, validated_opts) do
+        {:ok,
+         %Req.Response{
+           status: 200,
+           body: %{"data" => data, "pagination" => pagination}
+         } = response} ->
+          case decode_page(data, pagination) do
+            {:ok, result} -> {:ok, result}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Lists one page of domains accessible to an account.
+
+  This is a convenience alias for `list_page/3`; it never enumerates additional
+  pages implicitly.
+  """
+  @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list(req, account_id, opts \\ []), do: list_page(req, account_id, opts)
+
+  @doc """
+  Enumerates every domain accessible to an account in server order.
+
+  Enumeration always begins at page one, so an explicit `:page` option is
+  rejected. Filters, sorting, and `:per_page` are retained for every request.
+  """
+  @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
+          {:ok, [t()]} | {:error, term()}
+  def list_all(req, account_id, opts \\ []) do
+    ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, &1))
   end
 
   @doc """
@@ -183,10 +261,9 @@ defmodule ReqDnsimple.Domain do
               (is_integer(registrant_id) or is_nil(registrant_id)) and is_binary(name) and
               is_binary(unicode_name) and state in ["hosted", "registered", "expired"] and
               is_boolean(auto_renew) and is_boolean(private_whois) do
-    trustee = Map.get(data, "trustee")
     expires_on = Map.get(data, "expires_on")
 
-    with true <- is_boolean(trustee) or is_nil(trustee),
+    with {:ok, trustee} <- decode_optional_boolean(data, "trustee"),
          {:ok, expires_at} <- parse_optional_datetime(expires_at),
          {:ok, expires_on} <- parse_optional_date(expires_on),
          {:ok, created_at} <- parse_datetime(created_at),
@@ -213,6 +290,68 @@ defmodule ReqDnsimple.Domain do
   end
 
   defp decode(_data), do: :error
+
+  defp decode_page(data, pagination) when is_list(data) do
+    with {:ok, domains} <- decode_many(data),
+         true <- valid_pagination?(pagination) do
+      {:ok, {domains, pagination}}
+    else
+      _error -> :error
+    end
+  end
+
+  defp decode_page(_data, _pagination), do: :error
+
+  defp decode_many(data) do
+    Enum.reduce_while(data, {:ok, []}, fn item, {:ok, domains} ->
+      case decode(item) do
+        {:ok, domain} -> {:cont, {:ok, [domain | domains]}}
+        :error -> {:halt, :error}
+      end
+    end)
+    |> case do
+      {:ok, domains} -> {:ok, Enum.reverse(domains)}
+      :error -> :error
+    end
+  end
+
+  defp valid_pagination?(%{
+         "current_page" => current_page,
+         "per_page" => per_page,
+         "total_entries" => total_entries,
+         "total_pages" => total_pages
+       })
+       when is_integer(current_page) and current_page >= 0 and is_integer(per_page) and
+              per_page > 0 and is_integer(total_entries) and total_entries >= 0 and
+              is_integer(total_pages) and total_pages >= 0,
+       do: true
+
+  defp valid_pagination?(_pagination), do: false
+
+  defp request_list(req, account_id, opts) do
+    params =
+      opts
+      |> ReqDnsimple.convert_sort_to_string()
+      |> Map.new()
+
+    req
+    |> Req.merge(
+      method: :get,
+      url: "/:account_id/domains",
+      path_params_style: :colon,
+      path_params: [account_id: account_id],
+      params: params
+    )
+    |> Req.request()
+  end
+
+  defp decode_optional_boolean(data, key) do
+    case Map.fetch(data, key) do
+      :error -> {:ok, nil}
+      {:ok, value} when is_boolean(value) -> {:ok, value}
+      {:ok, _value} -> :error
+    end
+  end
 
   defp parse_optional_datetime(nil), do: {:ok, nil}
   defp parse_optional_datetime(value), do: parse_datetime(value)

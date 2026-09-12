@@ -344,6 +344,16 @@ arbitrary-precision decimal library.
   ReqDnsimple.Domain.create(client, account_id, name: "example.test")
 
 {:ok, domain} = ReqDnsimple.Domain.get(client, account_id, "example.com")
+
+{:ok, {domains, pagination}} =
+  ReqDnsimple.Domain.list_page(client, account_id,
+    name_like: "example",
+    sort: [name: :asc],
+    per_page: 30
+  )
+
+{:ok, all_domains} =
+  ReqDnsimple.Domain.list_all(client, account_id, registrant_id: 42)
 ```
 
 Domain creation adds the named domain and its hosted zone in one request and
@@ -351,7 +361,10 @@ returns a typed `ReqDnsimple.Domain` struct. DNSimple may charge for the DNS
 service subscription. It does not register or purchase the domain, change
 delegation, verify ownership, or issue a separate zone-creation request.
 Retrieval accepts a name or integer ID and returns registration state, privacy,
-renewal, and nullable expiry metadata.
+renewal, and nullable expiry metadata. `list_page/3` and its `list/3` alias
+return one typed page with string-keyed pagination metadata; `list_all/3`
+explicitly enumerates from page one while retaining `name_like` and
+`registrant_id` filters, `id`/`name`/`expiration` sorting, and page size.
 
 ### TLD extended attributes
 
@@ -792,7 +805,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.ZoneRecord` | `/zones/:zone/records`, `/zones/:zone/batch` | `list/4`, `get/4`, `create/4`, `update/5`, `delete/4`, `check_distribution/4`, `batch_change/4` |
 | `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/3` |
 | `ReqDnsimple.Contact` | `/contacts` | `list/3`, `get/3`, `delete/3` |
-| `ReqDnsimple.Domain` | `/domains`, `/domains/:domain` | `create/3`, `get/3`, `delete/3` |
+| `ReqDnsimple.Domain` | `/domains`, `/domains/:domain` | `create/3`, `get/3`, `list/3`, `list_page/3`, `list_all/3`, `delete/3` |
 | `ReqDnsimple.DomainResearch` | `/domains/research/status` | `get_status/3` |
 | `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records[/:ds_record]` | `create/4`, `get/4`, `list/4`, `list_page/4`, `list_all/4`, `delete/4` |
 | `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards[/:email_forward]` | `create/4`, `get/4`, `delete/4` |
