@@ -40,6 +40,14 @@ defmodule ReqDnsimple.CertificateTest do
     "expires_on" => nil,
     "contact_id" => nil
   }
+  @purchase_data %{
+    "id" => 101,
+    "certificate_id" => 202,
+    "state" => "new",
+    "auto_renew" => false,
+    "created_at" => "2026-09-01T10:00:00+02:00",
+    "updated_at" => "2026-09-01T10:01:00+02:00"
+  }
 
   describe "get/4" do
     test "getCertificate sends one bodyless request and decodes a pending certificate" do
@@ -402,6 +410,190 @@ defmodule ReqDnsimple.CertificateTest do
                  1010,
                  "example.test",
                  202
+               )
+    end
+  end
+
+  describe "purchase_letsencrypt/3 and purchase_letsencrypt/4" do
+    test "purchaseLetsencryptCertificate sends all attributes once and returns typed data" do
+      attrs = [
+        auto_renew: false,
+        name: "api",
+        alternate_names: ["docs.example.test", "status.example.test"],
+        signature_algorithm: "RSA"
+      ]
+
+      assert {:ok,
+              %ReqDnsimple.Certificate.Purchase{
+                id: 101,
+                certificate_id: 202,
+                state: "new",
+                auto_renew: false,
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:01:00Z]
+              }} =
+               ReqDnsimple.Certificate.purchase_letsencrypt(
+                 client(201, %{"data" => @purchase_data}),
+                 1010,
+                 "example.test",
+                 attrs
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/domains/example.test/certificates/letsencrypt",
+        %{},
+        Map.new(attrs)
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "purchaseLetsencryptCertificate leaves server defaults omitted" do
+      assert {:ok, %ReqDnsimple.Certificate.Purchase{certificate_id: 202}} =
+               ReqDnsimple.Certificate.purchase_letsencrypt(
+                 client(201, %{"data" => @purchase_data}),
+                 0,
+                 42
+               )
+
+      assert_request(:post, "/v2/0/domains/42/certificates/letsencrypt")
+      refute_received {:request, _request}
+    end
+
+    test "purchaseLetsencryptCertificate preserves apex, wildcard, empty, and false values" do
+      for {name, alternate_names} <- [{"", []}, {"*", []}] do
+        attrs = [name: name, alternate_names: alternate_names, auto_renew: false]
+
+        assert {:ok, %ReqDnsimple.Certificate.Purchase{auto_renew: false}} =
+                 ReqDnsimple.Certificate.purchase_letsencrypt(
+                   client(201, %{"data" => @purchase_data}),
+                   1010,
+                   "",
+                   attrs
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/domains//certificates/letsencrypt",
+          %{},
+          Map.new(attrs)
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "purchaseLetsencryptCertificate accepts every documented purchase state" do
+      for state <-
+            ~w(new purchased configured submitted issued rejected refunded cancelled requesting failed) do
+        body = %{"data" => Map.put(@purchase_data, "state", state)}
+
+        assert {:ok, %ReqDnsimple.Certificate.Purchase{state: ^state}} =
+                 ReqDnsimple.Certificate.purchase_letsencrypt(
+                   client(201, body),
+                   1010,
+                   "example.test"
+                 )
+
+        assert_request(:post, "/v2/1010/domains/example.test/certificates/letsencrypt")
+        refute_received {:request, _request}
+      end
+    end
+
+    test "purchaseLetsencryptCertificate rejects invalid inputs before HTTP" do
+      request = client(201, %{"data" => @purchase_data})
+
+      invalid_calls = [
+        {"1010", "example.test", []},
+        {nil, "example.test", []},
+        {1010, nil, []},
+        {1010, 1.5, []},
+        {1010, "example.test", [auto_renew: nil]},
+        {1010, "example.test", [auto_renew: 0]},
+        {1010, "example.test", [name: nil]},
+        {1010, "example.test", [name: 0]},
+        {1010, "example.test", [alternate_names: nil]},
+        {1010, "example.test", [alternate_names: ["valid", 0]]},
+        {1010, "example.test", [signature_algorithm: nil]},
+        {1010, "example.test", [signature_algorithm: "DSA"]},
+        {1010, "example.test", [unknown: true]},
+        {1010, "example.test", %{}}
+      ]
+
+      for {account_id, domain, attrs} <- invalid_calls do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Certificate.purchase_letsencrypt(
+                   request,
+                   account_id,
+                   domain,
+                   attrs
+                 )
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "purchaseLetsencryptCertificate preserves HTTP failures and disables retries" do
+      for status <- [400, 412, 401, 403, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"name" => ["is not available"]}
+        }
+
+        request = client(status, body) |> Req.merge(retry: :transient)
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Certificate.purchase_letsencrypt(
+                   request,
+                   1010,
+                   "example.test",
+                   name: "api"
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/domains/example.test/certificates/letsencrypt",
+          %{},
+          %{name: "api"}
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "purchaseLetsencryptCertificate returns explicit errors for malformed success" do
+      malformed_payloads = [
+        %{},
+        %{"data" => nil},
+        %{"data" => Map.delete(@purchase_data, "id")},
+        %{"data" => Map.put(@purchase_data, "id", "101")},
+        %{"data" => Map.put(@purchase_data, "certificate_id", nil)},
+        %{"data" => Map.put(@purchase_data, "state", "unknown")},
+        %{"data" => Map.put(@purchase_data, "auto_renew", nil)},
+        %{"data" => Map.put(@purchase_data, "created_at", "not-a-timestamp")},
+        %{"data" => Map.put(@purchase_data, "updated_at", nil)}
+      ]
+
+      for body <- malformed_payloads do
+        assert {:error, %{status: 201, response: ^body}} =
+                 ReqDnsimple.Certificate.purchase_letsencrypt(
+                   client(201, body),
+                   1010,
+                   "example.test"
+                 )
+
+        assert_request(:post, "/v2/1010/domains/example.test/certificates/letsencrypt")
+        refute_received {:request, _request}
+      end
+    end
+
+    test "purchaseLetsencryptCertificate preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Certificate.purchase_letsencrypt(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test"
                )
     end
   end

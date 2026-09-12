@@ -196,7 +196,25 @@ domain's registrar delegation.
   ReqDnsimple.ZoneRecord.check_distribution(client, account_id, "example.com", record_id)
 ```
 
-### Retrieve certificate material
+### Order and retrieve certificates
+
+```elixir
+{:ok, %ReqDnsimple.Certificate.Purchase{} = purchase} =
+  ReqDnsimple.Certificate.purchase_letsencrypt(
+    client,
+    account_id,
+    "example.com",
+    auto_renew: false,
+    name: "api",
+    alternate_names: ["docs.example.com"],
+    signature_algorithm: "RSA"
+  )
+```
+
+Without attributes, DNSimple's server defaults cover `www`. Custom names,
+subject-alternative names, and wildcards depend on the account plan. Ordering
+returns separate purchase and certificate IDs; it does not issue, download, or
+deploy the certificate automatically.
 
 ```elixir
 {:ok, %ReqDnsimple.Certificate{} = certificate} =

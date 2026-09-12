@@ -7,6 +7,14 @@ defmodule ReqDnsimple.Certificate do
       ReqDnsimple.Certificate.get(req, 1010, "example.test", 202)
       #=> {:ok, %ReqDnsimple.Certificate{}}
 
+      ReqDnsimple.Certificate.purchase_letsencrypt(req, 1010, "example.test",
+        auto_renew: false,
+        name: "api",
+        alternate_names: ["docs.example.test"],
+        signature_algorithm: "RSA"
+      )
+      #=> {:ok, %ReqDnsimple.Certificate.Purchase{}}
+
       ReqDnsimple.Certificate.download(req, 1010, "example.test", 202)
       #=> {:ok, %ReqDnsimple.Certificate.Download{}}
 
@@ -61,11 +69,98 @@ defmodule ReqDnsimple.Certificate do
     defstruct [:private_key]
   end
 
+  defmodule Purchase do
+    @moduledoc """
+    A Let's Encrypt certificate purchase awaiting separate issuance.
+    """
+
+    @type t :: %__MODULE__{
+            id: integer(),
+            certificate_id: integer(),
+            state: binary(),
+            auto_renew: boolean(),
+            created_at: DateTime.t(),
+            updated_at: DateTime.t()
+          }
+
+    defstruct [:id, :certificate_id, :state, :auto_renew, :created_at, :updated_at]
+  end
+
   @path_schema [
     account_id: [type: :integer, required: true],
     domain: [type: {:or, [:string, :integer]}, required: true],
     certificate_id: [type: :integer, required: true]
   ]
+
+  @purchase_path_schema [
+    account_id: [type: :integer, required: true],
+    domain: [type: {:or, [:string, :integer]}, required: true]
+  ]
+
+  @purchase_schema [
+    auto_renew: [type: :boolean],
+    name: [type: :string],
+    alternate_names: [type: {:list, :string}],
+    signature_algorithm: [type: {:in, ["ECDSA", "RSA"]}]
+  ]
+
+  @doc """
+  Orders a Let's Encrypt certificate without issuing or downloading it.
+
+  By default DNSimple covers `www`; custom names, SANs, and wildcards depend on
+  the account plan. Optional settings are `:auto_renew`, `:name`,
+  `:alternate_names`, and `:signature_algorithm` (`"ECDSA"` or `"RSA"`).
+  Omitted settings are left to DNSimple's server defaults, while explicit
+  `false`, empty names, and empty alternate-name lists are preserved.
+
+  Returns a typed `Purchase` containing both the order ID and the distinct
+  certificate ID. The function sends exactly one request and does not issue,
+  download, deploy, or otherwise follow up on the certificate.
+  """
+  @spec purchase_letsencrypt(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer(),
+          keyword()
+        ) ::
+          {:ok, Purchase.t()} | {:error, term()}
+  def purchase_letsencrypt(req, account_id, domain, attrs \\ []) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain],
+             @purchase_path_schema
+           ),
+         {:ok, validated_attrs} <- validate_purchase_attrs(attrs) do
+      request_options = [
+        method: :post,
+        url: "/:account_id/domains/:domain/certificates/letsencrypt",
+        path_params_style: :colon,
+        path_params: [account_id: account_id, domain: domain],
+        retry: false
+      ]
+
+      request_options =
+        if validated_attrs == [] do
+          request_options
+        else
+          Keyword.put(request_options, :json, Map.new(validated_attrs))
+        end
+
+      case Req.request(Req.merge(req, request_options)) do
+        {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
+          case decode_purchase(data) do
+            {:ok, purchase} -> {:ok, purchase}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
 
   @doc """
   Retrieves certificate metadata by account, domain name or ID, and certificate ID.
@@ -219,6 +314,55 @@ defmodule ReqDnsimple.Certificate do
       end
     end
   end
+
+  defp validate_purchase_attrs(attrs) when is_list(attrs) do
+    NimbleOptions.validate(attrs, @purchase_schema)
+  end
+
+  defp validate_purchase_attrs(attrs) do
+    {:error,
+     %NimbleOptions.ValidationError{
+       message: "expected a keyword list",
+       value: attrs
+     }}
+  end
+
+  defp decode_purchase(%{
+         "id" => id,
+         "certificate_id" => certificate_id,
+         "state" => state,
+         "auto_renew" => auto_renew,
+         "created_at" => created_at,
+         "updated_at" => updated_at
+       })
+       when is_integer(id) and is_integer(certificate_id) and
+              state in [
+                "new",
+                "purchased",
+                "configured",
+                "submitted",
+                "issued",
+                "rejected",
+                "refunded",
+                "cancelled",
+                "requesting",
+                "failed"
+              ] and is_boolean(auto_renew) do
+    with {:ok, created_at} <- parse_datetime(created_at),
+         {:ok, updated_at} <- parse_datetime(updated_at) do
+      {:ok,
+       %Purchase{
+         id: id,
+         certificate_id: certificate_id,
+         state: state,
+         auto_renew: auto_renew,
+         created_at: created_at,
+         updated_at: updated_at
+       }}
+    end
+  end
+
+  defp decode_purchase(_data), do: :error
 
   defp decode_private_key(%{"private_key" => private_key}) when is_binary(private_key) do
     {:ok, %PrivateKey{private_key: private_key}}

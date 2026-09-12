@@ -6115,7 +6115,7 @@
       "method": "POST",
       "path": "/{account}/domains/{domain}/certificates/letsencrypt",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-079",
       "br_issue_id": "bd-lgq",
       "proposed_interfaces": [
@@ -6169,8 +6169,20 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "purchase_letsencrypt",
+          "arity": 4,
+          "arities": [
+            3,
+            4
+          ]
+        }
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/certificate_test.exs"
+      ]
     },
     {
       "operation_id": "purchaseRenewalLetsencryptCertificate",
