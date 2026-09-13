@@ -1137,21 +1137,28 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple` | Client, `/whoami`, apex NS record enumeration | `new_client/1`, `whoami/1`, `token_type/1`, `ns_records/3` |
 | `ReqDnsimple.OAuth` | `/oauth/access_token` | `exchange_code/2` |
 | `ReqDnsimple.Account` | `/accounts` | `list/1` |
-| `ReqDnsimple.Zone` | `/zones` | `list/3`, `get/3`, `activate/3`, `deactivate/3`, `update_ns_records/4`, `get_zone_file/3`, `check_zone_distribution/3` |
-| `ReqDnsimple.ZoneRecord` | `/zones/:zone/records`, `/zones/:zone/batch` | `list/4`, `get/4`, `create/4`, `update/5`, `delete/4`, `check_distribution/4`, `batch_change/4` |
-| `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/3` |
-| `ReqDnsimple.Contact` | `/contacts` | `create/3`, `update/4`, `list/3`, `get/3`, `delete/3` |
+| `ReqDnsimple.Zone` | `/zones` | `list/2`, `list/3`, `list_page/2`, `list_page/3`, `list_all/2`, `list_all/3`, `get/3`, `activate/3`, `deactivate/3`, `update_ns_records/4`, `get_zone_file/3`, `check_zone_distribution/3` |
+| `ReqDnsimple.ZoneRecord` | `/zones/:zone/records`, `/zones/:zone/batch` | `list/3`, `list/4`, `list_page/3`, `list_page/4`, `list_all/3`, `list_all/4`, `get/4`, `create/4`, `update/5`, `delete/4`, `check_distribution/4`, `batch_change/4` |
+| `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/2`, `list/3`, `list_page/2`, `list_page/3`, `list_all/2`, `list_all/3` |
+| `ReqDnsimple.Contact` | `/contacts` | `create/3`, `update/4`, `list/2`, `list/3`, `list_page/2`, `list_page/3`, `list_all/2`, `list_all/3`, `get/3`, `delete/3` |
 | `ReqDnsimple.Domain` | `/domains`, `/domains/:domain` | `create/3`, `get/3`, `list/3`, `list_page/3`, `list_all/3`, `delete/3` |
 | `ReqDnsimple.DomainResearch` | `/domains/research/status` | `get_status/3` |
+| `ReqDnsimple.DnsAnalytics` | `/dns_analytics` | `query/2`, `query/3`, `list_page/2`, `list_page/3`, `list_all/2`, `list_all/3` |
+| `ReqDnsimple.Dnssec` | `/domains/:domain/dnssec` | `get/3`, `enable/3`, `disable/3` |
 | `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records[/:ds_record]` | `create/4`, `get/4`, `list/4`, `list_page/4`, `list_all/4`, `delete/4` |
-| `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards[/:email_forward]` | `create/4`, `get/4`, `delete/4` |
+| `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards[/:email_forward]` | `create/4`, `list/3`, `list/4`, `list_page/3`, `list_page/4`, `list_all/3`, `list_all/4`, `get/4`, `delete/4` |
 | `ReqDnsimple.DomainPush` | `/domains/:domain/pushes`, `/pushes[/:push]` | `initiate/4`, `list/3`, `list_page/3`, `list_all/3`, `accept/4`, `reject/3` |
 | `ReqDnsimple.VanityNameServer` | `/vanity/:domain` | `enable/3`, `disable/3` |
 | `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `get_prices/3`, `get_transfer_lock/3`, `enable_transfer_lock/3`, `disable_transfer_lock/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `enable_auto_renewal/3`, `enable_whois_privacy/3`, `disable_whois_privacy/3`, `register/4`, `transfer/4`, `renew/3`, `renew/4`, `restore/3`, `restore/4`, `get_delegation/3`, `change_delegation/4` |
+| `ReqDnsimple.RegistrantChange` | `/registrar/registrant_changes[/:registrant_change]` | `create/3`, `get/3`, `list/2`, `list/3`, `list_page/2`, `list_page/3`, `list_all/2`, `list_all/3`, `cancel/3` |
+| `ReqDnsimple.Certificate` | `/domains/:domain/certificates` | `purchase_letsencrypt/3`, `purchase_letsencrypt/4`, `purchase_letsencrypt_renewal/4`, `purchase_letsencrypt_renewal/5`, `issue_letsencrypt/4`, `issue_letsencrypt_renewal/5`, `list/3`, `list/4`, `list_page/3`, `list_page/4`, `list_all/3`, `list_all/4`, `get/4`, `download/4`, `get_private_key/4` |
 | `ReqDnsimple.Tld` | `/tlds[/:tld]`, `/tlds/:tld/extended_attributes` | `get/2`, `list/1`, `list/2`, `list_page/1`, `list_page/2`, `list_all/1`, `list_all/2`, `list_extended_attributes/2` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries` | `create/3`, `get/3`, `list/3`, `list_page/3`, `list_all/3`, `link/4`, `unlink/4`, `delete/3`, `from_json/1` |
 | `ReqDnsimple.SecondaryZone` | `/secondary_dns/zones` | `create/3` |
 | `ReqDnsimple.Service` | `/services[/:service]`, `/domains/:domain/services[/:service]` | `get/2`, `list/1`, `list/2`, `list_page/1`, `list_page/2`, `list_all/1`, `list_all/2`, `list_applied/3`, `list_applied/4`, `list_page_applied/3`, `list_page_applied/4`, `list_all_applied/3`, `list_all_applied/4`, `apply/4`, `apply/5`, `unapply/4` |
+| `ReqDnsimple.Template` | `/templates[/:template]`, `/domains/:domain/templates/:template` | `create/3`, `get/3`, `update/4`, `list/2`, `list/3`, `list_page/2`, `list_page/3`, `list_all/2`, `list_all/3`, `apply/4`, `delete/3` |
+| `ReqDnsimple.TemplateRecord` | `/templates/:template/records[/:record]` | `create/4`, `get/4`, `list/3`, `list/4`, `list_page/3`, `list_page/4`, `list_all/3`, `list_all/4`, `delete/4` |
+| `ReqDnsimple.Webhook` | `/webhooks[/:webhook]` | `list/2`, `list/3`, `create/3`, `get/3`, `delete/3` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |
 | `ReqDnsimple.Helper` | Req utilities | `append/2` (URL/param merging) |
 

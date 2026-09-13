@@ -52,11 +52,15 @@ Different modules use slightly different return conventions:
 |--------|---------|---------|
 | `OAuth.exchange_code/2` | `{:ok, %OAuth.Token{}}` | `{:error, reason}` |
 | `Account.list/1` | `[%Account{}, ...]` | `{:error, reason}` |
-| `Zone.list/3` | `{:ok, [%Zone{}, ...]}` | `{:error, reason}` |
+| `Zone.list/2,3` | `{:ok, [%Zone{}, ...]}` | `{:error, reason}` |
+| `Zone.list_page/2,3` | `{:ok, {[%Zone{}, ...], pagination}}` | `{:error, reason}` |
+| `Zone.list_all/2,3` | `{:ok, [%Zone{}, ...]}` | `{:error, reason}` |
 | `Zone.get/3` | `{:ok, %Zone{}}` | `{:error, reason}` |
 | `Zone.activate/3` | `{:ok, %Zone{}}` | `{:error, reason}` |
 | `Zone.deactivate/3` | `{:ok, %Zone{}}` | `{:error, reason}` |
-| `ZoneRecord.list/4` | `{:ok, {[%ZoneRecord{}, ...], pagination}}` | `{:error, reason}` |
+| `ZoneRecord.list/3,4` | `{:ok, {[%ZoneRecord{}, ...], pagination}}` | `{:error, reason}` |
+| `ZoneRecord.list_page/3,4` | `{:ok, {[%ZoneRecord{}, ...], pagination}}` | `{:error, reason}` |
+| `ZoneRecord.list_all/3,4` | `{:ok, [%ZoneRecord{}, ...]}` | `{:error, reason}` |
 | `ZoneRecord.create/4` | `{:ok, %ZoneRecord{}}` | `{:error, reason}` |
 | `ZoneRecord.update/5` | `{:ok, %ZoneRecord{}}` | `{:error, reason}` |
 | `ZoneRecord.delete/4` | `:ok` | `{:error, reason}` |
@@ -65,7 +69,9 @@ Different modules use slightly different return conventions:
 | `ZoneRecord.batch_change/4` | `{:ok, %ZoneRecord.BatchResult{}}` | `{:error, reason}` |
 | `Contact.create/3` | `{:ok, %Contact{}}` | `{:error, reason}` |
 | `Contact.update/4` | `{:ok, %Contact{}}` | `{:error, reason}` |
-| `Contact.list/3` | `{:ok, [%Contact{}, ...]}` | `{:error, reason}` |
+| `Contact.list/2,3` | `{:ok, [%Contact{}, ...]}` | `{:error, reason}` |
+| `Contact.list_page/2,3` | `{:ok, {[%Contact{}, ...], pagination}}` | `{:error, reason}` |
+| `Contact.list_all/2,3` | `{:ok, [%Contact{}, ...]}` | `{:error, reason}` |
 | `Contact.get/3` | `{:ok, %Contact{}}` | `{:error, :not_found}` |
 | `Contact.delete/3` | `:ok` | `{:error, reason}` |
 | `Domain.create/3` | `{:ok, %Domain{}}` | `{:error, reason}` |
@@ -100,6 +106,8 @@ Different modules use slightly different return conventions:
 | `DelegationSignerRecord.delete/4` | `:ok` | `{:error, reason}` |
 | `EmailForward.create/4` | `{:ok, %EmailForward{}}` | `{:error, reason}` |
 | `EmailForward.get/4` | `{:ok, %EmailForward{}}` | `{:error, reason}` |
+| `EmailForward.list/3,4` and `EmailForward.list_page/3,4` | `{:ok, {[%EmailForward{}], pagination}}` | `{:error, reason}` |
+| `EmailForward.list_all/3,4` | `{:ok, [%EmailForward{}]}` | `{:error, reason}` |
 | `EmailForward.delete/4` | `:ok` | `{:error, reason}` |
 | `Webhook.list/2,3` | `{:ok, [%Webhook{}]}` | `{:error, reason}` |
 | `Webhook.create/3` | `{:ok, %Webhook{}}` | `{:error, reason}` |
@@ -137,7 +145,9 @@ Different modules use slightly different return conventions:
 | `Registrar.renew/3,4` | `{:ok, %Registrar.Renewal{}}` | `{:error, reason}` |
 | `Registrar.restore/3,4` | `{:ok, %Registrar.Restore{}}` | `{:error, reason}` |
 | `Registrar.get_delegation/3` | `{:ok, [String.t()]}` | `{:error, reason}` |
-| `BillingCharge.list/3` | `{:ok, [%BillingCharge{}, ...]}` | `{:error, reason}` |
+| `BillingCharge.list/2,3` | `{:ok, [%BillingCharge{}, ...]}` | `{:error, reason}` |
+| `BillingCharge.list_page/2,3` | `{:ok, {[%BillingCharge{}, ...], pagination}}` | `{:error, reason}` |
+| `BillingCharge.list_all/2,3` | `{:ok, [%BillingCharge{}, ...]}` | `{:error, reason}` |
 | `Zone.get_zone_file/3` | `{:ok, binary()}` | `{:error, reason}` |
 | `Zone.check_zone_distribution/3` | `{:ok, boolean()}` | `{:error, reason}` |
 | `Zone.update_ns_records/4` | `{:ok, [%ZoneRecord{}, ...]}` | `{:error, reason}` |

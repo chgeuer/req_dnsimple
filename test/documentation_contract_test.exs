@@ -13,6 +13,23 @@ defmodule ReqDnsimple.DocumentationContractTest do
     getDomainRestore
     getDomainTransfer
   )
+  @catalog_modules ~w(
+    ReqDnsimple.Certificate
+    ReqDnsimple.DnsAnalytics
+    ReqDnsimple.Dnssec
+    ReqDnsimple.RegistrantChange
+    ReqDnsimple.Template
+    ReqDnsimple.TemplateRecord
+    ReqDnsimple.Webhook
+  )
+  @collection_interfaces %{
+    "ReqDnsimple.BillingCharge" =>
+      ~w(list/2 list/3 list_page/2 list_page/3 list_all/2 list_all/3),
+    "ReqDnsimple.Contact" => ~w(list/2 list/3 list_page/2 list_page/3 list_all/2 list_all/3),
+    "ReqDnsimple.EmailForward" => ~w(list/3 list/4 list_page/3 list_page/4 list_all/3 list_all/4),
+    "ReqDnsimple.Zone" => ~w(list/2 list/3 list_page/2 list_page/3 list_all/2 list_all/3),
+    "ReqDnsimple.ZoneRecord" => ~w(list/3 list/4 list_page/3 list_page/4 list_all/3 list_all/4)
+  }
 
   test "public guides describe bounded coverage and the versioned inventory states" do
     readme = File.read!(Path.join(@root, "README.md"))
@@ -81,6 +98,28 @@ defmodule ReqDnsimple.DocumentationContractTest do
       assert operation["implementation"] == "out-of-scope"
       assert operation["implemented_interfaces"] == []
       assert operation["contract_tests"] == []
+    end
+  end
+
+  test "public guides catalog supported modules and collection interfaces" do
+    readme = File.read!(Path.join(@root, "README.md"))
+    usage_rules = File.read!(Path.join(@root, "usage-rules.md"))
+
+    for module <- @catalog_modules do
+      assert readme =~ "| `#{module}` |", "README API catalog omits #{module}"
+    end
+
+    for {module, interfaces} <- @collection_interfaces do
+      readme_row = readme_catalog_row(readme, module)
+      short_module = String.replace_prefix(module, "ReqDnsimple.", "")
+
+      for interface <- interfaces do
+        assert interface_documented?(readme_row, nil, interface),
+               "README API catalog omits #{module}.#{interface}"
+
+        assert interface_documented?(usage_rules, short_module, interface),
+               "usage rules omit #{module}.#{interface}"
+      end
     end
   end
 
@@ -227,5 +266,19 @@ defmodule ReqDnsimple.DocumentationContractTest do
       [file] -> {file, nil}
       [file, label] -> {file, label}
     end
+  end
+
+  defp readme_catalog_row(readme, module) do
+    Enum.find(String.split(readme, "\n"), "", &String.starts_with?(&1, "| `#{module}` |"))
+  end
+
+  defp interface_documented?(documentation, module, interface) do
+    [function, arity] = String.split(interface, "/")
+    prefix = if module, do: "#{Regex.escape(module)}\\.", else: ""
+
+    Regex.match?(
+      Regex.compile!("`#{prefix}#{Regex.escape(function)}/(?:\\d+,)*#{arity}(?:,\\d+)*`"),
+      documentation
+    )
   end
 end
