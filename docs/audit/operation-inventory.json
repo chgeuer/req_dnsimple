@@ -6208,7 +6208,7 @@
       "method": "GET",
       "path": "/{account}/templates",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-075",
       "br_issue_id": "bd-1x9",
       "proposed_interfaces": [
@@ -6348,8 +6348,45 @@
           "alias_contract": "Delegate once to the explicit page operation, retaining the same payload/pagination pair; never enumerate implicitly."
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "list_page",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ]
+        },
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "list_all",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ]
+        },
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "list",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ]
+        }
+      ],
+      "contract_tests": [
+        {
+          "file": "test/req_dnsimple/template_test.exs",
+          "describe": "list_page/3 and list/3"
+        },
+        {
+          "file": "test/req_dnsimple/template_test.exs",
+          "describe": "list_all/3"
+        }
+      ]
     },
     {
       "operation_id": "listTlds",

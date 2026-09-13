@@ -391,6 +391,24 @@ arbitrary-precision decimal library.
 :ok = ReqDnsimple.Contact.delete(client, account_id, contact_id)
 ```
 
+### DNS templates
+
+```elixir
+{:ok, {templates, pagination}} =
+  ReqDnsimple.Template.list_page(client, account_id,
+    sort: [id: :asc, name: :desc],
+    page: 2,
+    per_page: 30
+  )
+
+{:ok, all_templates} =
+  ReqDnsimple.Template.list_all(client, account_id, sort: [sid: :asc])
+```
+
+`list_page/3` and its `list/3` alias fetch one page with string-keyed
+pagination metadata. `list_all/3` explicitly enumerates from page one while
+retaining sorting and `per_page`.
+
 ### Domains
 
 ```elixir

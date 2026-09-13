@@ -73,6 +73,8 @@ Different modules use slightly different return conventions:
 | `Service.list_all/1,2` | `{:ok, [%Service{}, ...]}` | `{:error, reason}` |
 | `Service.apply/4,5` | `:ok` | `{:error, reason}` |
 | `Template.create/3` | `{:ok, %Template{}}` | `{:error, reason}` |
+| `Template.list_page/2,3` | `{:ok, {[%Template{}], pagination}}` | `{:error, reason}` |
+| `Template.list_all/2,3` | `{:ok, [%Template{}]}` | `{:error, reason}` |
 | `Template.apply/4` | `:ok` | `{:error, reason}` |
 | `Template.delete/3` | `:ok` | `{:error, reason}` |
 | `TemplateRecord.create/4` | `{:ok, %TemplateRecord{}}` | `{:error, reason}` |
@@ -281,11 +283,13 @@ not contact the callback URL, inspect deliveries, or list registrations first.
   library when arithmetic is required. Manual-charge item product identifiers and
   references may be `nil`.
 - `ReqDnsimple.Contact` — Contact listing and retrieval. 14 contact fields + timestamps.
-- `ReqDnsimple.Template` — Creating, retrieving, applying, or deleting an account
-  template. Creation requires a short identifier and name, accepts an optional
-  description, and returns a typed template without creating records or applying
-  it to a domain. Retrieval returns a typed template with parsed timestamps.
-  Domain and template identifiers accept short names or integer IDs.
+- `ReqDnsimple.Template` — Creating, listing, retrieving, applying, or deleting an
+  account template. Listing supports explicit pages or deliberate complete
+  enumeration, with ordered `id`/`name`/`sid` sorting. Creation requires a short
+  identifier and name, accepts an optional description, and returns a typed
+  template without creating records or applying it to a domain. Retrieval returns
+  a typed template with parsed timestamps. Domain and template identifiers accept
+  short names or integer IDs.
 - `ReqDnsimple.TemplateRecord` — Creating, retrieving, listing, or deleting records
   from an account template by template short name or ID. Listing supports explicit
   pages or deliberate complete enumeration, with ordered `id`/`name`/`content`/`type`

@@ -16,6 +16,24 @@ defmodule ReqDnsimple.Template do
   Creating a template sends exactly one request. It does not create template
   records or apply the template to a domain.
 
+  List one page or deliberately enumerate every page:
+
+      {:ok, {templates, pagination}} =
+        ReqDnsimple.Template.list_page(
+          client,
+          1010,
+          sort: [id: :asc, name: :desc],
+          page: 2,
+          per_page: 30
+        )
+
+      {:ok, templates} =
+        ReqDnsimple.Template.list_all(
+          client,
+          1010,
+          sort: [sid: :asc]
+        )
+
   Retrieve an account template by short name or ID:
 
       {:ok, template} =
@@ -73,6 +91,14 @@ defmodule ReqDnsimple.Template do
     name: [type: :string, required: true],
     description: [type: :string]
   ]
+  @list_schema [
+    sort: [
+      type: {:custom, ReqDnsimple, :validate_sort, [[:id, :name, :sid]]},
+      doc: "Sort by id, name, or sid"
+    ],
+    page: [type: :pos_integer, doc: "Page number for pagination"],
+    per_page: [type: {:in, 1..100}, doc: "Number of templates per page"]
+  ]
 
   @doc """
   Creates an account template from a required short identifier and name.
@@ -111,6 +137,60 @@ defmodule ReqDnsimple.Template do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Lists one page of account templates.
+
+  Supports ordered `:sort` terms for `:id`, `:name`, and `:sid`, plus `:page`
+  and `:per_page`. The returned pagination metadata retains its string keys.
+  """
+  @spec list_page(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req, account_id, opts \\ []) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate([account_id: account_id], @create_path_schema),
+         {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_schema) do
+      case request_list(req, account_id, validated_opts) do
+        {:ok,
+         %Req.Response{
+           status: 200,
+           body: %{"data" => data, "pagination" => pagination}
+         } = response} ->
+          case decode_page(data, pagination) do
+            {:ok, result} -> {:ok, result}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Lists one page of account templates.
+
+  This is a convenience alias for `list_page/3`; it never enumerates additional
+  pages implicitly.
+  """
+  @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list(req, account_id, opts \\ []), do: list_page(req, account_id, opts)
+
+  @doc """
+  Enumerates every page of account templates in server order.
+
+  Enumeration always begins at page one, so an explicit `:page` option is
+  rejected. Sorting and `:per_page` are retained for every request.
+  """
+  @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
+          {:ok, [t()]} | {:error, term()}
+  def list_all(req, account_id, opts \\ []) do
+    ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, &1))
   end
 
   @doc """
@@ -225,6 +305,60 @@ defmodule ReqDnsimple.Template do
           {:error, error}
       end
     end
+  end
+
+  defp decode_page(data, pagination) when is_list(data) do
+    with {:ok, templates} <- decode_many(data),
+         true <- valid_pagination?(pagination) do
+      {:ok, {templates, pagination}}
+    else
+      _error -> :error
+    end
+  end
+
+  defp decode_page(_data, _pagination), do: :error
+
+  defp decode_many(data) do
+    Enum.reduce_while(data, {:ok, []}, fn item, {:ok, templates} ->
+      case decode(item) do
+        {:ok, template} -> {:cont, {:ok, [template | templates]}}
+        :error -> {:halt, :error}
+      end
+    end)
+    |> case do
+      {:ok, templates} -> {:ok, Enum.reverse(templates)}
+      :error -> :error
+    end
+  end
+
+  defp valid_pagination?(%{
+         "current_page" => current_page,
+         "per_page" => per_page,
+         "total_entries" => total_entries,
+         "total_pages" => total_pages
+       })
+       when is_integer(current_page) and current_page >= 0 and is_integer(per_page) and
+              per_page > 0 and is_integer(total_entries) and total_entries >= 0 and
+              is_integer(total_pages) and total_pages >= 0,
+       do: true
+
+  defp valid_pagination?(_pagination), do: false
+
+  defp request_list(req, account_id, opts) do
+    params =
+      opts
+      |> ReqDnsimple.convert_sort_to_string()
+      |> Map.new()
+
+    req
+    |> Req.merge(
+      method: :get,
+      url: "/:account_id/templates",
+      path_params_style: :colon,
+      path_params: [account_id: account_id],
+      params: params
+    )
+    |> Req.request()
   end
 
   defp decode(%{

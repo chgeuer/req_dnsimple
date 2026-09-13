@@ -3,6 +3,258 @@ defmodule ReqDnsimple.TemplateTest do
 
   import ReqDnsimple.TestSupport
 
+  describe "list_page/3 and list/3" do
+    test "listTemplates sends ordered options once and returns typed data" do
+      pagination = %{
+        "current_page" => 2,
+        "per_page" => 1,
+        "total_entries" => 2,
+        "total_pages" => 2
+      }
+
+      templates = [
+        template_body()["data"],
+        template_body()["data"] |> Map.put("id", 2) |> Map.put("sid", "second-template")
+      ]
+
+      assert {:ok,
+              {[
+                 %ReqDnsimple.Template{
+                   id: 1,
+                   account_id: 1010,
+                   name: "Offline template",
+                   sid: "offline-template",
+                   description: "Offline example",
+                   created_at: ~U[2026-09-01 08:00:00Z],
+                   updated_at: ~U[2026-09-01 08:30:00Z]
+                 },
+                 %ReqDnsimple.Template{id: 2, sid: "second-template"}
+               ], ^pagination}} =
+               ReqDnsimple.Template.list_page(
+                 client(200, %{"data" => templates, "pagination" => pagination}),
+                 1010,
+                 sort: [id: :asc, name: :desc, sid: :asc],
+                 page: 2,
+                 per_page: 1
+               )
+
+      assert_request(
+        :get,
+        "/v2/1010/templates",
+        %{"sort" => "id:asc,name:desc,sid:asc", "page" => 2, "per_page" => 1},
+        nil
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "listTemplates alias requests one empty page without adding defaults" do
+      pagination = %{
+        "current_page" => 1,
+        "per_page" => 30,
+        "total_entries" => 0,
+        "total_pages" => 0
+      }
+
+      assert {:ok, {[], ^pagination}} =
+               ReqDnsimple.Template.list(
+                 client(200, %{"data" => [], "pagination" => pagination}),
+                 0
+               )
+
+      assert_request(:get, "/v2/0/templates", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "listTemplates rejects invalid paths and options before HTTP" do
+      request =
+        client(200, %{
+          "data" => [],
+          "pagination" => %{
+            "current_page" => 1,
+            "per_page" => 30,
+            "total_entries" => 0,
+            "total_pages" => 0
+          }
+        })
+
+      for {account_id, opts} <- [
+            {"1010", []},
+            {nil, []},
+            {1010, [:invalid]},
+            {1010, [{:name}]},
+            {1010, [unknown: true]},
+            {1010, [sort: "id:asc"]},
+            {1010, [sort: [created_at: :asc]]},
+            {1010, [sort: [id: :sideways]]},
+            {1010, [page: 0]},
+            {1010, [per_page: 0]},
+            {1010, [per_page: 101]}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Template.list_page(request, account_id, opts)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "listTemplates preserves HTTP and transport failures" do
+      for status <- [401, 403, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"template" => ["is unavailable"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Template.list_page(client(status, body), 1010)
+
+        assert_request(:get, "/v2/1010/templates", %{}, nil)
+        refute_received {:request, _request}
+      end
+
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Template.list_page(transport_error_client(:timeout), 1010)
+    end
+
+    test "listTemplates rejects malformed successful responses" do
+      pagination = %{
+        "current_page" => 1,
+        "per_page" => 30,
+        "total_entries" => 1,
+        "total_pages" => 1
+      }
+
+      template = template_body()["data"]
+
+      malformed_bodies = [
+        %{},
+        %{"data" => nil, "pagination" => pagination},
+        %{"data" => %{}, "pagination" => pagination},
+        %{"data" => [Map.delete(template, "description")], "pagination" => pagination},
+        %{"data" => [Map.put(template, "description", nil)], "pagination" => pagination},
+        %{"data" => [Map.put(template, "created_at", "invalid")], "pagination" => pagination},
+        %{"data" => [template]},
+        %{"data" => [template], "pagination" => nil},
+        %{"data" => [template], "pagination" => Map.delete(pagination, "total_entries")},
+        %{"data" => [template], "pagination" => %{pagination | "per_page" => 0}}
+      ]
+
+      for body <- malformed_bodies do
+        assert {:error, %{status: 200, response: ^body}} =
+                 ReqDnsimple.Template.list_page(client(200, body), 1010)
+
+        assert_request(:get, "/v2/1010/templates", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+  end
+
+  describe "list_all/3" do
+    test "enumerates from page one while preserving options and server order" do
+      first = template_body()["data"]
+      second = template_body()["data"] |> Map.put("id", 2) |> Map.put("sid", "second-template")
+
+      pages = %{
+        1 =>
+          {200,
+           %{
+             "data" => [first],
+             "pagination" => %{
+               "current_page" => 1,
+               "per_page" => 1,
+               "total_entries" => 2,
+               "total_pages" => 2
+             }
+           }},
+        2 =>
+          {200,
+           %{
+             "data" => [second],
+             "pagination" => %{
+               "current_page" => 2,
+               "per_page" => 1,
+               "total_entries" => 2,
+               "total_pages" => 2
+             }
+           }}
+      }
+
+      assert {:ok,
+              [
+                %ReqDnsimple.Template{id: 1, sid: "offline-template"},
+                %ReqDnsimple.Template{id: 2, sid: "second-template"}
+              ]} =
+               ReqDnsimple.Template.list_all(
+                 page_client(pages),
+                 1010,
+                 sort: [sid: :desc, name: :asc],
+                 per_page: 1
+               )
+
+      query = %{"sort" => "sid:desc,name:asc", "per_page" => 1}
+      assert_request(:get, "/v2/1010/templates", Map.put(query, "page", 1))
+      assert_request(:get, "/v2/1010/templates", Map.put(query, "page", 2))
+      refute_received {:request, _request}
+    end
+
+    test "rejects explicit pages and malformed option containers before HTTP" do
+      request =
+        client(200, %{
+          "data" => [],
+          "pagination" => %{
+            "current_page" => 1,
+            "per_page" => 30,
+            "total_entries" => 0,
+            "total_pages" => 0
+          }
+        })
+
+      assert {:error, {:invalid_option, :page}} =
+               ReqDnsimple.Template.list_all(request, 1010, page: 2)
+
+      for opts <- [[:invalid], [{:name}]] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Template.list_all(request, 1010, opts)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "aborts on later-page failures and rejects non-progressing pagination" do
+      first_page = %{
+        "current_page" => 1,
+        "per_page" => 1,
+        "total_entries" => 2,
+        "total_pages" => 2
+      }
+
+      http_client =
+        page_client(%{
+          1 => {200, %{"data" => [template_body()["data"]], "pagination" => first_page}},
+          2 => {503, %{"message" => "unavailable"}}
+        })
+
+      assert {:error, %{status: 503, response: %{"message" => "unavailable"}}} =
+               ReqDnsimple.Template.list_all(http_client, 1010)
+
+      assert_request(:get, "/v2/1010/templates", %{"page" => 1})
+      assert_request(:get, "/v2/1010/templates", %{"page" => 2})
+
+      assert {:error, {:invalid_pagination, ^first_page}} =
+               ReqDnsimple.Template.list_all(
+                 page_client(%{
+                   1 => {200, %{"data" => [template_body()["data"]], "pagination" => first_page}},
+                   2 => {200, %{"data" => [template_body()["data"]], "pagination" => first_page}}
+                 }),
+                 1010
+               )
+
+      assert_request(:get, "/v2/1010/templates", %{"page" => 1})
+      assert_request(:get, "/v2/1010/templates", %{"page" => 2})
+      refute_received {:request, _request}
+    end
+  end
+
   describe "create/3" do
     test "createTemplate sends all attributes once and returns the typed template" do
       assert {:ok,
@@ -449,5 +701,19 @@ defmodule ReqDnsimple.TemplateTest do
         "updated_at" => "2026-09-01T10:30:00+02:00"
       }
     }
+  end
+
+  defp page_client(pages) do
+    test_pid = self()
+
+    adapter = fn request ->
+      send(test_pid, {:request, request})
+      page = request.url.query |> URI.decode_query() |> Map.fetch!("page") |> String.to_integer()
+      {status, body} = Map.fetch!(pages, page)
+      {request, %Req.Response{status: status, body: body}}
+    end
+
+    ReqDnsimple.new_client("dnsimple_u_fake-token")
+    |> Req.merge(adapter: adapter, retry: false)
   end
 end
