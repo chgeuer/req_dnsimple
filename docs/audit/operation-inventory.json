@@ -4557,7 +4557,7 @@
       "method": "GET",
       "path": "/{account}/domains/{domain}/services",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-066",
       "br_issue_id": "bd-2oj",
       "proposed_interfaces": [
@@ -4712,8 +4712,24 @@
           "alias_contract": "Delegate once to the explicit page operation, retaining the same payload/pagination pair; never enumerate implicitly."
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.Service.list_page_applied/3",
+        "ReqDnsimple.Service.list_page_applied/4",
+        "ReqDnsimple.Service.list_applied/3",
+        "ReqDnsimple.Service.list_applied/4",
+        "ReqDnsimple.Service.list_all_applied/3",
+        "ReqDnsimple.Service.list_all_applied/4"
+      ],
+      "contract_tests": [
+        {
+          "file": "test/req_dnsimple/service_test.exs",
+          "describe": "list_page_applied/4 and list_applied/4"
+        },
+        {
+          "file": "test/req_dnsimple/service_test.exs",
+          "describe": "list_all_applied/4"
+        }
+      ]
     },
     {
       "operation_id": "listDomainDelegationSignerRecords",

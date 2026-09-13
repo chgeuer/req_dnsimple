@@ -6,6 +6,16 @@ defmodule ReqDnsimple.Service do
 
       {:ok, service} = ReqDnsimple.Service.get(client, "service-sid")
 
+  List one page of services applied to a domain, including pagination:
+
+      {:ok, {services, pagination}} =
+        ReqDnsimple.Service.list_page_applied(client, 1010, "example.test", per_page: 30)
+
+  Explicitly enumerate every applied service:
+
+      {:ok, services} =
+        ReqDnsimple.Service.list_all_applied(client, 1010, "example.test", per_page: 30)
+
   Apply a service with its defaults:
 
       :ok = ReqDnsimple.Service.apply(client, 1010, "example.test", "service-sid")
@@ -79,6 +89,16 @@ defmodule ReqDnsimple.Service do
     service: [type: {:or, [:string, :integer]}, required: true]
   ]
 
+  @applied_path_schema [
+    account_id: [type: :integer, required: true],
+    domain: [type: {:or, [:string, :integer]}, required: true]
+  ]
+
+  @list_applied_schema [
+    page: [type: :pos_integer, doc: "Page number for pagination"],
+    per_page: [type: {:in, 1..100}, doc: "Number of applied services per page"]
+  ]
+
   @apply_schema [
     settings: [type: :any]
   ]
@@ -116,6 +136,91 @@ defmodule ReqDnsimple.Service do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Lists one page of one-click services applied to a domain.
+
+  Supports `:page` and `:per_page`. Omitted options remain omitted so DNSimple
+  applies its server defaults. The returned pagination metadata retains its
+  string keys.
+
+  ## Example
+
+      ReqDnsimple.Service.list_page_applied(
+        req,
+        1010,
+        "example.test",
+        page: 2,
+        per_page: 30
+      )
+      #=> {:ok, {[%ReqDnsimple.Service{}], %{"current_page" => 2}}}
+  """
+  @spec list_page_applied(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer(),
+          keyword()
+        ) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page_applied(req, account_id, domain, opts \\ []) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain],
+             @applied_path_schema
+           ),
+         {:ok, validated_opts} <-
+           ReqDnsimple.validate_options(opts, @list_applied_schema) do
+      case request_applied_services(req, account_id, domain, validated_opts) do
+        {:ok,
+         %Req.Response{
+           status: 200,
+           body: %{"data" => data, "pagination" => pagination}
+         } = response} ->
+          case decode_page(data, pagination) do
+            {:ok, result} -> {:ok, result}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Lists one page of one-click services applied to a domain.
+
+  This convenience alias delegates to `list_page_applied/4` and never
+  enumerates additional pages implicitly.
+  """
+  @spec list_applied(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer(),
+          keyword()
+        ) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_applied(req, account_id, domain, opts \\ []),
+    do: list_page_applied(req, account_id, domain, opts)
+
+  @doc """
+  Enumerates every page of one-click services applied to a domain.
+
+  Enumeration always begins at page one, so an explicit `:page` option is
+  rejected. `:per_page` is retained for every request.
+  """
+  @spec list_all_applied(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer(),
+          keyword()
+        ) :: {:ok, [t()]} | {:error, term()}
+  def list_all_applied(req, account_id, domain, opts \\ []) do
+    ReqDnsimple.Pagination.all(opts, &list_page_applied(req, account_id, domain, &1))
   end
 
   @doc """
@@ -285,6 +390,55 @@ defmodule ReqDnsimple.Service do
   end
 
   defp decode_setting(_setting), do: :error
+
+  defp decode_page(data, pagination) when is_list(data) do
+    with {:ok, services} <- decode_many(data),
+         true <- valid_pagination?(pagination) do
+      {:ok, {services, pagination}}
+    else
+      _error -> :error
+    end
+  end
+
+  defp decode_page(_data, _pagination), do: :error
+
+  defp decode_many(data) do
+    Enum.reduce_while(data, {:ok, []}, fn item, {:ok, services} ->
+      case decode(item) do
+        {:ok, service} -> {:cont, {:ok, [service | services]}}
+        :error -> {:halt, :error}
+      end
+    end)
+    |> case do
+      {:ok, services} -> {:ok, Enum.reverse(services)}
+      :error -> :error
+    end
+  end
+
+  defp valid_pagination?(%{
+         "current_page" => current_page,
+         "per_page" => per_page,
+         "total_entries" => total_entries,
+         "total_pages" => total_pages
+       })
+       when is_integer(current_page) and current_page >= 0 and is_integer(per_page) and
+              per_page > 0 and is_integer(total_entries) and total_entries >= 0 and
+              is_integer(total_pages) and total_pages >= 0,
+       do: true
+
+  defp valid_pagination?(_pagination), do: false
+
+  defp request_applied_services(req, account_id, domain, opts) do
+    req
+    |> Req.merge(
+      method: :get,
+      url: "/:account_id/domains/:domain/services",
+      path_params_style: :colon,
+      path_params: [account_id: account_id, domain: domain],
+      params: Map.new(opts)
+    )
+    |> Req.request()
+  end
 
   defp parse_datetime(value) do
     case DateTime.from_iso8601(value) do

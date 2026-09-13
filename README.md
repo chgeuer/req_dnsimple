@@ -908,6 +908,18 @@ requests.
 ```elixir
 {:ok, service} = ReqDnsimple.Service.get(client, "service-sid")
 
+{:ok, {services, pagination}} =
+  ReqDnsimple.Service.list_page_applied(
+    client,
+    account_id,
+    "example.com",
+    page: 2,
+    per_page: 30
+  )
+
+{:ok, all_services} =
+  ReqDnsimple.Service.list_all_applied(client, account_id, "example.com", per_page: 100)
+
 :ok = ReqDnsimple.Service.apply(client, account_id, "example.com", "service-sid")
 
 :ok =
@@ -924,6 +936,10 @@ requests.
 
 Service retrieval accepts a sid or integer ID and returns a typed
 `ReqDnsimple.Service` with typed nested setting definitions and timestamps.
+`list_page_applied/4` and its `list_applied/4` alias return one typed page of
+services applied to a domain with string-keyed pagination metadata.
+`list_all_applied/4` explicitly enumerates from page one, preserves `per_page`,
+and rejects an explicit `page`.
 Omitting `settings` sends no request body; an explicit empty map sends
 `{"settings": {}}`. Setting names remain strings. Applying a service performs
 one request without fetching the service or creating records individually.
@@ -971,7 +987,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `get_prices/3`, `get_transfer_lock/3`, `enable_transfer_lock/3`, `disable_transfer_lock/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `enable_auto_renewal/3`, `enable_whois_privacy/3`, `disable_whois_privacy/3`, `register/4`, `transfer/4`, `renew/3`, `renew/4`, `restore/3`, `restore/4`, `get_delegation/3`, `change_delegation/4` |
 | `ReqDnsimple.Tld` | `/tlds/:tld`, `/tlds/:tld/extended_attributes` | `get/2`, `list_extended_attributes/2` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries` | `create/3`, `get/3`, `list/3`, `list_page/3`, `list_all/3`, `link/4`, `unlink/4`, `delete/3`, `from_json/1` |
-| `ReqDnsimple.Service` | `/services/:service`, `/domains/:domain/services/:service` | `get/2`, `apply/4`, `apply/5`, `unapply/4` |
+| `ReqDnsimple.Service` | `/services/:service`, `/domains/:domain/services[/:service]` | `get/2`, `list_applied/3`, `list_applied/4`, `list_page_applied/3`, `list_page_applied/4`, `list_all_applied/3`, `list_all_applied/4`, `apply/4`, `apply/5`, `unapply/4` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |
 | `ReqDnsimple.Helper` | Req utilities | `append/2` (URL/param merging) |
 

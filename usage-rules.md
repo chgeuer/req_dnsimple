@@ -394,11 +394,13 @@ not contact the callback URL, inspect deliveries, or list registrations first.
   `port`, ordered `linked_secondary_zones`, and timestamps. Deletion does not
   unlink zones or perform DNS requests.
 - `ReqDnsimple.Service` — Retrieve a global one-click service by sid or ID,
-  including typed timestamps and setting definitions, or apply/unapply one on a
-  domain. Optional dynamic settings use string keys. Omitted settings send no
-  body, while an explicit empty map is preserved. Applying performs no catalog
-  lookup or per-record requests; unapplying sends one bodyless request and does
-  not delete records individually.
+  including typed timestamps and setting definitions; list one paginated page
+  or explicitly enumerate all services applied to a domain; or apply/unapply
+  one. Applied-service listing accepts only `page` and `per_page`, and full
+  enumeration rejects an explicit page. Optional dynamic settings use string
+  keys. Omitted settings send no body, while an explicit empty map is preserved.
+  Applying performs no catalog lookup or per-record requests; unapplying sends
+  one bodyless request and does not delete records individually.
 - `ReqDnsimple.NsRecord` — Name server record struct and JSON parsing.
 - `ReqDnsimple.Helper` — Req helper for incrementally appending URL path segments
   and merging params/path_params onto a `Req.Request`.
