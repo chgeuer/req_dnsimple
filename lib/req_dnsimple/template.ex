@@ -2,6 +2,20 @@ defmodule ReqDnsimple.Template do
   @moduledoc """
   DNS template operations.
 
+  Create an account template:
+
+      {:ok, template} =
+        ReqDnsimple.Template.create(
+          client,
+          1010,
+          sid: "offline-template",
+          name: "Offline template",
+          description: "Offline contract example"
+        )
+
+  Creating a template sends exactly one request. It does not create template
+  records or apply the template to a domain.
+
   Retrieve an account template by short name or ID:
 
       {:ok, template} =
@@ -53,6 +67,51 @@ defmodule ReqDnsimple.Template do
   ]
 
   @template_path_schema Keyword.delete(@path_schema, :domain)
+  @create_path_schema [account_id: [type: :integer, required: true]]
+  @create_schema [
+    sid: [type: :string, required: true],
+    name: [type: :string, required: true],
+    description: [type: :string]
+  ]
+
+  @doc """
+  Creates an account template from a required short identifier and name.
+
+  The optional description is omitted unless explicitly supplied. This sends
+  exactly one request and returns the created template with typed timestamps.
+  It does not create records or apply the template to a domain.
+  """
+  @spec create(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
+          {:ok, t()} | {:error, term()}
+  def create(req, account_id, attrs) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate([account_id: account_id], @create_path_schema),
+         {:ok, validated_attrs} <- ReqDnsimple.validate_options(attrs, @create_schema) do
+      req =
+        Req.merge(req,
+          method: :post,
+          url: "/:account_id/templates",
+          path_params_style: :colon,
+          path_params: [account_id: account_id],
+          json: Map.new(validated_attrs),
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
+          case decode(data) do
+            {:ok, template} -> {:ok, template}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
 
   @doc """
   Retrieves an account template by short name or ID.

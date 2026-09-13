@@ -3,6 +3,148 @@ defmodule ReqDnsimple.TemplateTest do
 
   import ReqDnsimple.TestSupport
 
+  describe "create/3" do
+    test "createTemplate sends all attributes once and returns the typed template" do
+      assert {:ok,
+              %ReqDnsimple.Template{
+                id: 1,
+                account_id: 1010,
+                name: "Offline template",
+                sid: "offline-template",
+                description: "Offline example",
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:30:00Z]
+              }} =
+               ReqDnsimple.Template.create(
+                 client(201, template_body()),
+                 1010,
+                 sid: "offline-template",
+                 name: "Offline template",
+                 description: "Offline example"
+               )
+
+      assert_request(:post, "/v2/1010/templates", %{}, %{
+        "sid" => "offline-template",
+        "name" => "Offline template",
+        "description" => "Offline example"
+      })
+
+      refute_received {:request, _request}
+    end
+
+    test "createTemplate preserves omitted and explicitly empty descriptions" do
+      for {account_id, attrs, expected_body} <- [
+            {1010, [sid: "offline-template", name: "Offline template"],
+             %{"sid" => "offline-template", "name" => "Offline template"}},
+            {0, [sid: "", name: "", description: ""],
+             %{"sid" => "", "name" => "", "description" => ""}}
+          ] do
+        assert {:ok, %ReqDnsimple.Template{}} =
+                 ReqDnsimple.Template.create(client(201, template_body()), account_id, attrs)
+
+        assert_request(:post, "/v2/#{account_id}/templates", %{}, expected_body)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "createTemplate rejects invalid attributes before HTTP" do
+      request = client(201, template_body())
+
+      for {account_id, attrs} <- [
+            {"1010", [sid: "offline-template", name: "Offline template"]},
+            {nil, [sid: "offline-template", name: "Offline template"]},
+            {1010, [:invalid]},
+            {1010, [{:name}]},
+            {1010, []},
+            {1010, [name: "Offline template"]},
+            {1010, [sid: "offline-template"]},
+            {1010, [sid: nil, name: "Offline template"]},
+            {1010, [sid: false, name: "Offline template"]},
+            {1010, [sid: 0, name: "Offline template"]},
+            {1010, [sid: [], name: "Offline template"]},
+            {1010, [sid: %{}, name: "Offline template"]},
+            {1010, [sid: "offline-template", name: nil]},
+            {1010, [sid: "offline-template", name: false]},
+            {1010, [sid: "offline-template", name: 0]},
+            {1010, [sid: "offline-template", name: []]},
+            {1010, [sid: "offline-template", name: %{}]},
+            {1010, [sid: "offline-template", name: "Offline template", description: nil]},
+            {1010, [sid: "offline-template", name: "Offline template", description: false]},
+            {1010, [sid: "offline-template", name: "Offline template", description: 0]},
+            {1010, [sid: "offline-template", name: "Offline template", description: []]},
+            {1010, [sid: "offline-template", name: "Offline template", description: %{}]},
+            {1010, [sid: "offline-template", name: "Offline template", unknown: true]}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Template.create(request, account_id, attrs)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "createTemplate preserves documented and shared HTTP failures" do
+      for status <- [400, 401, 403, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"sid" => ["has already been taken"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Template.create(
+                   client(status, body),
+                   1010,
+                   sid: "offline-template",
+                   name: "Offline template"
+                 )
+
+        assert_request(:post, "/v2/1010/templates", %{}, %{
+          "sid" => "offline-template",
+          "name" => "Offline template"
+        })
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "createTemplate rejects malformed successful responses and unexpected statuses" do
+      malformed_responses = [
+        {201, %{}},
+        {201, %{"data" => nil}},
+        {201, %{"data" => Map.delete(template_body()["data"], "name")}},
+        {201, put_in(template_body(), ["data", "description"], nil)},
+        {201, put_in(template_body(), ["data", "created_at"], "not-a-timestamp")},
+        {200, template_body()}
+      ]
+
+      for {status, body} <- malformed_responses do
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Template.create(
+                   client(status, body),
+                   1010,
+                   sid: "offline-template",
+                   name: "Offline template"
+                 )
+
+        assert_request(:post, "/v2/1010/templates", %{}, %{
+          "sid" => "offline-template",
+          "name" => "Offline template"
+        })
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "createTemplate preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Template.create(
+                 transport_error_client(:timeout),
+                 1010,
+                 sid: "offline-template",
+                 name: "Offline template"
+               )
+    end
+  end
+
   describe "get/3" do
     test "getTemplate retrieves one typed template with one bodyless request" do
       body = template_body()
