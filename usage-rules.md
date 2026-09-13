@@ -77,6 +77,8 @@ Different modules use slightly different return conventions:
 | `Template.delete/3` | `:ok` | `{:error, reason}` |
 | `TemplateRecord.create/4` | `{:ok, %TemplateRecord{}}` | `{:error, reason}` |
 | `TemplateRecord.get/4` | `{:ok, %TemplateRecord{}}` | `{:error, reason}` |
+| `TemplateRecord.list_page/3,4` | `{:ok, {[%TemplateRecord{}], pagination}}` | `{:error, reason}` |
+| `TemplateRecord.list_all/3,4` | `{:ok, [%TemplateRecord{}]}` | `{:error, reason}` |
 | `TemplateRecord.delete/4` | `:ok` | `{:error, reason}` |
 | `DelegationSignerRecord.create/4` | `{:ok, %DelegationSignerRecord{}}` | `{:error, reason}` |
 | `DelegationSignerRecord.get/4` | `{:ok, %DelegationSignerRecord{}}` | `{:error, reason}` |
@@ -284,12 +286,14 @@ not contact the callback URL, inspect deliveries, or list registrations first.
   description, and returns a typed template without creating records or applying
   it to a domain. Retrieval returns a typed template with parsed timestamps.
   Domain and template identifiers accept short names or integer IDs.
-- `ReqDnsimple.TemplateRecord` — Creating, retrieving, or deleting records from an
-  account template by template short name or ID. Creation requires name, type,
-  and content, accepts optional TTL and priority, and sends a flat JSON object.
-  Creation and retrieval preserve literal placeholders, zero TTL/priority values,
-  and nullable response priority while returning parsed timestamps. Deletion does
-  not remove the template or records previously applied to domains.
+- `ReqDnsimple.TemplateRecord` — Creating, retrieving, listing, or deleting records
+  from an account template by template short name or ID. Listing supports explicit
+  pages or deliberate complete enumeration, with ordered `id`/`name`/`content`/`type`
+  sorting. Creation requires name, type, and content, accepts optional TTL and
+  priority, and sends a flat JSON object. Typed responses preserve literal
+  placeholders, zero TTL/priority values, and nullable priority while returning
+  parsed timestamps. Deletion does not remove the template or records previously
+  applied to domains.
 - `ReqDnsimple.Domain` — Hosted-domain creation, retrieval, paginated listing,
   deliberate complete enumeration, and explicit deletion by name or ID. Listing
   supports `name_like` and `registrant_id` filters plus ordered
