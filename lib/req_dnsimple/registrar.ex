@@ -28,6 +28,9 @@ defmodule ReqDnsimple.Registrar do
       ReqDnsimple.Registrar.enable_whois_privacy(req, 1010, "example.test")
       #=> {:ok, %ReqDnsimple.Registrar.WhoisPrivacy{}}
 
+      ReqDnsimple.Registrar.disable_whois_privacy(req, 1010, "example.test")
+      #=> {:ok, %ReqDnsimple.Registrar.WhoisPrivacy{enabled: false}}
+
       ReqDnsimple.Registrar.register(req, 1010, "example.test",
         registrant_id: 11,
         whois_privacy: false,
@@ -244,6 +247,7 @@ defmodule ReqDnsimple.Registrar do
   # https://developer.dnsimple.com/v2/registrar/auto-renewal/#disableDomainAutoRenewal
   # https://developer.dnsimple.com/v2/registrar/auto-renewal/#enableDomainAutoRenewal
   # https://developer.dnsimple.com/v2/registrar/whois-privacy/#enableWhoisPrivacy
+  # https://developer.dnsimple.com/v2/registrar/whois-privacy/#disableWhoisPrivacy
   # https://developer.dnsimple.com/v2/registrar/#registerDomain
   # https://developer.dnsimple.com/v2/registrar/#transferDomain
   # https://developer.dnsimple.com/v2/registrar/#renewDomain
@@ -635,6 +639,53 @@ defmodule ReqDnsimple.Registrar do
       case Req.request(req) do
         {:ok, %Req.Response{status: status, body: %{"data" => data}} = response}
         when status in [200, 201] ->
+          case decode_whois_privacy(data) do
+            {:ok, whois_privacy} -> {:ok, whois_privacy}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Disables WHOIS privacy for a domain.
+
+  This function sends exactly one bodyless DELETE request and does not look up
+  the domain, issue a refund, or perform another registrar operation. Registry
+  or TLD refusals, other HTTP responses, validation failures, and transport
+  failures are returned as explicit error tuples.
+
+  Returns the resulting privacy state as a typed `WhoisPrivacy` resource.
+  """
+  @spec disable_whois_privacy(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer()
+        ) ::
+          {:ok, WhoisPrivacy.t()} | {:error, term()}
+  def disable_whois_privacy(req, account_id, domain) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain],
+             @delegation_path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :delete,
+          url: "/:account_id/registrar/domains/:domain/whois_privacy",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain: domain],
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode_whois_privacy(data) do
             {:ok, whois_privacy} -> {:ok, whois_privacy}
             :error -> ReqDnsimple.response_error(response)

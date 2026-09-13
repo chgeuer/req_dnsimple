@@ -723,6 +723,196 @@ defmodule ReqDnsimple.RegistrarTest do
     end
   end
 
+  describe "disable_whois_privacy/3" do
+    test "disableWhoisPrivacy sends one bodyless DELETE and returns the typed 200 payload" do
+      body = %{
+        "data" => %{
+          "id" => 1,
+          "domain_id" => 100,
+          "enabled" => false,
+          "expires_on" => "2026-09-01",
+          "created_at" => "2026-09-01T10:00:00+02:00",
+          "updated_at" => "2026-09-01T10:01:00+02:00"
+        }
+      }
+
+      assert {:ok,
+              %ReqDnsimple.Registrar.WhoisPrivacy{
+                id: 1,
+                domain_id: 100,
+                enabled: false,
+                expires_on: ~D[2026-09-01],
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:01:00Z]
+              }} =
+               ReqDnsimple.Registrar.disable_whois_privacy(
+                 client(200, body),
+                 1010,
+                 "example.test"
+               )
+
+      assert_request(
+        :delete,
+        "/v2/1010/registrar/domains/example.test/whois_privacy",
+        %{},
+        nil
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "disableWhoisPrivacy accepts integer, zero, and empty identifiers" do
+      body = %{
+        "data" => %{
+          "id" => 0,
+          "domain_id" => 0,
+          "enabled" => false,
+          "expires_on" => "2026-09-01",
+          "created_at" => "2026-09-01T10:00:00Z",
+          "updated_at" => "2026-09-01T10:00:00Z"
+        }
+      }
+
+      for {account_id, domain} <- [{1010, 42}, {0, 0}, {1010, ""}] do
+        assert {:ok, %ReqDnsimple.Registrar.WhoisPrivacy{enabled: false}} =
+                 ReqDnsimple.Registrar.disable_whois_privacy(
+                   client(200, body),
+                   account_id,
+                   domain
+                 )
+
+        assert_request(
+          :delete,
+          "/v2/#{account_id}/registrar/domains/#{domain}/whois_privacy",
+          %{},
+          nil
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "disableWhoisPrivacy rejects invalid path parameters before HTTP" do
+      request =
+        client(200, %{
+          "data" => %{
+            "id" => 1,
+            "domain_id" => 100,
+            "enabled" => false,
+            "expires_on" => "2026-09-01",
+            "created_at" => "2026-09-01T10:00:00Z",
+            "updated_at" => "2026-09-01T10:00:00Z"
+          }
+        })
+
+      for {account_id, domain} <- [
+            {"1010", "example.test"},
+            {nil, "example.test"},
+            {1010, nil},
+            {1010, 1.5},
+            {1010, []}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Registrar.disable_whois_privacy(request, account_id, domain)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "disableWhoisPrivacy preserves documented and shared HTTP failures" do
+      for status <- [400, 404, 401, 403, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"whois_privacy" => ["cannot be disabled"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Registrar.disable_whois_privacy(
+                   client(status, body),
+                   1010,
+                   "example.test"
+                 )
+
+        assert_request(
+          :delete,
+          "/v2/1010/registrar/domains/example.test/whois_privacy",
+          %{},
+          nil
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "disableWhoisPrivacy disables retries for the mutation" do
+      body = %{"message" => "Fake offline request failure"}
+      request = client(500, body) |> Req.merge(retry: :transient)
+
+      assert {:error, %{status: 500, response: ^body}} =
+               ReqDnsimple.Registrar.disable_whois_privacy(request, 1010, "example.test")
+
+      assert_request(
+        :delete,
+        "/v2/1010/registrar/domains/example.test/whois_privacy",
+        %{},
+        nil
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "disableWhoisPrivacy returns explicit errors for malformed successful responses" do
+      valid_data = %{
+        "id" => 1,
+        "domain_id" => 100,
+        "enabled" => false,
+        "expires_on" => "2026-09-01",
+        "created_at" => "2026-09-01T10:00:00Z",
+        "updated_at" => "2026-09-01T10:00:00Z"
+      }
+
+      malformed_payloads = [
+        %{},
+        %{"data" => nil},
+        %{"data" => Map.delete(valid_data, "id")},
+        %{"data" => Map.put(valid_data, "id", "1")},
+        %{"data" => Map.put(valid_data, "domain_id", nil)},
+        %{"data" => Map.put(valid_data, "enabled", nil)},
+        %{"data" => Map.put(valid_data, "expires_on", nil)},
+        %{"data" => Map.put(valid_data, "expires_on", "not-a-date")},
+        %{"data" => Map.put(valid_data, "created_at", "not-a-timestamp")},
+        %{"data" => Map.put(valid_data, "updated_at", 0)}
+      ]
+
+      for body <- malformed_payloads do
+        assert {:error, %{status: 200, response: ^body}} =
+                 ReqDnsimple.Registrar.disable_whois_privacy(
+                   client(200, body),
+                   1010,
+                   "example.test"
+                 )
+
+        assert_request(
+          :delete,
+          "/v2/1010/registrar/domains/example.test/whois_privacy",
+          %{},
+          nil
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "disableWhoisPrivacy preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Registrar.disable_whois_privacy(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test"
+               )
+    end
+  end
+
   describe "register/4" do
     test "registerDomain sends all attributes once and returns the typed 201 payload" do
       body = %{

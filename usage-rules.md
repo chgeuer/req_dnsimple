@@ -102,6 +102,7 @@ Different modules use slightly different return conventions:
 | `RegistrantChange.get/3` | `{:ok, %RegistrantChange{}}` | `{:error, reason}` |
 | `RegistrantChange.cancel/3` | `{:ok, %RegistrantChange{}}` or `:ok` | `{:error, reason}` |
 | `Registrar.enable_whois_privacy/3` | `{:ok, %Registrar.WhoisPrivacy{}}` | `{:error, reason}` |
+| `Registrar.disable_whois_privacy/3` | `{:ok, %Registrar.WhoisPrivacy{}}` | `{:error, reason}` |
 | `Registrar.register/4` | `{:ok, %Registrar.Registration{}}` | `{:error, reason}` |
 | `Registrar.transfer/4` | `{:ok, %Registrar.Transfer{}}` | `{:error, reason}` |
 | `Registrar.renew/3,4` | `{:ok, %Registrar.Renewal{}}` | `{:error, reason}` |
@@ -339,7 +340,7 @@ not contact the callback URL, inspect deliveries, or list registrations first.
 - `ReqDnsimple.Registrar` — Check domain availability by name, explicitly
   retrieve registration and lifecycle prices by name, retrieve or disable the
   transfer lock by name or ID, authorize transfer-out by name, enable or
-  disable automatic renewal by name or ID, enable WHOIS privacy by name or ID,
+  disable automatic renewal by name or ID, enable or disable WHOIS privacy by name or ID,
   submit a registration or inbound transfer for an existing contact, submit a
   renewal or expired-domain restore by name, or retrieve or replace registrar
   delegation by name or ID.

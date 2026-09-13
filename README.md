@@ -500,6 +500,16 @@ state for modern HTTP 200 and legacy HTTP 201 responses. It sends one bodyless
 request and does not promise or initiate a separate one-year purchase. Legacy
 payment failures, including HTTP 402, are returned as explicit errors.
 
+Disable WHOIS privacy without a lookup, refund, or other registrar operation:
+
+```elixir
+{:ok, %ReqDnsimple.Registrar.WhoisPrivacy{enabled: false} = privacy} =
+  ReqDnsimple.Registrar.disable_whois_privacy(client, account_id, "example.com")
+```
+
+The operation accepts a domain name or integer ID, sends one bodyless DELETE,
+and returns the resulting typed privacy state.
+
 Submit a renewal without a price lookup or follow-up polling:
 
 ```elixir
@@ -878,7 +888,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards[/:email_forward]` | `create/4`, `get/4`, `delete/4` |
 | `ReqDnsimple.DomainPush` | `/domains/:domain/pushes`, `/pushes[/:push]` | `initiate/4`, `list/3`, `list_page/3`, `list_all/3`, `accept/4`, `reject/3` |
 | `ReqDnsimple.VanityNameServer` | `/vanity/:domain` | `enable/3`, `disable/3` |
-| `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `get_prices/3`, `get_transfer_lock/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `enable_auto_renewal/3`, `enable_whois_privacy/3`, `register/4`, `transfer/4`, `renew/3`, `renew/4`, `restore/3`, `restore/4`, `get_delegation/3`, `change_delegation/4` |
+| `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `get_prices/3`, `get_transfer_lock/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `enable_auto_renewal/3`, `enable_whois_privacy/3`, `disable_whois_privacy/3`, `register/4`, `transfer/4`, `renew/3`, `renew/4`, `restore/3`, `restore/4`, `get_delegation/3`, `change_delegation/4` |
 | `ReqDnsimple.Tld` | `/tlds/:tld`, `/tlds/:tld/extended_attributes` | `get/2`, `list_extended_attributes/2` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries` | `create/3`, `get/3`, `list/3`, `list_page/3`, `list_all/3`, `link/4`, `unlink/4`, `delete/3`, `from_json/1` |
 | `ReqDnsimple.Service` | `/services/:service`, `/domains/:domain/services/:service` | `get/2`, `apply/4`, `apply/5`, `unapply/4` |
