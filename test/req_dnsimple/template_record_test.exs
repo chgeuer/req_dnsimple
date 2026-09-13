@@ -3,6 +3,208 @@ defmodule ReqDnsimple.TemplateRecordTest do
 
   import ReqDnsimple.TestSupport
 
+  describe "create/4" do
+    test "createTemplateRecord sends all attributes once and returns the typed record" do
+      assert {:ok,
+              %ReqDnsimple.TemplateRecord{
+                id: 1,
+                template_id: 1,
+                name: "",
+                content: "mail.{{domain}}",
+                ttl: 0,
+                priority: 0,
+                type: "MX",
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:00:00Z]
+              }} =
+               ReqDnsimple.TemplateRecord.create(
+                 client(201, template_record_body(0)),
+                 1010,
+                 "offline-template",
+                 name: "",
+                 type: "MX",
+                 content: "mail.{{domain}}",
+                 ttl: 0,
+                 priority: 0
+               )
+
+      assert_request(:post, "/v2/1010/templates/offline-template/records", %{}, %{
+        "name" => "",
+        "type" => "MX",
+        "content" => "mail.{{domain}}",
+        "ttl" => 0,
+        "priority" => 0
+      })
+
+      refute_received {:request, _request}
+    end
+
+    test "createTemplateRecord preserves omitted optional attributes and path identifiers" do
+      for {account_id, template} <- [{1010, 42}, {0, 0}, {1010, ""}] do
+        assert {:ok, %ReqDnsimple.TemplateRecord{priority: nil}} =
+                 ReqDnsimple.TemplateRecord.create(
+                   client(201, template_record_body(nil)),
+                   account_id,
+                   template,
+                   name: "",
+                   type: "TXT",
+                   content: "{{domain}}"
+                 )
+
+        assert_request(
+          :post,
+          "/v2/#{account_id}/templates/#{template}/records",
+          %{},
+          %{"name" => "", "type" => "TXT", "content" => "{{domain}}"}
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "createTemplateRecord rejects invalid attributes before HTTP" do
+      request = client(201, template_record_body(nil))
+      valid = [name: "", type: "MX", content: "mail.{{domain}}"]
+
+      invalid_calls = [
+        {"1010", "offline-template", valid},
+        {nil, "offline-template", valid},
+        {1010, nil, valid},
+        {1010, 1.5, valid},
+        {1010, [], valid},
+        {1010, "offline-template", [:invalid]},
+        {1010, "offline-template", [{:name}]},
+        {1010, "offline-template", []},
+        {1010, "offline-template", Keyword.delete(valid, :name)},
+        {1010, "offline-template", Keyword.delete(valid, :type)},
+        {1010, "offline-template", Keyword.delete(valid, :content)},
+        {1010, "offline-template", Keyword.put(valid, :name, nil)},
+        {1010, "offline-template", Keyword.put(valid, :name, false)},
+        {1010, "offline-template", Keyword.put(valid, :name, 0)},
+        {1010, "offline-template", Keyword.put(valid, :name, [])},
+        {1010, "offline-template", Keyword.put(valid, :name, %{})},
+        {1010, "offline-template", Keyword.put(valid, :type, nil)},
+        {1010, "offline-template", Keyword.put(valid, :type, "INVALID")},
+        {1010, "offline-template", Keyword.put(valid, :content, nil)},
+        {1010, "offline-template", Keyword.put(valid, :content, false)},
+        {1010, "offline-template", Keyword.put(valid, :content, 0)},
+        {1010, "offline-template", Keyword.put(valid, :content, [])},
+        {1010, "offline-template", Keyword.put(valid, :content, %{})},
+        {1010, "offline-template", Keyword.put(valid, :ttl, nil)},
+        {1010, "offline-template", Keyword.put(valid, :ttl, -1)},
+        {1010, "offline-template", Keyword.put(valid, :ttl, false)},
+        {1010, "offline-template", Keyword.put(valid, :priority, nil)},
+        {1010, "offline-template", Keyword.put(valid, :priority, false)},
+        {1010, "offline-template", Keyword.put(valid, :regions, ["global"])},
+        {1010, "offline-template", Keyword.put(valid, :integrated_zones, true)},
+        {1010, "offline-template", Keyword.put(valid, :unknown, true)}
+      ]
+
+      for {account_id, template, attrs} <- invalid_calls do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.TemplateRecord.create(request, account_id, template, attrs)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "createTemplateRecord normalizes nullable and legacy numeric-string priorities" do
+      for {wire_priority, priority} <- [{"10", 10}, {"0010", 10}, {-1, -1}, {nil, nil}] do
+        assert {:ok, %ReqDnsimple.TemplateRecord{priority: ^priority}} =
+                 ReqDnsimple.TemplateRecord.create(
+                   client(201, template_record_body(wire_priority)),
+                   1010,
+                   "offline-template",
+                   name: "",
+                   type: "MX",
+                   content: "mail.{{domain}}"
+                 )
+
+        assert_request(:post, "/v2/1010/templates/offline-template/records", %{}, %{
+          "name" => "",
+          "type" => "MX",
+          "content" => "mail.{{domain}}"
+        })
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "createTemplateRecord rejects malformed successful responses and unexpected statuses" do
+      malformed_responses = [
+        {201, %{}},
+        {201, %{"data" => nil}},
+        {201, %{"data" => %{}}},
+        {201, put_in(template_record_body(nil), ["data", "created_at"], "not-a-timestamp")},
+        {201, put_in(template_record_body(nil), ["data", "ttl"], -1)},
+        {201, put_in(template_record_body(nil), ["data", "priority"], "high")},
+        {201, put_in(template_record_body(nil), ["data", "priority"], "+10")},
+        {201, put_in(template_record_body(nil), ["data", "priority"], "10\n")},
+        {201, put_in(template_record_body(nil), ["data", "type"], "INVALID")},
+        {200, template_record_body(nil)}
+      ]
+
+      for {status, body} <- malformed_responses do
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.TemplateRecord.create(
+                   client(status, body),
+                   1010,
+                   "offline-template",
+                   name: "",
+                   type: "MX",
+                   content: "mail.{{domain}}"
+                 )
+
+        assert_request(:post, "/v2/1010/templates/offline-template/records", %{}, %{
+          "name" => "",
+          "type" => "MX",
+          "content" => "mail.{{domain}}"
+        })
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "createTemplateRecord preserves documented and shared HTTP failures" do
+      for status <- [400, 401, 403, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"template_record" => ["is invalid"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.TemplateRecord.create(
+                   client(status, body),
+                   1010,
+                   "offline-template",
+                   name: "",
+                   type: "MX",
+                   content: "mail.{{domain}}"
+                 )
+
+        assert_request(:post, "/v2/1010/templates/offline-template/records", %{}, %{
+          "name" => "",
+          "type" => "MX",
+          "content" => "mail.{{domain}}"
+        })
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "createTemplateRecord preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.TemplateRecord.create(
+                 transport_error_client(:timeout),
+                 1010,
+                 "offline-template",
+                 name: "",
+                 type: "MX",
+                 content: "mail.{{domain}}"
+               )
+    end
+  end
+
   describe "get/4" do
     test "getTemplateRecord retrieves one typed record with one bodyless request" do
       body = template_record_body(0)

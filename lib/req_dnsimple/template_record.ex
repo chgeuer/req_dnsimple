@@ -2,6 +2,20 @@ defmodule ReqDnsimple.TemplateRecord do
   @moduledoc """
   Operations for records in DNS templates.
 
+  Create one template record with a flat attribute list:
+
+      {:ok, record} =
+        ReqDnsimple.TemplateRecord.create(
+          client,
+          1010,
+          "offline-template",
+          name: "",
+          type: "MX",
+          content: "mail.{{domain}}",
+          ttl: 0,
+          priority: 0
+        )
+
   Retrieve one typed template record:
 
       {:ok, record} =
@@ -48,6 +62,66 @@ defmodule ReqDnsimple.TemplateRecord do
     template: [type: {:or, [:string, :integer]}, required: true],
     record_id: [type: :integer, required: true]
   ]
+
+  @create_path_schema [
+    account_id: [type: :integer, required: true],
+    template: [type: {:or, [:string, :integer]}, required: true]
+  ]
+
+  @create_schema [
+    name: [type: :string, required: true],
+    type: [type: {:in, @record_types}, required: true],
+    content: [type: :string, required: true],
+    ttl: [type: :non_neg_integer],
+    priority: [type: :integer]
+  ]
+
+  @doc """
+  Creates one record in a DNS template.
+
+  The template may be a short name or integer ID. Attributes are sent as a
+  flat JSON object; `name`, `type`, and `content` are required, while `ttl`
+  and `priority` are optional. Empty apex names, literal placeholders, and
+  explicit zero values are preserved. This sends exactly one request.
+  """
+  @spec create(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer(),
+          keyword()
+        ) :: {:ok, t()} | {:error, term()}
+  def create(req, account_id, template, attrs) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, template: template],
+             @create_path_schema
+           ),
+         {:ok, validated_attrs} <- ReqDnsimple.validate_options(attrs, @create_schema) do
+      req =
+        Req.merge(req,
+          method: :post,
+          url: "/:account_id/templates/:template/records",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, template: template],
+          json: Map.new(validated_attrs),
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
+          case decode(data) do
+            {:ok, record} -> {:ok, record}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
 
   @doc """
   Retrieves one record from a DNS template.

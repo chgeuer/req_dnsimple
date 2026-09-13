@@ -75,6 +75,7 @@ Different modules use slightly different return conventions:
 | `Template.create/3` | `{:ok, %Template{}}` | `{:error, reason}` |
 | `Template.apply/4` | `:ok` | `{:error, reason}` |
 | `Template.delete/3` | `:ok` | `{:error, reason}` |
+| `TemplateRecord.create/4` | `{:ok, %TemplateRecord{}}` | `{:error, reason}` |
 | `TemplateRecord.get/4` | `{:ok, %TemplateRecord{}}` | `{:error, reason}` |
 | `TemplateRecord.delete/4` | `:ok` | `{:error, reason}` |
 | `DelegationSignerRecord.create/4` | `{:ok, %DelegationSignerRecord{}}` | `{:error, reason}` |
@@ -283,11 +284,12 @@ not contact the callback URL, inspect deliveries, or list registrations first.
   description, and returns a typed template without creating records or applying
   it to a domain. Retrieval returns a typed template with parsed timestamps.
   Domain and template identifiers accept short names or integer IDs.
-- `ReqDnsimple.TemplateRecord` — Retrieving or deleting one record from an account
-  template by template short name or ID and record ID. Retrieval preserves
-  literal placeholders, zero TTL/priority values, and nullable priority while
-  returning parsed timestamps. Deletion does not remove the template or records
-  previously applied to domains.
+- `ReqDnsimple.TemplateRecord` — Creating, retrieving, or deleting records from an
+  account template by template short name or ID. Creation requires name, type,
+  and content, accepts optional TTL and priority, and sends a flat JSON object.
+  Creation and retrieval preserve literal placeholders, zero TTL/priority values,
+  and nullable response priority while returning parsed timestamps. Deletion does
+  not remove the template or records previously applied to domains.
 - `ReqDnsimple.Domain` — Hosted-domain creation, retrieval, paginated listing,
   deliberate complete enumeration, and explicit deletion by name or ID. Listing
   supports `name_like` and `registrant_id` filters plus ordered
