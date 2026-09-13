@@ -61,6 +61,7 @@ Different modules use slightly different return conventions:
 | `ZoneRecord.check_distribution/4` | `{:ok, boolean()}` | `{:error, reason}` |
 | `ZoneRecord.batch_change/4` | `{:ok, %ZoneRecord.BatchResult{}}` | `{:error, reason}` |
 | `Contact.create/3` | `{:ok, %Contact{}}` | `{:error, reason}` |
+| `Contact.update/4` | `{:ok, %Contact{}}` | `{:error, reason}` |
 | `Contact.list/3` | `{:ok, [%Contact{}, ...]}` | `{:error, reason}` |
 | `Contact.get/3` | `{:ok, %Contact{}}` | `{:error, :not_found}` |
 | `Contact.delete/3` | `:ok` | `{:error, reason}` |
@@ -305,7 +306,8 @@ deliveries.
   exact decimal strings; parse them explicitly with an arbitrary-precision decimal
   library when arithmetic is required. Manual-charge item product identifiers and
   references may be `nil`.
-- `ReqDnsimple.Contact` — Contact listing and retrieval. 14 contact fields + timestamps.
+- `ReqDnsimple.Contact` — Contact creation, partial updates, listing, retrieval, and
+  deletion. 14 contact fields + timestamps.
 - `ReqDnsimple.Template` — Creating, listing, retrieving, updating, applying, or
   deleting an account template. Listing supports explicit pages or deliberate
   complete enumeration, with ordered `id`/`name`/`sid` sorting. Creation requires

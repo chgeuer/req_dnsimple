@@ -18,6 +18,13 @@ defmodule ReqDnsimple.Contact do
       )
       #=> {:ok, %ReqDnsimple.Contact{}}
 
+      ReqDnsimple.Contact.update(req, 1010, 1,
+        label: "",
+        address2: nil,
+        fax: nil
+      )
+      #=> {:ok, %ReqDnsimple.Contact{}}
+
       ReqDnsimple.Contact.delete(req, 1010, 1)
       #=> :ok
   """
@@ -77,6 +84,23 @@ defmodule ReqDnsimple.Contact do
     job_title: [type: :string]
   ]
 
+  @update_schema [
+    first_name: [type: :string],
+    last_name: [type: :string],
+    address1: [type: :string],
+    address2: [type: {:custom, __MODULE__, :validate_nullable_string, []}],
+    city: [type: :string],
+    state_province: [type: :string],
+    postal_code: [type: :string],
+    country: [type: {:custom, __MODULE__, :validate_country, []}],
+    email: [type: :string],
+    phone: [type: :string],
+    fax: [type: {:custom, __MODULE__, :validate_nullable_string, []}],
+    label: [type: :string],
+    organization_name: [type: :string],
+    job_title: [type: :string]
+  ]
+
   @doc """
   Creates a reusable registrant contact.
 
@@ -117,6 +141,65 @@ defmodule ReqDnsimple.Contact do
 
       case Req.request(req) do
         {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
+          case decode(data) do
+            {:ok, contact} -> {:ok, contact}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Updates the supplied fields of an existing contact.
+
+  All attributes are optional and omitted attributes are not sent. `:address2`
+  and `:fax` accept explicit `nil`, and supplying `:organization_name` requires
+  `:job_title`. This sends exactly one PATCH request without first retrieving
+  the contact.
+
+  ## Example
+
+      ReqDnsimple.Contact.update(req, 1010, 1,
+        label: "",
+        address2: nil,
+        fax: nil
+      )
+      #=> {:ok, %ReqDnsimple.Contact{}}
+  """
+  @spec update(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          ReqDnsimple.contact_id(),
+          keyword()
+        ) :: {:ok, t()} | {:error, term()}
+  def update(req, account_id, contact_id, attrs) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, contact_id: contact_id],
+             @delete_contact_schema
+           ),
+         {:ok, validated_attrs} <- validate_update_attrs(attrs) do
+      req =
+        Req.merge(req,
+          method: :patch,
+          url: "/:account_id/contacts/:contact_id",
+          path_params_style: :colon,
+          path_params: [
+            account_id: account_id,
+            contact_id: contact_id
+          ],
+          json: Map.new(validated_attrs),
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode(data) do
             {:ok, contact} -> {:ok, contact}
             :error -> ReqDnsimple.response_error(response)
@@ -292,6 +375,13 @@ defmodule ReqDnsimple.Contact do
 
   defp validate_create_attrs(attrs) do
     with {:ok, validated_attrs} <- ReqDnsimple.validate_options(attrs, @create_schema),
+         :ok <- validate_organization(validated_attrs) do
+      {:ok, validated_attrs}
+    end
+  end
+
+  defp validate_update_attrs(attrs) do
+    with {:ok, validated_attrs} <- ReqDnsimple.validate_options(attrs, @update_schema),
          :ok <- validate_organization(validated_attrs) do
       {:ok, validated_attrs}
     end

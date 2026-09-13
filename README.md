@@ -473,6 +473,13 @@ arbitrary-precision decimal library.
     country: "IT"
   )
 
+{:ok, contact} =
+  ReqDnsimple.Contact.update(client, account_id, contact_id,
+    label: "",
+    address2: nil,
+    fax: nil
+  )
+
 {:ok, contacts} = ReqDnsimple.Contact.list(client, account_id, sort: [label: :asc])
 {:ok, contact}  = ReqDnsimple.Contact.get(client, account_id, contact_id)
 :ok = ReqDnsimple.Contact.delete(client, account_id, contact_id)
@@ -1112,7 +1119,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.Zone` | `/zones` | `list/3`, `get/3`, `activate/3`, `deactivate/3`, `update_ns_records/4`, `get_zone_file/3`, `check_zone_distribution/3` |
 | `ReqDnsimple.ZoneRecord` | `/zones/:zone/records`, `/zones/:zone/batch` | `list/4`, `get/4`, `create/4`, `update/5`, `delete/4`, `check_distribution/4`, `batch_change/4` |
 | `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/3` |
-| `ReqDnsimple.Contact` | `/contacts` | `create/3`, `list/3`, `get/3`, `delete/3` |
+| `ReqDnsimple.Contact` | `/contacts` | `create/3`, `update/4`, `list/3`, `get/3`, `delete/3` |
 | `ReqDnsimple.Domain` | `/domains`, `/domains/:domain` | `create/3`, `get/3`, `list/3`, `list_page/3`, `list_all/3`, `delete/3` |
 | `ReqDnsimple.DomainResearch` | `/domains/research/status` | `get_status/3` |
 | `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records[/:ds_record]` | `create/4`, `get/4`, `list/4`, `list_page/4`, `list_all/4`, `delete/4` |

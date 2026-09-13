@@ -188,6 +188,169 @@ defmodule ReqDnsimple.ContactTest do
     end
   end
 
+  describe "update/4" do
+    test "updateContact patches every supported attribute once and returns a typed contact" do
+      assert {:ok,
+              %ReqDnsimple.Contact{
+                id: 1,
+                account_id: 1010,
+                label: "Offline contact",
+                first_name: "Test",
+                last_name: "Contact",
+                organization_name: "Example Test Organization",
+                job_title: "Test Operator",
+                address1: "1 Example Street",
+                address2: nil,
+                city: "Roma",
+                state_province: "RM",
+                postal_code: "00100",
+                country: "IT",
+                phone: "+12025550123",
+                fax: nil,
+                email: "contact@example.test",
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:30:00Z]
+              }} =
+               ReqDnsimple.Contact.update(
+                 client(200, %{"data" => @contact_data}),
+                 1010,
+                 1,
+                 @contact_attrs
+               )
+
+      assert_request(:patch, "/v2/1010/contacts/1", %{}, Map.new(@contact_attrs))
+      refute_received {:request, _request}
+    end
+
+    test "updateContact preserves omitted fields, empty strings, nullable values, and zero IDs" do
+      for {account_id, contact_id, attrs, expected_body} <- [
+            {1010, 1, [label: ""], %{"label" => ""}},
+            {1010, 1, [address2: nil, fax: nil], %{"address2" => nil, "fax" => nil}},
+            {0, 0, [], %{}}
+          ] do
+        assert {:ok, %ReqDnsimple.Contact{postal_code: "00100", address2: nil, fax: nil}} =
+                 ReqDnsimple.Contact.update(
+                   client(200, %{"data" => @contact_data}),
+                   account_id,
+                   contact_id,
+                   attrs
+                 )
+
+        assert_request(
+          :patch,
+          "/v2/#{account_id}/contacts/#{contact_id}",
+          %{},
+          expected_body
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "updateContact rejects invalid paths and attributes before HTTP" do
+      request = client(200, %{"data" => @contact_data})
+
+      invalid_cases =
+        [
+          {"1010", 1, [label: "Updated"]},
+          {nil, 1, [label: "Updated"]},
+          {1010, "1", [label: "Updated"]},
+          {1010, nil, [label: "Updated"]},
+          {1010, 1, [:invalid]},
+          {1010, 1, [{:name}]},
+          {1010, 1, [organization_name: "Example"]},
+          {1010, 1, [unknown: true]}
+        ] ++
+          for field <- [
+                :label,
+                :first_name,
+                :last_name,
+                :address1,
+                :city,
+                :state_province,
+                :postal_code,
+                :email,
+                :phone,
+                :organization_name,
+                :job_title
+              ],
+              value <- [nil, false, 0, [], %{}] do
+            {1010, 1, [{field, value}]}
+          end ++
+          for field <- [:address2, :fax],
+              value <- [false, 0, [], %{}] do
+            {1010, 1, [{field, value}]}
+          end ++
+          for value <- [nil, false, 0, [], %{}, "it", "ITA"] do
+            {1010, 1, [country: value]}
+          end
+
+      for {account_id, contact_id, attrs} <- invalid_cases do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Contact.update(request, account_id, contact_id, attrs)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "updateContact preserves documented and shared HTTP failures" do
+      for status <- [400, 401, 403, 404, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"country" => ["is invalid"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Contact.update(
+                   client(status, body),
+                   1010,
+                   1,
+                   label: "Updated"
+                 )
+
+        assert_request(:patch, "/v2/1010/contacts/1", %{}, %{"label" => "Updated"})
+        refute_received {:request, _request}
+      end
+    end
+
+    test "updateContact returns explicit errors for malformed success and unexpected status" do
+      malformed_responses = [
+        {200, %{}},
+        {200, %{"data" => nil}},
+        {200, %{"data" => Map.delete(@contact_data, "id")}},
+        {200, %{"data" => Map.delete(@contact_data, "address2")}},
+        {200, %{"data" => Map.put(@contact_data, "address2", false)}},
+        {200, %{"data" => Map.put(@contact_data, "fax", 0)}},
+        {200, %{"data" => Map.put(@contact_data, "country", nil)}},
+        {200, %{"data" => Map.put(@contact_data, "created_at", "not-a-timestamp")}},
+        {201, %{"data" => @contact_data}}
+      ]
+
+      for {status, body} <- malformed_responses do
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Contact.update(
+                   client(status, body),
+                   1010,
+                   1,
+                   label: "Updated"
+                 )
+
+        assert_request(:patch, "/v2/1010/contacts/1", %{}, %{"label" => "Updated"})
+        refute_received {:request, _request}
+      end
+    end
+
+    test "updateContact preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Contact.update(
+                 transport_error_client(:timeout),
+                 1010,
+                 1,
+                 label: "Updated"
+               )
+    end
+  end
+
   describe "delete/3" do
     test "deleteContact sends one bodyless request and returns :ok" do
       assert :ok = ReqDnsimple.Contact.delete(client(204, ""), 1010, 1)
