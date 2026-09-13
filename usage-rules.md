@@ -101,6 +101,8 @@ Different modules use slightly different return conventions:
 | `Registrar.disable_transfer_lock/3` | `{:ok, %Registrar.TransferLock{}}` | `{:error, reason}` |
 | `RegistrantChange.create/3` | `{:ok, %RegistrantChange{}}` | `{:error, reason}` |
 | `RegistrantChange.get/3` | `{:ok, %RegistrantChange{}}` | `{:error, reason}` |
+| `RegistrantChange.list_page/2,3` and `RegistrantChange.list/2,3` | `{:ok, {[RegistrantChange.t()], pagination}}` | `{:error, reason}` |
+| `RegistrantChange.list_all/2,3` | `{:ok, [RegistrantChange.t()]}` | `{:error, reason}` |
 | `RegistrantChange.cancel/3` | `{:ok, %RegistrantChange{}}` or `:ok` | `{:error, reason}` |
 | `Registrar.enable_whois_privacy/3` | `{:ok, %Registrar.WhoisPrivacy{}}` | `{:error, reason}` |
 | `Registrar.disable_whois_privacy/3` | `{:ok, %Registrar.WhoisPrivacy{}}` | `{:error, reason}` |
@@ -329,11 +331,12 @@ not contact the callback URL, inspect deliveries, or list registrations first.
   ordered intermediate chain; or retrieve its private key as byte-preserved PEM
   strings without parsing, logging, persisting, or writing files.
 - `ReqDnsimple.RegistrantChange` — Start a registrar contact-change request from
-  explicit domain/contact identifiers, retrieve one by integer ID, or cancel it
-  without polling. Creation returns immediate and pending responses without a
-  requirements check. Cancellation returns the typed current request when
-  asynchronous or `:ok` when immediate. Registry extended attributes retain
-  string keys and values, and the registry lock-lift date may be `nil`.
+  explicit domain/contact identifiers; list one filtered, sorted page or
+  explicitly enumerate all matching pages; retrieve one by integer ID; or
+  cancel it without polling. Creation returns immediate and pending responses
+  without a requirements check. Cancellation returns the typed current request
+  when asynchronous or `:ok` when immediate. Registry extended attributes
+  retain string keys and values, and the registry lock-lift date may be `nil`.
 - `ReqDnsimple.Tld` — Retrieve one TLD's capabilities or its non-paginated,
   typed registry extended-attribute definitions. Arbitrary attribute names and
   option values remain strings, free-text attributes retain empty option lists,

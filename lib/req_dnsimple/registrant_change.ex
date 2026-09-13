@@ -1,6 +1,6 @@
 defmodule ReqDnsimple.RegistrantChange do
   @moduledoc """
-  Creates, retrieves, and cancels registrar contact-change requests.
+  Creates, lists, retrieves, and cancels registrar contact-change requests.
 
   ## Example
 
@@ -17,6 +17,19 @@ defmodule ReqDnsimple.RegistrantChange do
 
       ReqDnsimple.RegistrantChange.get(req, 1010, 1)
       #=> {:ok, %ReqDnsimple.RegistrantChange{}}
+
+      ReqDnsimple.RegistrantChange.list_page(req, 1010,
+        sort: [id: :asc],
+        state: "completed",
+        domain_id: "100",
+        contact_id: "11",
+        page: 2,
+        per_page: 30
+      )
+      #=> {:ok, {[%ReqDnsimple.RegistrantChange{}], %{"current_page" => 2}}}
+
+      ReqDnsimple.RegistrantChange.list_all(req, 1010, state: "pending")
+      #=> {:ok, [%ReqDnsimple.RegistrantChange{}]}
 
       ReqDnsimple.RegistrantChange.cancel(req, 1010, 1)
       #=> {:ok, %ReqDnsimple.RegistrantChange{state: "cancelling"}}
@@ -66,6 +79,18 @@ defmodule ReqDnsimple.RegistrantChange do
   ]
 
   @states ~w(new pending cancelling cancelled completed)
+
+  @list_schema [
+    sort: [
+      type: {:custom, ReqDnsimple, :validate_sort, [[:id]]},
+      doc: "Sort by id. Format: [id: :asc]"
+    ],
+    state: [type: {:in, @states}, doc: "Filter by registrant-change state"],
+    domain_id: [type: :string, doc: "Filter by domain ID"],
+    contact_id: [type: :string, doc: "Filter by contact ID"],
+    page: [type: :pos_integer, doc: "Page number for pagination"],
+    per_page: [type: {:in, 1..100}, doc: "Number of registrant changes per page"]
+  ]
 
   @doc """
   Starts a registrar contact-change request.
@@ -170,6 +195,84 @@ defmodule ReqDnsimple.RegistrantChange do
   end
 
   @doc """
+  Lists one page of registrar contact-change requests.
+
+  Supports `:state`, string `:domain_id` and `:contact_id` filters, `:page`,
+  `:per_page`, and ordered `:id` sorting. Omitted filters remain omitted so
+  DNSimple retains its default open-state filter.
+
+  ## Example
+
+      ReqDnsimple.RegistrantChange.list_page(
+        req,
+        1010,
+        sort: [id: :asc],
+        state: "completed",
+        domain_id: "100",
+        contact_id: "11",
+        page: 2,
+        per_page: 30
+      )
+      #=> {:ok, {[%ReqDnsimple.RegistrantChange{}], %{"current_page" => 2}}}
+  """
+  @spec list_page(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req, account_id, opts \\ []) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate([account_id: account_id], @create_path_schema),
+         {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_schema) do
+      req =
+        Req.merge(req,
+          method: :get,
+          url: "/:account_id/registrar/registrant_changes",
+          path_params_style: :colon,
+          path_params: [account_id: account_id],
+          params: validated_opts |> ReqDnsimple.convert_sort_to_string() |> Map.new()
+        )
+
+      case Req.request(req) do
+        {:ok,
+         %Req.Response{
+           status: 200,
+           body: %{"data" => data, "pagination" => pagination}
+         } = response} ->
+          case decode_page(data, pagination) do
+            {:ok, result} -> {:ok, result}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Lists one page of registrar contact-change requests.
+
+  This convenience alias delegates to `list_page/3` and never enumerates
+  additional pages.
+  """
+  @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list(req, account_id, opts \\ []), do: list_page(req, account_id, opts)
+
+  @doc """
+  Enumerates every matching registrar contact-change request in server order.
+
+  Enumeration begins at page one. An explicit `:page` option is rejected;
+  filters, sorting, and `:per_page` are retained for every request.
+  """
+  @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
+          {:ok, [t()]} | {:error, term()}
+  def list_all(req, account_id, opts \\ []) do
+    ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, &1))
+  end
+
+  @doc """
   Cancels a registrar contact-change request.
 
   Returns `{:ok, %ReqDnsimple.RegistrantChange{}}` for an asynchronous
@@ -259,6 +362,43 @@ defmodule ReqDnsimple.RegistrantChange do
   end
 
   defp decode(_data), do: :error
+
+  defp decode_page(data, pagination) when is_list(data) do
+    with {:ok, registrant_changes} <- decode_many(data),
+         true <- valid_pagination?(pagination) do
+      {:ok, {registrant_changes, pagination}}
+    else
+      _error -> :error
+    end
+  end
+
+  defp decode_page(_data, _pagination), do: :error
+
+  defp decode_many(data) do
+    Enum.reduce_while(data, {:ok, []}, fn item, {:ok, registrant_changes} ->
+      case decode(item) do
+        {:ok, registrant_change} -> {:cont, {:ok, [registrant_change | registrant_changes]}}
+        :error -> {:halt, :error}
+      end
+    end)
+    |> case do
+      {:ok, registrant_changes} -> {:ok, Enum.reverse(registrant_changes)}
+      :error -> :error
+    end
+  end
+
+  defp valid_pagination?(%{
+         "current_page" => current_page,
+         "per_page" => per_page,
+         "total_entries" => total_entries,
+         "total_pages" => total_pages
+       })
+       when is_integer(current_page) and current_page >= 0 and is_integer(per_page) and
+              per_page > 0 and is_integer(total_entries) and total_entries >= 0 and
+              is_integer(total_pages) and total_pages >= 0,
+       do: true
+
+  defp valid_pagination?(_pagination), do: false
 
   defp parse_optional_date(nil), do: {:ok, nil}
 

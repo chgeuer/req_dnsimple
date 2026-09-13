@@ -597,6 +597,21 @@ separate from hosted-zone apex NS records and `Zone.update_ns_records/4`.
 {:ok, %ReqDnsimple.RegistrantChange{} = change} =
   ReqDnsimple.RegistrantChange.get(client, account_id, registrant_change_id)
 
+{:ok, {changes, pagination}} =
+  ReqDnsimple.RegistrantChange.list_page(
+    client,
+    account_id,
+    sort: [id: :asc],
+    state: "completed",
+    domain_id: "100",
+    contact_id: "11",
+    page: 2,
+    per_page: 30
+  )
+
+{:ok, all_pending_changes} =
+  ReqDnsimple.RegistrantChange.list_all(client, account_id, state: "pending")
+
 {:ok, %ReqDnsimple.RegistrantChange{state: "cancelling"}} =
   ReqDnsimple.RegistrantChange.cancel(client, account_id, registrant_change_id)
 ```
