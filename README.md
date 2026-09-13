@@ -154,6 +154,17 @@ may renew an expired domain subscription and charge the account during
 activation. The client does not preflight billing, register a domain, or make
 follow-up requests.
 
+### Deactivate DNS service for a zone
+
+```elixir
+{:ok, zone} = ReqDnsimple.Zone.deactivate(client, account_id, "example.com")
+# => {:ok, %ReqDnsimple.Zone{active: false, ...}}
+```
+
+Deactivation sends one bodyless request and stops DNS resolution without
+deleting the zone, domain, or records. The client performs no preflight,
+follow-up request, or additional mutation.
+
 ### Manage DNS records
 
 **List records for a zone:**
@@ -1075,7 +1086,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple` | Client, `/whoami`, apex NS record enumeration | `new_client/1`, `whoami/1`, `token_type/1`, `ns_records/3` |
 | `ReqDnsimple.OAuth` | `/oauth/access_token` | `exchange_code/2` |
 | `ReqDnsimple.Account` | `/accounts` | `list/1` |
-| `ReqDnsimple.Zone` | `/zones` | `list/3`, `update_ns_records/4`, `get_zone_file/3`, `check_zone_distribution/3` |
+| `ReqDnsimple.Zone` | `/zones` | `list/3`, `activate/3`, `deactivate/3`, `update_ns_records/4`, `get_zone_file/3`, `check_zone_distribution/3` |
 | `ReqDnsimple.ZoneRecord` | `/zones/:zone/records`, `/zones/:zone/batch` | `list/4`, `get/4`, `create/4`, `update/5`, `delete/4`, `check_distribution/4`, `batch_change/4` |
 | `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/3` |
 | `ReqDnsimple.Contact` | `/contacts` | `list/3`, `get/3`, `delete/3` |

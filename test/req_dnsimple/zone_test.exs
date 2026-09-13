@@ -162,6 +162,150 @@ defmodule ReqDnsimple.ZoneTest do
     end
   end
 
+  describe "deactivate/3" do
+    test "deactivateZoneService sends one bodyless request and returns the inactive zone" do
+      inactive_zone = Map.put(@zone_data, "active", false)
+
+      assert {:ok,
+              %ReqDnsimple.Zone{
+                id: 1,
+                account_id: 1010,
+                name: "example.test",
+                reverse: false,
+                secondary: false,
+                last_transferred_at: nil,
+                active: false,
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:30:00Z]
+              }} =
+               ReqDnsimple.Zone.deactivate(
+                 client(200, %{"data" => inactive_zone}),
+                 1010,
+                 "example.test"
+               )
+
+      assert_request(:delete, "/v2/1010/zones/example.test/activation", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "deactivateZoneService accepts zero and empty path identifiers" do
+      inactive_zone = Map.put(@zone_data, "active", false)
+
+      assert {:ok, %ReqDnsimple.Zone{active: false}} =
+               ReqDnsimple.Zone.deactivate(
+                 client(200, %{"data" => inactive_zone}),
+                 0,
+                 ""
+               )
+
+      assert_request(:delete, "/v2/0/zones//activation", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "deactivateZoneService rejects invalid path parameters before HTTP" do
+      request = client(200, %{"data" => Map.put(@zone_data, "active", false)})
+
+      for {account_id, zone} <- [
+            {"1010", "example.test"},
+            {nil, "example.test"},
+            {1010, nil},
+            {1010, 42},
+            {1010, []}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Zone.deactivate(request, account_id, zone)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "deactivateZoneService preserves documented and shared HTTP failures" do
+      for status <- [401, 403, 404, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"zone" => ["cannot deactivate DNS service"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Zone.deactivate(
+                   client(status, body),
+                   1010,
+                   "example.test"
+                 )
+
+        assert_request(:delete, "/v2/1010/zones/example.test/activation", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "deactivateZoneService returns explicit errors for malformed success" do
+      inactive_zone = Map.put(@zone_data, "active", false)
+
+      malformed_bodies = [
+        %{},
+        %{"data" => nil},
+        %{"data" => []},
+        %{"data" => Map.delete(inactive_zone, "last_transferred_at")},
+        %{"data" => Map.put(inactive_zone, "id", "1")},
+        %{"data" => Map.put(inactive_zone, "active", nil)},
+        %{"data" => Map.put(inactive_zone, "last_transferred_at", "not-a-timestamp")},
+        %{"data" => Map.put(inactive_zone, "created_at", nil)}
+      ]
+
+      for body <- malformed_bodies do
+        assert {:error, %{status: 200, response: ^body}} =
+                 ReqDnsimple.Zone.deactivate(
+                   client(200, body),
+                   1010,
+                   "example.test"
+                 )
+
+        assert_request(:delete, "/v2/1010/zones/example.test/activation", %{}, nil)
+        refute_received {:request, _request}
+      end
+
+      assert {:error, %{status: 204, response: nil}} =
+               ReqDnsimple.Zone.deactivate(
+                 client(204, nil),
+                 1010,
+                 "example.test"
+               )
+
+      assert_request(:delete, "/v2/1010/zones/example.test/activation", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "deactivateZoneService decodes a non-null transfer timestamp" do
+      inactive_zone =
+        @zone_data
+        |> Map.put("active", false)
+        |> Map.put("last_transferred_at", "2026-08-31T09:15:00+02:00")
+
+      assert {:ok,
+              %ReqDnsimple.Zone{
+                active: false,
+                last_transferred_at: ~U[2026-08-31 07:15:00Z]
+              }} =
+               ReqDnsimple.Zone.deactivate(
+                 client(200, %{"data" => inactive_zone}),
+                 1010,
+                 "example.test"
+               )
+
+      assert_request(:delete, "/v2/1010/zones/example.test/activation", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "deactivateZoneService preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Zone.deactivate(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test"
+               )
+    end
+  end
+
   describe "update_ns_records/4" do
     test "updateZoneNsRecords sends both selections once and returns typed records" do
       attrs = [

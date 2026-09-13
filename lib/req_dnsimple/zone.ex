@@ -12,6 +12,14 @@ defmodule ReqDnsimple.Zone do
   may renew an expired domain subscription and charge the account as part of
   activation; this client performs no billing preflight or additional mutation.
 
+  ## Deactivating DNS service
+
+      ReqDnsimple.Zone.deactivate(req, 1010, "example.test")
+      #=> {:ok, %ReqDnsimple.Zone{active: false}}
+
+  Deactivation stops DNS resolution for the zone without deleting the zone,
+  domain, or records. This client sends only the requested deactivation.
+
   ## Updating apex NS records
 
       ReqDnsimple.Zone.update_ns_records(req, 1010, "example.test",
@@ -66,6 +74,45 @@ defmodule ReqDnsimple.Zone do
       req =
         Req.merge(req,
           method: :put,
+          url: "/:account_id/zones/:zone/activation",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, zone: zone]
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
+          case decode(data) do
+            {:ok, zone} -> {:ok, zone}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Deactivates DNS service for a zone and returns the resulting zone.
+
+  This stops DNS resolution without deleting the zone, domain, or records.
+  The function sends only the requested deactivation and performs no preflight
+  or follow-up request.
+  """
+  @spec deactivate(Req.Request.t(), ReqDnsimple.account_id(), ReqDnsimple.zone_name()) ::
+          {:ok, t()} | {:error, term()}
+  def deactivate(req, account_id, zone) do
+    with {:ok, _validated_params} <-
+           NimbleOptions.validate(
+             [account_id: account_id, zone: zone],
+             @activation_path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :delete,
           url: "/:account_id/zones/:zone/activation",
           path_params_style: :colon,
           path_params: [account_id: account_id, zone: zone]

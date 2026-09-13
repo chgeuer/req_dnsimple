@@ -51,6 +51,7 @@ Different modules use slightly different return conventions:
 | `Account.list/1` | `[%Account{}, ...]` | `{:error, reason}` |
 | `Zone.list/3` | `{:ok, [%Zone{}, ...]}` | `{:error, reason}` |
 | `Zone.activate/3` | `{:ok, %Zone{}}` | `{:error, reason}` |
+| `Zone.deactivate/3` | `{:ok, %Zone{}}` | `{:error, reason}` |
 | `ZoneRecord.list/4` | `{:ok, {[%ZoneRecord{}, ...], pagination}}` | `{:error, reason}` |
 | `ZoneRecord.create/4` | `{:ok, %ZoneRecord{}}` | `{:error, reason}` |
 | `ZoneRecord.update/5` | `{:ok, %ZoneRecord{}}` | `{:error, reason}` |
@@ -286,8 +287,9 @@ deliveries.
 - `ReqDnsimple.Account` — Account listing. Struct: `id`, `email`, optional `name`,
   `plan_identifier`, `created_at`, `updated_at`. DNSimple's examples and official
   SDK include `name` even though its OpenAPI schema omits it.
-- `ReqDnsimple.Zone` — Zone listing, apex NS updates, zone file retrieval, and
-  distribution checks.
+- `ReqDnsimple.Zone` — Zone listing, DNS-service activation/deactivation, apex
+  NS updates, zone file retrieval, and distribution checks. Deactivation stops
+  resolution without deleting the zone, domain, or records.
   Struct: `id`, `account_id`, `name`, `active`, `reverse`, `secondary`, timestamps.
   `last_transferred_at` is `nil` when a zone has not been transferred.
 - `ReqDnsimple.ZoneRecord` — Full CRUD, distribution checks, and atomic batch changes for DNS records.
