@@ -12,31 +12,7 @@ defmodule ReqDnsimple.HttpErrorTest do
   end
 
   test "every existing wrapper returns explicit generic HTTP errors" do
-    operations = [
-      {"whoami", 400, &ReqDnsimple.whoami/1},
-      {"NS records", 401, &ReqDnsimple.ns_records(&1, 1010, "example.com")},
-      {"accounts", 402, &ReqDnsimple.Account.list/1},
-      {"zones", 403, &ReqDnsimple.Zone.list(&1, 1010)},
-      {"zone file", 412, &ReqDnsimple.Zone.get_zone_file(&1, 1010, "example.com")},
-      {"zone distribution", 428,
-       &ReqDnsimple.Zone.check_zone_distribution(&1, 1010, "example.com")},
-      {"zone records", 429, &ReqDnsimple.ZoneRecord.list(&1, 1010, "example.com")},
-      {"zone record", 500, &ReqDnsimple.ZoneRecord.get(&1, 1010, "example.com", 42)},
-      {"create zone record", 502,
-       &ReqDnsimple.ZoneRecord.create(&1, 1010, "example.com",
-         name: "www",
-         type: "A",
-         content: "192.0.2.1"
-       )},
-      {"update zone record", 503,
-       &ReqDnsimple.ZoneRecord.update(&1, 1010, "example.com", 42, content: "192.0.2.2")},
-      {"delete zone record", 504, &ReqDnsimple.ZoneRecord.delete(&1, 1010, "example.com", 42)},
-      {"contacts", 400, &ReqDnsimple.Contact.list(&1, 1010)},
-      {"contact", 401, &ReqDnsimple.Contact.get(&1, 1010, 42)},
-      {"billing charges", 500, &ReqDnsimple.BillingCharge.list(&1, 1010)}
-    ]
-
-    for {name, status, operation} <- operations do
+    for {name, status, operation} <- existing_operations() do
       assert operation.(client(status, @generic_body)) ==
                {:error, %{status: status, response: @generic_body}},
              "#{name} did not preserve the HTTP status and response body"
@@ -97,11 +73,12 @@ defmodule ReqDnsimple.HttpErrorTest do
     end
   end
 
-  test "transport errors remain unchanged" do
-    client = transport_error_client(:econnrefused)
-
-    assert {:error, %Req.TransportError{reason: :econnrefused}} =
-             ReqDnsimple.Account.list(client)
+  test "every existing wrapper returns transport errors" do
+    for {name, _status, operation} <- existing_operations() do
+      assert {:error, %Req.TransportError{reason: :econnrefused}} =
+               operation.(transport_error_client(:econnrefused)),
+             "#{name} did not preserve the transport error"
+    end
   end
 
   test "successful wrappers preserve return shapes and request contracts" do
@@ -298,5 +275,31 @@ defmodule ReqDnsimple.HttpErrorTest do
              )
 
     assert_request(:get, "/v2/1010/billing/charges", %{"start_date" => "2024-01-01"})
+  end
+
+  defp existing_operations do
+    [
+      {"whoami", 400, &ReqDnsimple.whoami/1},
+      {"NS records", 401, &ReqDnsimple.ns_records(&1, 1010, "example.com")},
+      {"accounts", 402, &ReqDnsimple.Account.list/1},
+      {"zones", 403, &ReqDnsimple.Zone.list(&1, 1010)},
+      {"zone file", 412, &ReqDnsimple.Zone.get_zone_file(&1, 1010, "example.com")},
+      {"zone distribution", 428,
+       &ReqDnsimple.Zone.check_zone_distribution(&1, 1010, "example.com")},
+      {"zone records", 429, &ReqDnsimple.ZoneRecord.list(&1, 1010, "example.com")},
+      {"zone record", 500, &ReqDnsimple.ZoneRecord.get(&1, 1010, "example.com", 42)},
+      {"create zone record", 502,
+       &ReqDnsimple.ZoneRecord.create(&1, 1010, "example.com",
+         name: "www",
+         type: "A",
+         content: "192.0.2.1"
+       )},
+      {"update zone record", 503,
+       &ReqDnsimple.ZoneRecord.update(&1, 1010, "example.com", 42, content: "192.0.2.2")},
+      {"delete zone record", 504, &ReqDnsimple.ZoneRecord.delete(&1, 1010, "example.com", 42)},
+      {"contacts", 400, &ReqDnsimple.Contact.list(&1, 1010)},
+      {"contact", 401, &ReqDnsimple.Contact.get(&1, 1010, 42)},
+      {"billing charges", 500, &ReqDnsimple.BillingCharge.list(&1, 1010)}
+    ]
   end
 end

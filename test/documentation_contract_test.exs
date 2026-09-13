@@ -3,6 +3,16 @@ defmodule ReqDnsimple.DocumentationContractTest do
 
   @root Path.expand("..", __DIR__)
   @implementation_states ~w(existing implemented pending out-of-scope)
+  @out_of_scope_operation_ids ~w(
+    cancelDomainTransfer
+    changeDomainDelegationFromVanity
+    changeDomainDelegationToVanity
+    checkRegistrantChange
+    getDomainRegistration
+    getDomainRenewal
+    getDomainRestore
+    getDomainTransfer
+  )
 
   test "public guides describe bounded coverage and the versioned inventory states" do
     readme = File.read!(Path.join(@root, "README.md"))
@@ -14,6 +24,10 @@ defmodule ReqDnsimple.DocumentationContractTest do
 
     assert readme =~ "docs/audit/operation-inventory.json"
     assert usage_rules =~ "docs/audit/operation-inventory.json"
+    assert readme =~ "103 supported operations"
+    assert usage_rules =~ "103 supported operations"
+    assert readme =~ "eight additional"
+    assert usage_rules =~ "eight additional"
 
     for state <- @implementation_states do
       assert readme =~ "`#{state}`"
@@ -28,6 +42,46 @@ defmodule ReqDnsimple.DocumentationContractTest do
 
     refute Enum.any?(Jason.decode!(inventory)["operations"], &(&1["implementation"] == "pending"))
     assert_inventory_states(inventory)
+  end
+
+  test "inventory reconciles every scoped operation with implementation and contract evidence" do
+    inventory =
+      @root
+      |> Path.join("docs/audit/operation-inventory.json")
+      |> File.read!()
+      |> Jason.decode!()
+
+    assert inventory["approved_operation_count"] == 103
+    assert length(inventory["operations"]) == 111
+
+    {scoped, excluded} = Enum.split_with(inventory["operations"], & &1["in_scope"])
+
+    assert length(scoped) == 103
+    assert length(excluded) == 8
+    assert Enum.uniq_by(inventory["operations"], & &1["operation_id"]) == inventory["operations"]
+
+    assert excluded |> Enum.map(& &1["operation_id"]) |> Enum.sort() ==
+             Enum.sort(@out_of_scope_operation_ids)
+
+    for operation <- scoped do
+      assert operation["implementation"] in ~w(existing implemented)
+      assert operation["implemented_interfaces"] != []
+      assert operation["contract_tests"] != []
+
+      for interface <- operation["implemented_interfaces"] do
+        assert_exported_interface(interface, operation["operation_id"])
+      end
+
+      for contract_test <- operation["contract_tests"] do
+        assert_contract_test_location(contract_test, operation["operation_id"])
+      end
+    end
+
+    for operation <- excluded do
+      assert operation["implementation"] == "out-of-scope"
+      assert operation["implemented_interfaces"] == []
+      assert operation["contract_tests"] == []
+    end
   end
 
   test "inventory accepts a campaign before its first new operation is implemented" do
@@ -121,6 +175,57 @@ defmodule ReqDnsimple.DocumentationContractTest do
     for operation <- operations do
       assert is_map(operation)
       assert operation["implementation"] in @implementation_states
+    end
+  end
+
+  defp assert_exported_interface(interface, operation_id) do
+    {module_name, function_name, arity} =
+      case interface do
+        %{"module" => module, "function" => function, "arity" => arity} ->
+          {module, function, arity}
+
+        interface when is_binary(interface) ->
+          [module_and_function, arity] = String.split(interface, "/")
+          parts = String.split(module_and_function, ".")
+          {Enum.join(Enum.drop(parts, -1), "."), List.last(parts), String.to_integer(arity)}
+      end
+
+    module = Module.concat(String.split(module_name, "."))
+
+    assert Code.ensure_loaded?(module),
+           "#{operation_id} references unavailable module #{module_name}"
+
+    function = String.to_existing_atom(function_name)
+
+    assert function_exported?(module, function, arity),
+           "#{operation_id} references unavailable interface #{module_name}.#{function_name}/#{arity}"
+  end
+
+  defp assert_contract_test_location(contract_test, operation_id) do
+    {file, label} =
+      case contract_test do
+        %{"file" => file, "describe" => describe} -> {file, describe}
+        contract_test when is_binary(contract_test) -> split_test_location(contract_test)
+      end
+
+    absolute_file = Path.expand(file, @root)
+
+    assert String.starts_with?(absolute_file, Path.join(@root, "test/")),
+           "#{operation_id} references a test outside the test directory: #{file}"
+
+    assert File.regular?(absolute_file),
+           "#{operation_id} references a missing contract-test file: #{file}"
+
+    if label do
+      assert File.read!(absolute_file) =~ label,
+             "#{operation_id} references a missing contract-test label: #{file}: #{label}"
+    end
+  end
+
+  defp split_test_location(contract_test) do
+    case String.split(contract_test, ": ", parts: 2) do
+      [file] -> {file, nil}
+      [file, label] -> {file, label}
     end
   end
 end

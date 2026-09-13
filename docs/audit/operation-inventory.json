@@ -629,7 +629,11 @@
       "implemented_interfaces": [
         "ReqDnsimple.Zone.check_zone_distribution/3"
       ],
-      "contract_tests": []
+      "contract_tests": [
+        "test/http_error_test.exs: successful wrappers preserve return shapes and request contracts",
+        "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
+        "test/http_error_test.exs: every existing wrapper returns transport errors"
+      ]
     },
     {
       "operation_id": "checkZoneRecordDistribution",
@@ -1371,7 +1375,11 @@
       "implemented_interfaces": [
         "ReqDnsimple.ZoneRecord.create/4"
       ],
-      "contract_tests": []
+      "contract_tests": [
+        "test/zone_record_test.exs: create accepts and transmits explicit zero TTL and priority for apex records",
+        "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
+        "test/http_error_test.exs: every existing wrapper returns transport errors"
+      ]
     },
     {
       "operation_id": "deactivateZoneService",
@@ -1979,7 +1987,11 @@
       "implemented_interfaces": [
         "ReqDnsimple.ZoneRecord.delete/4"
       ],
-      "contract_tests": []
+      "contract_tests": [
+        "test/http_error_test.exs: successful wrappers preserve return shapes and request contracts",
+        "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
+        "test/http_error_test.exs: every existing wrapper returns transport errors"
+      ]
     },
     {
       "operation_id": "disableDomainAutoRenewal",
@@ -2969,7 +2981,11 @@
       "implemented_interfaces": [
         "ReqDnsimple.Contact.get/3"
       ],
-      "contract_tests": []
+      "contract_tests": [
+        "test/http_error_test.exs: successful wrappers preserve return shapes and request contracts",
+        "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
+        "test/http_error_test.exs: every existing wrapper returns transport errors"
+      ]
     },
     {
       "operation_id": "getDomain",
@@ -4114,7 +4130,11 @@
       "implemented_interfaces": [
         "ReqDnsimple.Zone.get_zone_file/3"
       ],
-      "contract_tests": []
+      "contract_tests": [
+        "test/http_error_test.exs: successful wrappers preserve return shapes and request contracts",
+        "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
+        "test/http_error_test.exs: every existing wrapper returns transport errors"
+      ]
     },
     {
       "operation_id": "getZoneRecord",
@@ -4128,7 +4148,11 @@
       "implemented_interfaces": [
         "ReqDnsimple.ZoneRecord.get/4"
       ],
-      "contract_tests": []
+      "contract_tests": [
+        "test/http_error_test.exs: successful wrappers preserve return shapes and request contracts",
+        "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
+        "test/http_error_test.exs: every existing wrapper returns transport errors"
+      ]
     },
     {
       "operation_id": "initiateDomainPush",
@@ -4417,7 +4441,11 @@
       "implemented_interfaces": [
         "ReqDnsimple.Account.list/1"
       ],
-      "contract_tests": []
+      "contract_tests": [
+        "test/account_test.exs: list preserves the optional account name and its existing bare-list response",
+        "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
+        "test/http_error_test.exs: every existing wrapper returns transport errors"
+      ]
     },
     {
       "operation_id": "listCertificates",
@@ -4611,7 +4639,11 @@
         "ReqDnsimple.BillingCharge.list/2",
         "ReqDnsimple.BillingCharge.list/3"
       ],
-      "contract_tests": []
+      "contract_tests": [
+        "test/billing_charge_test.exs: list preserves exact monetary strings and nullable manual item references",
+        "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
+        "test/http_error_test.exs: every existing wrapper returns transport errors"
+      ]
     },
     {
       "operation_id": "listContacts",
@@ -4626,7 +4658,12 @@
         "ReqDnsimple.Contact.list/2",
         "ReqDnsimple.Contact.list/3"
       ],
-      "contract_tests": []
+      "contract_tests": [
+        "test/http_error_test.exs: successful wrappers preserve return shapes and request contracts",
+        "test/pagination_test.exs: list_page returns typed items and pagination for every paginated resource",
+        "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
+        "test/http_error_test.exs: every existing wrapper returns transport errors"
+      ]
     },
     {
       "operation_id": "listDomainAppliedServices",
@@ -6689,7 +6726,12 @@
         "ReqDnsimple.ZoneRecord.list/3",
         "ReqDnsimple.ZoneRecord.list/4"
       ],
-      "contract_tests": []
+      "contract_tests": [
+        "test/http_error_test.exs: successful wrappers preserve return shapes and request contracts",
+        "test/pagination_test.exs: list_page returns typed items and pagination for every paginated resource",
+        "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
+        "test/http_error_test.exs: every existing wrapper returns transport errors"
+      ]
     },
     {
       "operation_id": "listZones",
@@ -6704,7 +6746,12 @@
         "ReqDnsimple.Zone.list/2",
         "ReqDnsimple.Zone.list/3"
       ],
-      "contract_tests": []
+      "contract_tests": [
+        "test/http_error_test.exs: successful wrappers preserve return shapes and request contracts",
+        "test/pagination_test.exs: list_page returns typed items and pagination for every paginated resource",
+        "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
+        "test/http_error_test.exs: every existing wrapper returns transport errors"
+      ]
     },
     {
       "operation_id": "oauthToken",
@@ -7744,7 +7791,11 @@
       "implemented_interfaces": [
         "ReqDnsimple.ZoneRecord.update/5"
       ],
-      "contract_tests": []
+      "contract_tests": [
+        "test/zone_record_test.exs: update transmits explicit zero without adding omitted fields",
+        "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
+        "test/http_error_test.exs: every existing wrapper returns transport errors"
+      ]
     },
     {
       "operation_id": "whoami",
@@ -7758,7 +7809,11 @@
       "implemented_interfaces": [
         "ReqDnsimple.whoami/1"
       ],
-      "contract_tests": []
+      "contract_tests": [
+        "test/req_dnsimple_test.exs: whoami/1",
+        "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
+        "test/http_error_test.exs: every existing wrapper returns transport errors"
+      ]
     }
   ]
 }

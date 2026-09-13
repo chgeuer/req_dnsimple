@@ -19,6 +19,9 @@ for that boundary:
 
 The inventory records implementation and test evidence; the repository's `br`
 tracker remains the authority for live campaign progress.
+It currently reconciles 103 supported operations (13 original and 90 added)
+with executable contract-test locations and records eight additional published
+operations as explicitly `out-of-scope`.
 
 ## Installation
 

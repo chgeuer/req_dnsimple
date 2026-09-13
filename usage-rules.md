@@ -21,7 +21,10 @@ an operation is part of the library's supported surface:
 
 The inventory describes the bounded implementation target and its evidence, not
 live issue state. The repository's `br` tracker is the authority for campaign
-progress. An operation absent from the inventory is not implicitly supported.
+progress. It currently reconciles 103 supported operations (13 original and 90
+added) with executable contract-test locations and records eight additional
+published operations as explicitly `out-of-scope`. An operation absent from the
+inventory is not implicitly supported.
 
 ## Client Creation
 
