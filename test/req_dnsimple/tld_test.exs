@@ -142,6 +142,235 @@ defmodule ReqDnsimple.TldTest do
     end
   end
 
+  describe "list_page/2 and list/2" do
+    test "listTlds sends supported query options once and decodes typed data" do
+      pagination = %{
+        "current_page" => 2,
+        "per_page" => 1,
+        "total_entries" => 2,
+        "total_pages" => 2
+      }
+
+      data =
+        tld_data()
+        |> Map.put("tld", "co.uk")
+        |> Map.put("name_server_min", "002")
+        |> Map.delete("name_server_max")
+
+      assert {:ok,
+              {[
+                 %ReqDnsimple.Tld{
+                   tld: "co.uk",
+                   name_server_min: 2,
+                   name_server_max: nil,
+                   auto_renew_only: false,
+                   minimum_registration: 0,
+                   trustee_service_enabled: false
+                 }
+               ], ^pagination}} =
+               ReqDnsimple.Tld.list_page(
+                 client(200, %{"data" => [data], "pagination" => pagination}),
+                 sort: [tld: :asc, tld: :desc],
+                 page: 2,
+                 per_page: 1
+               )
+
+      assert_request(
+        :get,
+        "/v2/tlds",
+        %{"sort" => "tld:asc,tld:desc", "page" => 2, "per_page" => 1},
+        nil
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "listTlds alias requests one empty page without materializing defaults" do
+      pagination = %{
+        "current_page" => 1,
+        "per_page" => 30,
+        "total_entries" => 0,
+        "total_pages" => 0
+      }
+
+      assert {:ok, {[], ^pagination}} =
+               ReqDnsimple.Tld.list(client(200, %{"data" => [], "pagination" => pagination}))
+
+      assert_request(:get, "/v2/tlds", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "listTlds rejects invalid options before HTTP" do
+      request = client(200, %{})
+
+      invalid_options = [
+        [:invalid],
+        [{:name}],
+        [unknown: true],
+        [page: 0],
+        [per_page: 0],
+        [per_page: 101],
+        [sort: [name: :asc]],
+        [sort: [tld: :up]],
+        [sort: "tld:asc"]
+      ]
+
+      for opts <- invalid_options do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Tld.list_page(request, opts)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "listTlds rejects malformed successful responses" do
+      pagination = %{
+        "current_page" => 1,
+        "per_page" => 30,
+        "total_entries" => 1,
+        "total_pages" => 1
+      }
+
+      malformed_bodies = [
+        %{},
+        %{"data" => nil, "pagination" => pagination},
+        %{"data" => %{}, "pagination" => pagination},
+        %{"data" => [Map.put(tld_data(), "name_server_min", nil)], "pagination" => pagination},
+        %{"data" => [Map.put(tld_data(), "name_server_max", "+13")], "pagination" => pagination},
+        %{"data" => [Map.put(tld_data(), "name_server_min", "2x")], "pagination" => pagination},
+        %{"data" => [Map.put(tld_data(), "tld_type", 4)], "pagination" => pagination},
+        %{"data" => [tld_data()]},
+        %{"data" => [tld_data()], "pagination" => nil},
+        %{"data" => [tld_data()], "pagination" => Map.delete(pagination, "total_entries")},
+        %{"data" => [tld_data()], "pagination" => %{pagination | "per_page" => 0}}
+      ]
+
+      for body <- malformed_bodies do
+        assert {:error, %{status: 200, response: ^body}} =
+                 ReqDnsimple.Tld.list_page(client(200, body))
+
+        assert_request(:get, "/v2/tlds", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "listTlds preserves HTTP and transport failures" do
+      for status <- [401, 403, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"tld" => ["was not found"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Tld.list_page(client(status, body))
+
+        assert_request(:get, "/v2/tlds", %{}, nil)
+        refute_received {:request, _request}
+      end
+
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Tld.list_page(transport_error_client(:timeout))
+    end
+  end
+
+  describe "list_all/2" do
+    test "enumerates from page one while preserving sorting, page size, and server order" do
+      second = Map.put(tld_data(), "tld", "org")
+
+      pages = %{
+        1 =>
+          {[tld_data()],
+           %{
+             "current_page" => 1,
+             "per_page" => 1,
+             "total_entries" => 2,
+             "total_pages" => 2
+           }},
+        2 =>
+          {[second],
+           %{
+             "current_page" => 2,
+             "per_page" => 1,
+             "total_entries" => 2,
+             "total_pages" => 2
+           }}
+      }
+
+      assert {:ok, [%ReqDnsimple.Tld{tld: "com.au"}, %ReqDnsimple.Tld{tld: "org"}]} =
+               ReqDnsimple.Tld.list_all(
+                 tld_page_client(pages),
+                 sort: [tld: :desc],
+                 per_page: 1
+               )
+
+      assert_request(
+        :get,
+        "/v2/tlds",
+        %{"sort" => "tld:desc", "page" => 1, "per_page" => 1}
+      )
+
+      assert_request(
+        :get,
+        "/v2/tlds",
+        %{"sort" => "tld:desc", "page" => 2, "per_page" => 1}
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "rejects explicit pages and malformed option containers before HTTP" do
+      request = client(200, %{})
+
+      assert {:error, {:invalid_option, :page}} =
+               ReqDnsimple.Tld.list_all(request, page: 2)
+
+      for opts <- [[:invalid], [{:name}]] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Tld.list_all(request, opts)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "aborts on later-page failures and rejects non-progressing pagination" do
+      first_page = %{
+        "current_page" => 1,
+        "per_page" => 1,
+        "total_entries" => 2,
+        "total_pages" => 2
+      }
+
+      http_client =
+        tld_response_client(fn
+          1 -> {200, %{"data" => [tld_data()], "pagination" => first_page}}
+          2 -> {503, %{"message" => "unavailable"}}
+        end)
+
+      assert {:error, %{status: 503, response: %{"message" => "unavailable"}}} =
+               ReqDnsimple.Tld.list_all(http_client)
+
+      assert_request(:get, "/v2/tlds", %{"page" => 1})
+      assert_request(:get, "/v2/tlds", %{"page" => 2})
+
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Tld.list_all(
+                 tld_response_client(fn
+                   1 -> {200, %{"data" => [tld_data()], "pagination" => first_page}}
+                   2 -> {:error, :timeout}
+                 end)
+               )
+
+      repeated = %{first_page | "current_page" => 1}
+
+      assert {:error, {:invalid_pagination, ^repeated}} =
+               ReqDnsimple.Tld.list_all(
+                 tld_response_client(fn _page ->
+                   {200, %{"data" => [tld_data()], "pagination" => repeated}}
+                 end)
+               )
+    end
+  end
+
   describe "list_extended_attributes/2" do
     test "getTldExtendedAttributes retrieves typed definitions without pagination or a body" do
       body = extended_attributes_body()
@@ -273,24 +502,58 @@ defmodule ReqDnsimple.TldTest do
   end
 
   defp tld_body do
+    %{"data" => tld_data()}
+  end
+
+  defp tld_data do
     %{
-      "data" => %{
-        "tld" => "com.au",
-        "tld_type" => 1,
-        "whois_privacy" => true,
-        "auto_renew_only" => false,
-        "idn" => true,
-        "minimum_registration" => 0,
-        "registration_enabled" => true,
-        "renewal_enabled" => true,
-        "transfer_enabled" => true,
-        "dnssec_interface_type" => "ds",
-        "name_server_min" => 2,
-        "name_server_max" => 13,
-        "trustee_service_enabled" => false,
-        "trustee_service_required" => false
-      }
+      "tld" => "com.au",
+      "tld_type" => 1,
+      "whois_privacy" => true,
+      "auto_renew_only" => false,
+      "idn" => true,
+      "minimum_registration" => 0,
+      "registration_enabled" => true,
+      "renewal_enabled" => true,
+      "transfer_enabled" => true,
+      "dnssec_interface_type" => "ds",
+      "name_server_min" => 2,
+      "name_server_max" => 13,
+      "trustee_service_enabled" => false,
+      "trustee_service_required" => false
     }
+  end
+
+  defp tld_page_client(pages) do
+    tld_response_client(fn page ->
+      {data, pagination} = Map.fetch!(pages, page)
+      {200, %{"data" => data, "pagination" => pagination}}
+    end)
+  end
+
+  defp tld_response_client(response_for_page) do
+    test_pid = self()
+
+    adapter = fn request ->
+      send(test_pid, {:request, request})
+
+      page =
+        request.url.query
+        |> then(&URI.decode_query(&1 || ""))
+        |> Map.get("page", "1")
+        |> String.to_integer()
+
+      case response_for_page.(page) do
+        {:error, reason} ->
+          {request, %Req.TransportError{reason: reason}}
+
+        {status, body} ->
+          {request, %Req.Response{status: status, body: body}}
+      end
+    end
+
+    ReqDnsimple.new_client("dnsimple_u_fake-token")
+    |> Req.merge(adapter: adapter, retry: false)
   end
 
   defp extended_attributes_body do

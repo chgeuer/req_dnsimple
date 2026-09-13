@@ -444,13 +444,22 @@ return one typed page with string-keyed pagination metadata; `list_all/3`
 explicitly enumerates from page one while retaining `name_like` and
 `registrant_id` filters, `id`/`name`/`expiration` sorting, and page size.
 
-### TLD extended attributes
+### TLD capabilities and extended attributes
 
 ```elixir
+{:ok, {tlds, pagination}} =
+  ReqDnsimple.Tld.list_page(client, sort: [tld: :asc], per_page: 30)
+
+{:ok, all_tlds} = ReqDnsimple.Tld.list_all(client, sort: [tld: :asc])
+
 {:ok, attributes} = ReqDnsimple.Tld.list_extended_attributes(client, "co.uk")
 ```
 
-The non-paginated result contains typed
+The paginated list returns typed TLD capability values and string-keyed
+pagination metadata. `list/2` is a single-page alias, while `list_all/2`
+explicitly enumerates from page one and retains TLD sorting and page size.
+Numeric-string name-server bounds are normalized to integers and omitted bounds
+remain `nil`. The non-paginated extended-attribute result contains typed
 `ReqDnsimple.Tld.ExtendedAttribute` values and their typed options. Registry
 attribute names and values remain strings, free-text attributes retain
 `options: []`, and an omitted display title is `nil`; a present title is always
@@ -1024,7 +1033,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.DomainPush` | `/domains/:domain/pushes`, `/pushes[/:push]` | `initiate/4`, `list/3`, `list_page/3`, `list_all/3`, `accept/4`, `reject/3` |
 | `ReqDnsimple.VanityNameServer` | `/vanity/:domain` | `enable/3`, `disable/3` |
 | `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `get_prices/3`, `get_transfer_lock/3`, `enable_transfer_lock/3`, `disable_transfer_lock/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `enable_auto_renewal/3`, `enable_whois_privacy/3`, `disable_whois_privacy/3`, `register/4`, `transfer/4`, `renew/3`, `renew/4`, `restore/3`, `restore/4`, `get_delegation/3`, `change_delegation/4` |
-| `ReqDnsimple.Tld` | `/tlds/:tld`, `/tlds/:tld/extended_attributes` | `get/2`, `list_extended_attributes/2` |
+| `ReqDnsimple.Tld` | `/tlds[/:tld]`, `/tlds/:tld/extended_attributes` | `get/2`, `list/1`, `list/2`, `list_page/1`, `list_page/2`, `list_all/1`, `list_all/2`, `list_extended_attributes/2` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries` | `create/3`, `get/3`, `list/3`, `list_page/3`, `list_all/3`, `link/4`, `unlink/4`, `delete/3`, `from_json/1` |
 | `ReqDnsimple.Service` | `/services[/:service]`, `/domains/:domain/services[/:service]` | `get/2`, `list/1`, `list/2`, `list_page/1`, `list_page/2`, `list_all/1`, `list_all/2`, `list_applied/3`, `list_applied/4`, `list_page_applied/3`, `list_page_applied/4`, `list_all_applied/3`, `list_all_applied/4`, `apply/4`, `apply/5`, `unapply/4` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |

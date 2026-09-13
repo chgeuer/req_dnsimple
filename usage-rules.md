@@ -361,10 +361,14 @@ not contact the callback URL, inspect deliveries, or list registrations first.
   without a requirements check. Cancellation returns the typed current request
   when asynchronous or `:ok` when immediate. Registry extended attributes
   retain string keys and values, and the registry lock-lift date may be `nil`.
-- `ReqDnsimple.Tld` — Retrieve one TLD's capabilities or its non-paginated,
-  typed registry extended-attribute definitions. Arbitrary attribute names and
-  option values remain strings, free-text attributes retain empty option lists,
-  omitted display titles remain `nil`, and present titles are strings.
+- `ReqDnsimple.Tld` — List one sorted page of typed TLD capabilities or
+  deliberately enumerate all pages in server order, retrieve one TLD's
+  capabilities, or retrieve its non-paginated, typed registry
+  extended-attribute definitions. Numeric-string name-server bounds are
+  normalized to integers and omitted bounds remain `nil`. Arbitrary attribute
+  names and option values remain strings, free-text attributes retain empty
+  option lists, omitted display titles remain `nil`, and present titles are
+  strings.
 - `ReqDnsimple.Registrar` — Check domain availability by name, explicitly
   retrieve registration and lifecycle prices by name, retrieve, enable, or
   disable the transfer lock by name or ID, authorize transfer-out by name,

@@ -6,6 +6,15 @@ defmodule ReqDnsimple.Tld do
 
       {:ok, tld} = ReqDnsimple.Tld.get(client, "com.au")
 
+  List one page of supported TLDs:
+
+      {:ok, {tlds, pagination}} =
+        ReqDnsimple.Tld.list_page(client, sort: [tld: :asc], per_page: 30)
+
+  Explicitly enumerate every supported TLD:
+
+      {:ok, tlds} = ReqDnsimple.Tld.list_all(client, sort: [tld: :asc])
+
   Retrieve the registry's typed extended-attribute definitions:
 
       {:ok, attributes} = ReqDnsimple.Tld.list_extended_attributes(client, "co.uk")
@@ -84,6 +93,15 @@ defmodule ReqDnsimple.Tld do
     tld: [type: :string, required: true]
   ]
 
+  @list_schema [
+    sort: [
+      type: {:custom, ReqDnsimple, :validate_sort, [[:tld]]},
+      doc: "Sort by tld"
+    ],
+    page: [type: :pos_integer, doc: "Page number for pagination"],
+    per_page: [type: {:in, 1..100}, doc: "Number of TLDs per page"]
+  ]
+
   @doc """
   Retrieves one supported TLD and its registration, DNSSEC, privacy, and
   name-server capabilities.
@@ -115,6 +133,68 @@ defmodule ReqDnsimple.Tld do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Lists one page of supported TLDs and their capabilities.
+
+  Supports ordered `:sort` terms for `:tld`, plus `:page` and `:per_page`.
+  Omitted options remain omitted so DNSimple applies its server defaults. The
+  returned pagination metadata retains its string keys.
+
+  ## Example
+
+      ReqDnsimple.Tld.list_page(
+        req,
+        sort: [tld: :asc],
+        page: 2,
+        per_page: 30
+      )
+      #=> {:ok, {[%ReqDnsimple.Tld{}], %{"current_page" => 2}}}
+  """
+  @spec list_page(Req.Request.t(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req, opts \\ []) do
+    with {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_schema) do
+      case request_tlds(req, validated_opts) do
+        {:ok,
+         %Req.Response{
+           status: 200,
+           body: %{"data" => data, "pagination" => pagination}
+         } = response} ->
+          case decode_page(data, pagination) do
+            {:ok, result} -> {:ok, result}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Lists one page of supported TLDs.
+
+  This convenience alias delegates to `list_page/2` and never enumerates
+  additional pages implicitly.
+  """
+  @spec list(Req.Request.t(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list(req, opts \\ []), do: list_page(req, opts)
+
+  @doc """
+  Enumerates every page of supported TLDs.
+
+  Enumeration always begins at page one, so an explicit `:page` option is
+  rejected. Sorting and `:per_page` are retained for every request.
+  """
+  @spec list_all(Req.Request.t(), keyword()) :: {:ok, [t()]} | {:error, term()}
+  def list_all(req, opts \\ []) do
+    ReqDnsimple.Pagination.all(opts, &list_page(req, &1))
   end
 
   @doc """
@@ -217,6 +297,54 @@ defmodule ReqDnsimple.Tld do
   end
 
   defp decode_bound(_value), do: :error
+
+  defp decode_page(data, pagination) when is_list(data) do
+    with {:ok, tlds} <- decode_many(data),
+         true <- valid_pagination?(pagination) do
+      {:ok, {tlds, pagination}}
+    else
+      _error -> :error
+    end
+  end
+
+  defp decode_page(_data, _pagination), do: :error
+
+  defp decode_many(data) do
+    Enum.reduce_while(data, {:ok, []}, fn item, {:ok, tlds} ->
+      case decode(item) do
+        {:ok, tld} -> {:cont, {:ok, [tld | tlds]}}
+        :error -> {:halt, :error}
+      end
+    end)
+    |> case do
+      {:ok, tlds} -> {:ok, Enum.reverse(tlds)}
+      :error -> :error
+    end
+  end
+
+  defp valid_pagination?(%{
+         "current_page" => current_page,
+         "per_page" => per_page,
+         "total_entries" => total_entries,
+         "total_pages" => total_pages
+       })
+       when is_integer(current_page) and current_page >= 0 and is_integer(per_page) and
+              per_page > 0 and is_integer(total_entries) and total_entries >= 0 and
+              is_integer(total_pages) and total_pages >= 0,
+       do: true
+
+  defp valid_pagination?(_pagination), do: false
+
+  defp request_tlds(req, opts) do
+    params =
+      opts
+      |> ReqDnsimple.convert_sort_to_string()
+      |> Map.new()
+
+    req
+    |> Req.merge(method: :get, url: "/tlds", params: params)
+    |> Req.request()
+  end
 
   defp decode_extended_attributes(data) do
     Enum.reduce_while(data, {:ok, []}, fn item, {:ok, attributes} ->
