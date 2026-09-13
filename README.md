@@ -466,6 +466,17 @@ The operation accepts a domain name or integer ID, sends one bodyless request,
 and returns both enabled and disabled states in the typed resource without a
 domain lookup or mutation.
 
+Explicitly disable the transfer lock without requesting an authorization code
+or initiating a transfer:
+
+```elixir
+{:ok, %ReqDnsimple.Registrar.TransferLock{enabled: false}} =
+  ReqDnsimple.Registrar.disable_transfer_lock(client, account_id, "example.com")
+```
+
+The operation accepts a domain name or integer ID, sends one bodyless DELETE,
+and returns the resulting typed transfer-lock state.
+
 Enable or disable future automatic renewal without renewing or otherwise
 modifying the domain:
 

@@ -13,6 +13,9 @@ defmodule ReqDnsimple.Registrar do
       ReqDnsimple.Registrar.get_transfer_lock(req, 1010, "example.test")
       #=> {:ok, %ReqDnsimple.Registrar.TransferLock{enabled: true}}
 
+      ReqDnsimple.Registrar.disable_transfer_lock(req, 1010, "example.test")
+      #=> {:ok, %ReqDnsimple.Registrar.TransferLock{enabled: false}}
+
       ReqDnsimple.Registrar.authorize_transfer_out(req, 1010, "example.test")
       #=> :ok
 
@@ -236,6 +239,7 @@ defmodule ReqDnsimple.Registrar do
   # https://developer.dnsimple.com/v2/registrar/#checkDomain
   # https://developer.dnsimple.com/v2/registrar/#getDomainPrices
   # https://developer.dnsimple.com/v2/registrar/transfer-lock/#getDomainTransferLock
+  # https://developer.dnsimple.com/v2/registrar/transfer-lock/#disableDomainTransferLock
   # https://developer.dnsimple.com/v2/registrar/#authorizeDomainTransferOut
   # https://developer.dnsimple.com/v2/registrar/auto-renewal/#disableDomainAutoRenewal
   # https://developer.dnsimple.com/v2/registrar/auto-renewal/#enableDomainAutoRenewal
@@ -399,6 +403,54 @@ defmodule ReqDnsimple.Registrar do
       req =
         Req.merge(req,
           method: :get,
+          url: "/:account_id/registrar/domains/:domain/transfer_lock",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain: domain],
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
+          case decode_transfer_lock(data) do
+            {:ok, transfer_lock} -> {:ok, transfer_lock}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Disables a domain's transfer lock.
+
+  The domain can be identified by name or integer ID. This function sends
+  exactly one bodyless request and does not retrieve an authorization code or
+  initiate a transfer.
+
+  Returns the resulting disabled state as a typed `TransferLock` resource.
+  Other HTTP responses, malformed success bodies, validation failures, and
+  transport failures are returned as explicit error tuples.
+  """
+  @spec disable_transfer_lock(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer()
+        ) ::
+          {:ok, TransferLock.t()} | {:error, term()}
+  def disable_transfer_lock(req, account_id, domain) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain],
+             @delegation_path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :delete,
           url: "/:account_id/registrar/domains/:domain/transfer_lock",
           path_params_style: :colon,
           path_params: [account_id: account_id, domain: domain],
