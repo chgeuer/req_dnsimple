@@ -119,6 +119,252 @@ defmodule ReqDnsimple.ServiceTest do
     end
   end
 
+  describe "list_page/2 and list/2" do
+    test "listServices sends supported query options once and decodes typed data" do
+      pagination = %{
+        "current_page" => 2,
+        "per_page" => 1,
+        "total_entries" => 2,
+        "total_pages" => 2
+      }
+
+      data =
+        Map.merge(service_data(), %{
+          "requires_setup" => true,
+          "default_subdomain" => nil,
+          "created_at" => "2026-09-01T10:00:00+02:00",
+          "settings" => [
+            %{
+              "name" => "example.test",
+              "label" => "Offline example",
+              "append" => nil,
+              "description" => "Offline example",
+              "example" => nil,
+              "password" => false
+            }
+          ]
+        })
+
+      assert {:ok,
+              {[
+                 %ReqDnsimple.Service{
+                   id: 1,
+                   setup_description: nil,
+                   requires_setup: true,
+                   default_subdomain: nil,
+                   created_at: ~U[2026-09-01 08:00:00Z],
+                   settings: [
+                     %ReqDnsimple.Service.Setting{
+                       append: nil,
+                       example: nil,
+                       password: false
+                     }
+                   ]
+                 }
+               ], ^pagination}} =
+               ReqDnsimple.Service.list_page(
+                 client(200, %{"data" => [data], "pagination" => pagination}),
+                 sort: [id: :asc, sid: :desc],
+                 page: 2,
+                 per_page: 1
+               )
+
+      assert_request(
+        :get,
+        "/v2/services",
+        %{"sort" => "id:asc,sid:desc", "page" => 2, "per_page" => 1},
+        nil
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "listServices alias requests one empty page without materializing defaults" do
+      pagination = %{
+        "current_page" => 1,
+        "per_page" => 30,
+        "total_entries" => 0,
+        "total_pages" => 0
+      }
+
+      assert {:ok, {[], ^pagination}} =
+               ReqDnsimple.Service.list(client(200, %{"data" => [], "pagination" => pagination}))
+
+      assert_request(:get, "/v2/services", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "listServices rejects invalid options before HTTP" do
+      request = client(200, %{})
+
+      invalid_options = [
+        [:invalid],
+        [{:name}],
+        [unknown: true],
+        [page: 0],
+        [per_page: 0],
+        [per_page: 101],
+        [sort: [name: :asc]],
+        [sort: [id: :up]],
+        [sort: "id:asc"]
+      ]
+
+      for opts <- invalid_options do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Service.list_page(request, opts)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "listServices preserves HTTP and transport failures" do
+      for status <- [401, 403, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"service" => ["was not found"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Service.list_page(client(status, body))
+
+        assert_request(:get, "/v2/services", %{}, nil)
+        refute_received {:request, _request}
+      end
+
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Service.list_page(transport_error_client(:timeout))
+    end
+
+    test "listServices rejects malformed successful responses" do
+      pagination = %{
+        "current_page" => 1,
+        "per_page" => 30,
+        "total_entries" => 1,
+        "total_pages" => 1
+      }
+
+      malformed_bodies = [
+        %{},
+        %{"data" => nil, "pagination" => pagination},
+        %{"data" => %{}, "pagination" => pagination},
+        %{"data" => [Map.delete(service_data(), "settings")], "pagination" => pagination},
+        %{"data" => [service_data()]},
+        %{"data" => [service_data()], "pagination" => nil},
+        %{
+          "data" => [service_data()],
+          "pagination" => Map.delete(pagination, "total_entries")
+        },
+        %{"data" => [service_data()], "pagination" => %{pagination | "per_page" => 0}}
+      ]
+
+      for body <- malformed_bodies do
+        assert {:error, %{status: 200, response: ^body}} =
+                 ReqDnsimple.Service.list_page(client(200, body))
+
+        assert_request(:get, "/v2/services", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+  end
+
+  describe "list_all/2" do
+    test "enumerates from page one while preserving sorting, page size, and server order" do
+      second = Map.put(service_data(), "id", 2)
+
+      pages = %{
+        1 =>
+          {[service_data()],
+           %{
+             "current_page" => 1,
+             "per_page" => 1,
+             "total_entries" => 2,
+             "total_pages" => 2
+           }},
+        2 =>
+          {[second],
+           %{
+             "current_page" => 2,
+             "per_page" => 1,
+             "total_entries" => 2,
+             "total_pages" => 2
+           }}
+      }
+
+      assert {:ok, [%ReqDnsimple.Service{id: 1}, %ReqDnsimple.Service{id: 2}]} =
+               ReqDnsimple.Service.list_all(
+                 service_page_client(pages),
+                 sort: [:id, sid: :desc],
+                 per_page: 1
+               )
+
+      assert_request(
+        :get,
+        "/v2/services",
+        %{"sort" => "id:asc,sid:desc", "page" => 1, "per_page" => 1}
+      )
+
+      assert_request(
+        :get,
+        "/v2/services",
+        %{"sort" => "id:asc,sid:desc", "page" => 2, "per_page" => 1}
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "rejects explicit pages and malformed option containers before HTTP" do
+      request = client(200, %{})
+
+      assert {:error, {:invalid_option, :page}} =
+               ReqDnsimple.Service.list_all(request, page: 2)
+
+      for opts <- [[:invalid], [{:name}]] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Service.list_all(request, opts)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "aborts on later-page failures and rejects non-progressing pagination" do
+      first_page = %{
+        "current_page" => 1,
+        "per_page" => 1,
+        "total_entries" => 2,
+        "total_pages" => 2
+      }
+
+      http_client =
+        service_response_client(fn
+          1 -> {200, %{"data" => [service_data()], "pagination" => first_page}}
+          2 -> {503, %{"message" => "unavailable"}}
+        end)
+
+      assert {:error, %{status: 503, response: %{"message" => "unavailable"}}} =
+               ReqDnsimple.Service.list_all(http_client)
+
+      assert_request(:get, "/v2/services", %{"page" => 1})
+      assert_request(:get, "/v2/services", %{"page" => 2})
+
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Service.list_all(
+                 service_response_client(fn
+                   1 -> {200, %{"data" => [service_data()], "pagination" => first_page}}
+                   2 -> {:error, :timeout}
+                 end)
+               )
+
+      repeated = %{first_page | "current_page" => 1}
+
+      assert {:error, {:invalid_pagination, ^repeated}} =
+               ReqDnsimple.Service.list_all(
+                 service_response_client(fn _page ->
+                   {200, %{"data" => [service_data()], "pagination" => repeated}}
+                 end)
+               )
+    end
+  end
+
   describe "list_page_applied/4 and list_applied/4" do
     test "listDomainAppliedServices sends supported query options once and decodes typed data" do
       pagination = %{

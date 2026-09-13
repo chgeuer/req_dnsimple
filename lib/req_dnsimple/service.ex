@@ -6,6 +6,15 @@ defmodule ReqDnsimple.Service do
 
       {:ok, service} = ReqDnsimple.Service.get(client, "service-sid")
 
+  List one page of the global service catalog:
+
+      {:ok, {services, pagination}} =
+        ReqDnsimple.Service.list_page(client, sort: [id: :asc], per_page: 30)
+
+  Explicitly enumerate the complete global service catalog:
+
+      {:ok, services} = ReqDnsimple.Service.list_all(client, sort: [sid: :asc])
+
   List one page of services applied to a domain, including pagination:
 
       {:ok, {services, pagination}} =
@@ -99,6 +108,15 @@ defmodule ReqDnsimple.Service do
     per_page: [type: {:in, 1..100}, doc: "Number of applied services per page"]
   ]
 
+  @list_schema [
+    sort: [
+      type: {:custom, ReqDnsimple, :validate_sort, [[:id, :sid]]},
+      doc: "Sort by id or sid"
+    ],
+    page: [type: :pos_integer, doc: "Page number for pagination"],
+    per_page: [type: {:in, 1..100}, doc: "Number of services per page"]
+  ]
+
   @apply_schema [
     settings: [type: :any]
   ]
@@ -136,6 +154,68 @@ defmodule ReqDnsimple.Service do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Lists one page of the global one-click service catalog.
+
+  Supports ordered `:sort` terms for `:id` and `:sid`, plus `:page` and
+  `:per_page`. Omitted options remain omitted so DNSimple applies its server
+  defaults. The returned pagination metadata retains its string keys.
+
+  ## Example
+
+      ReqDnsimple.Service.list_page(
+        req,
+        sort: [id: :asc, sid: :desc],
+        page: 2,
+        per_page: 30
+      )
+      #=> {:ok, {[%ReqDnsimple.Service{}], %{"current_page" => 2}}}
+  """
+  @spec list_page(Req.Request.t(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req, opts \\ []) do
+    with {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_schema) do
+      case request_services(req, validated_opts) do
+        {:ok,
+         %Req.Response{
+           status: 200,
+           body: %{"data" => data, "pagination" => pagination}
+         } = response} ->
+          case decode_page(data, pagination) do
+            {:ok, result} -> {:ok, result}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Lists one page of the global one-click service catalog.
+
+  This convenience alias delegates to `list_page/2` and never enumerates
+  additional pages implicitly.
+  """
+  @spec list(Req.Request.t(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list(req, opts \\ []), do: list_page(req, opts)
+
+  @doc """
+  Enumerates every page of the global one-click service catalog.
+
+  Enumeration always begins at page one, so an explicit `:page` option is
+  rejected. Sorting and `:per_page` are retained for every request.
+  """
+  @spec list_all(Req.Request.t(), keyword()) :: {:ok, [t()]} | {:error, term()}
+  def list_all(req, opts \\ []) do
+    ReqDnsimple.Pagination.all(opts, &list_page(req, &1))
   end
 
   @doc """
@@ -427,6 +507,17 @@ defmodule ReqDnsimple.Service do
        do: true
 
   defp valid_pagination?(_pagination), do: false
+
+  defp request_services(req, opts) do
+    params =
+      opts
+      |> ReqDnsimple.convert_sort_to_string()
+      |> Map.new()
+
+    req
+    |> Req.merge(method: :get, url: "/services", params: params)
+    |> Req.request()
+  end
 
   defp request_applied_services(req, account_id, domain, opts) do
     req

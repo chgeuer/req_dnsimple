@@ -69,6 +69,8 @@ Different modules use slightly different return conventions:
 | `Dnssec.enable/3` | `{:ok, %Dnssec{}}` | `{:error, reason}` |
 | `Dnssec.disable/3` | `:ok` | `{:error, reason}` |
 | `Service.get/2` | `{:ok, %Service{}}` | `{:error, reason}` |
+| `Service.list_page/1,2` | `{:ok, {[%Service{}, ...], pagination}}` | `{:error, reason}` |
+| `Service.list_all/1,2` | `{:ok, [%Service{}, ...]}` | `{:error, reason}` |
 | `Service.apply/4,5` | `:ok` | `{:error, reason}` |
 | `Template.apply/4` | `:ok` | `{:error, reason}` |
 | `Template.delete/3` | `:ok` | `{:error, reason}` |
@@ -395,12 +397,14 @@ not contact the callback URL, inspect deliveries, or list registrations first.
   unlink zones or perform DNS requests.
 - `ReqDnsimple.Service` — Retrieve a global one-click service by sid or ID,
   including typed timestamps and setting definitions; list one paginated page
-  or explicitly enumerate all services applied to a domain; or apply/unapply
-  one. Applied-service listing accepts only `page` and `per_page`, and full
-  enumeration rejects an explicit page. Optional dynamic settings use string
-  keys. Omitted settings send no body, while an explicit empty map is preserved.
-  Applying performs no catalog lookup or per-record requests; unapplying sends
-  one bodyless request and does not delete records individually.
+  or explicitly enumerate the global catalog; list one paginated page or
+  explicitly enumerate all services applied to a domain; or apply/unapply one.
+  Catalog listing supports ordered `id`/`sid` sorting, `page`, and `per_page`.
+  Applied-service listing accepts only `page` and `per_page`; both full
+  enumeration helpers reject an explicit page. Optional dynamic settings use
+  string keys. Omitted settings send no body, while an explicit empty map is
+  preserved. Applying performs no catalog lookup or per-record requests;
+  unapplying sends one bodyless request and does not delete records individually.
 - `ReqDnsimple.NsRecord` — Name server record struct and JSON parsing.
 - `ReqDnsimple.Helper` — Req helper for incrementally appending URL path segments
   and merging params/path_params onto a `Req.Request`.
