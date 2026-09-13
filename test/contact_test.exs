@@ -119,6 +119,7 @@ defmodule ReqDnsimple.ContactTest do
         {1010, Keyword.put(@contact_attrs, :postal_code, 100)},
         {1010, Keyword.put(@contact_attrs, :country, "it")},
         {1010, Keyword.put(@contact_attrs, :country, "ITA")},
+        {1010, Keyword.put(@contact_attrs, :country, "IT\n")},
         {1010, Keyword.put(@contact_attrs, :address2, false)},
         {1010, Keyword.put(@contact_attrs, :fax, 0)},
         {1010, Keyword.delete(@contact_attrs, :job_title)},
@@ -281,7 +282,7 @@ defmodule ReqDnsimple.ContactTest do
               value <- [false, 0, [], %{}] do
             {1010, 1, [{field, value}]}
           end ++
-          for value <- [nil, false, 0, [], %{}, "it", "ITA"] do
+          for value <- [nil, false, 0, [], %{}, "it", "ITA", "IT\n"] do
             {1010, 1, [country: value]}
           end
 

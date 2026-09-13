@@ -106,7 +106,8 @@ defmodule ReqDnsimple.Contact do
 
   All required contact details are sent in one POST request. Optional fields
   remain omitted unless supplied; `:address2` and `:fax` also accept explicit
-  `nil`. Supplying `:organization_name` requires `:job_title`.
+  `nil`. Supplying `:organization_name` requires `:job_title`. `:country` must
+  contain exactly two uppercase ASCII letters.
 
   ## Example
 
@@ -160,7 +161,8 @@ defmodule ReqDnsimple.Contact do
 
   All attributes are optional and omitted attributes are not sent. `:address2`
   and `:fax` accept explicit `nil`, and supplying `:organization_name` requires
-  `:job_title`. This sends exactly one PATCH request without first retrieving
+  `:job_title`. When supplied, `:country` must contain exactly two uppercase
+  ASCII letters. This sends exactly one PATCH request without first retrieving
   the contact.
 
   ## Example
@@ -216,7 +218,7 @@ defmodule ReqDnsimple.Contact do
 
   @doc false
   def validate_country(country) when is_binary(country) do
-    if Regex.match?(~r/^[A-Z]{2}$/, country),
+    if Regex.match?(~r/\A[A-Z]{2}\z/, country),
       do: {:ok, country},
       else: {:error, "expected an uppercase ISO 3166-1 alpha-2 country code"}
   end
