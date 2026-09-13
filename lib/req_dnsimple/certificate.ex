@@ -4,6 +4,19 @@ defmodule ReqDnsimple.Certificate do
 
   ## Example
 
+      ReqDnsimple.Certificate.list_page(req, 1010, "example.test",
+        sort: [id: :asc, common_name: :desc],
+        page: 2,
+        per_page: 30
+      )
+      #=> {:ok, {[%ReqDnsimple.Certificate{}], %{"current_page" => 2}}}
+
+      ReqDnsimple.Certificate.list_all(req, 1010, "example.test",
+        sort: [expiration: :asc],
+        per_page: 100
+      )
+      #=> {:ok, [%ReqDnsimple.Certificate{}]}
+
       ReqDnsimple.Certificate.get(req, 1010, "example.test", 202)
       #=> {:ok, %ReqDnsimple.Certificate{}}
 
@@ -163,6 +176,90 @@ defmodule ReqDnsimple.Certificate do
     auto_renew: [type: :boolean],
     signature_algorithm: [type: {:in, ["ECDSA", "RSA"]}]
   ]
+
+  @list_schema [
+    sort: [
+      type: {:custom, ReqDnsimple, :validate_sort, [[:id, :common_name, :expiration]]},
+      doc: "Sort by id, common_name, or expiration. Format: [id: :asc, common_name: :desc]"
+    ],
+    page: [type: :pos_integer, doc: "Page number for pagination"],
+    per_page: [type: {:in, 1..100}, doc: "Number of certificates per page"]
+  ]
+
+  @doc """
+  Lists one page of certificates for a domain.
+
+  Supports ordered `:sort` terms for `:id`, `:common_name`, and `:expiration`,
+  plus `:page` and `:per_page`. Omitting `:sort` preserves the API's default
+  descending-ID order. The returned pagination metadata retains its string keys.
+
+  ## Example
+
+      ReqDnsimple.Certificate.list_page(
+        req,
+        1010,
+        "example.test",
+        sort: [id: :asc, common_name: :desc],
+        page: 2,
+        per_page: 30
+      )
+      #=> {:ok, {[%ReqDnsimple.Certificate{}], %{"current_page" => 2}}}
+  """
+  @spec list_page(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer(),
+          keyword()
+        ) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req, account_id, domain, opts \\ []) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain],
+             @purchase_path_schema
+           ),
+         {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_schema) do
+      case request_list(req, account_id, domain, validated_opts) do
+        {:ok,
+         %Req.Response{
+           status: 200,
+           body: %{"data" => data, "pagination" => pagination}
+         } = response} ->
+          case decode_page(data, pagination) do
+            {:ok, result} -> {:ok, result}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Lists one page of certificates for a domain.
+
+  This is a convenience alias for `list_page/4`; it never enumerates additional
+  pages implicitly.
+  """
+  @spec list(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list(req, account_id, domain, opts \\ []), do: list_page(req, account_id, domain, opts)
+
+  @doc """
+  Enumerates every page of certificates for a domain in server order.
+
+  Enumeration always begins at page one, so an explicit `:page` option is
+  rejected. Sorting and `:per_page` are retained for every request.
+  """
+  @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer(), keyword()) ::
+          {:ok, [t()]} | {:error, term()}
+  def list_all(req, account_id, domain, opts \\ []) do
+    ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, domain, &1))
+  end
 
   @doc """
   Orders a Let's Encrypt certificate without issuing or downloading it.
@@ -652,6 +749,63 @@ defmodule ReqDnsimple.Certificate do
   end
 
   defp decode_download(_data), do: :error
+
+  defp decode_page(data, pagination) when is_list(data) do
+    with {:ok, certificates} <- decode_many(data),
+         true <- valid_pagination?(pagination) do
+      {:ok, {certificates, pagination}}
+    else
+      _error -> :error
+    end
+  end
+
+  defp decode_page(_data, _pagination), do: :error
+
+  defp decode_many(data) do
+    Enum.reduce_while(data, {:ok, []}, fn item, {:ok, certificates} ->
+      case decode(item) do
+        {:ok, certificate} ->
+          {:cont, {:ok, [certificate | certificates]}}
+
+        :error ->
+          {:halt, :error}
+      end
+    end)
+    |> case do
+      {:ok, certificates} -> {:ok, Enum.reverse(certificates)}
+      :error -> :error
+    end
+  end
+
+  defp valid_pagination?(%{
+         "current_page" => current_page,
+         "per_page" => per_page,
+         "total_entries" => total_entries,
+         "total_pages" => total_pages
+       })
+       when is_integer(current_page) and current_page >= 0 and is_integer(per_page) and
+              per_page > 0 and is_integer(total_entries) and total_entries >= 0 and
+              is_integer(total_pages) and total_pages >= 0,
+       do: true
+
+  defp valid_pagination?(_pagination), do: false
+
+  defp request_list(req, account_id, domain, opts) do
+    params =
+      opts
+      |> ReqDnsimple.convert_sort_to_string()
+      |> Map.new()
+
+    req
+    |> Req.merge(
+      method: :get,
+      url: "/:account_id/domains/:domain/certificates",
+      path_params_style: :colon,
+      path_params: [account_id: account_id, domain: domain],
+      params: params
+    )
+    |> Req.request()
+  end
 
   defp decode(
          %{

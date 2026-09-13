@@ -93,6 +93,9 @@ Different modules use slightly different return conventions:
 | `Certificate.purchase_letsencrypt_renewal/4,5` | `{:ok, %Certificate.Renewal{}}` | `{:error, reason}` |
 | `Certificate.issue_letsencrypt/4` | `{:ok, %Certificate{}}` | `{:error, reason}` |
 | `Certificate.issue_letsencrypt_renewal/5` | `{:ok, %Certificate{}}` | `{:error, reason}` |
+| `Certificate.list_page/3,4` | `{:ok, {[%Certificate{}], pagination}}` | `{:error, reason}` |
+| `Certificate.list/3,4` | `{:ok, {[%Certificate{}], pagination}}` | `{:error, reason}` |
+| `Certificate.list_all/3,4` | `{:ok, [%Certificate{}]}` | `{:error, reason}` |
 | `Certificate.get/4` | `{:ok, %Certificate{}}` | `{:error, reason}` |
 | `Certificate.download/4` | `{:ok, %Certificate.Download{}}` | `{:error, reason}` |
 | `Certificate.get_private_key/4` | `{:ok, %Certificate.PrivateKey{}}` | `{:error, reason}` |
@@ -329,11 +332,12 @@ not contact the callback URL, inspect deliveries, or list registrations first.
 - `ReqDnsimple.Certificate` — Order typed Let's Encrypt purchases and renewals
   without automatic issuance or deployment; renewal orders preserve distinct
   old and new certificate IDs. Explicitly request initial or renewal issuance
-  by the required certificate and order IDs without polling or deployment.
-  Retrieve typed certificate metadata, including pending nullable CSR/expiry
-  values; download its server, nullable root, and ordered intermediate chain; or
-  retrieve its private key as byte-preserved PEM strings without parsing,
-  logging, persisting, or writing files.
+  by the required certificate and order IDs without polling or deployment. List
+  one sorted page with pagination or deliberately enumerate every page in server
+  order. Retrieve typed certificate metadata, including pending nullable
+  CSR/expiry values; download its server, nullable root, and ordered intermediate
+  chain; or retrieve its private key as byte-preserved PEM strings without
+  parsing, logging, persisting, or writing files.
 - `ReqDnsimple.RegistrantChange` — Start a registrar contact-change request from
   explicit domain/contact identifiers; list one filtered, sorted page or
   explicitly enumerate all matching pages; retrieve one by integer ID; or

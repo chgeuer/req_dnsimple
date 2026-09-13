@@ -320,6 +320,31 @@ It returns the replacement certificate, which can have a different ID, without
 creating another renewal order or waiting for issuance to complete.
 
 ```elixir
+{:ok, {certificates, pagination}} =
+  ReqDnsimple.Certificate.list_page(
+    client,
+    account_id,
+    "example.com",
+    sort: [expiration: :asc, common_name: :desc],
+    page: 2,
+    per_page: 30
+  )
+
+{:ok, all_certificates} =
+  ReqDnsimple.Certificate.list_all(
+    client,
+    account_id,
+    "example.com",
+    sort: [id: :desc],
+    per_page: 100
+  )
+```
+
+Certificate listing preserves the server's descending-ID order when sorting is
+omitted. `list_page/4` (and its `list/4` alias) returns one page with pagination;
+`list_all/4` explicitly enumerates from page one.
+
+```elixir
 {:ok, %ReqDnsimple.Certificate{} = certificate} =
   ReqDnsimple.Certificate.get(client, account_id, "example.com", certificate_id)
 ```
