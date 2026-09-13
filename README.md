@@ -121,6 +121,16 @@ interfaces. `ZoneRecord` provides `list_page/4` and `list_all/4`. `list_all`
 preserves filters, sorting, and `per_page`, but rejects `page` because complete
 enumeration always begins at page one.
 
+### Get a zone
+
+```elixir
+{:ok, zone} = ReqDnsimple.Zone.get(client, account_id, "example.com")
+# => {:ok, %ReqDnsimple.Zone{name: "example.com", active: true, ...}}
+```
+
+This sends one bodyless request and returns the complete zone, including its
+reverse, secondary, activation, and nullable last-transfer fields.
+
 ### Query DNS analytics
 
 DNS analytics retain the endpoint's tabular headers, rows, and echoed query
@@ -1086,7 +1096,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple` | Client, `/whoami`, apex NS record enumeration | `new_client/1`, `whoami/1`, `token_type/1`, `ns_records/3` |
 | `ReqDnsimple.OAuth` | `/oauth/access_token` | `exchange_code/2` |
 | `ReqDnsimple.Account` | `/accounts` | `list/1` |
-| `ReqDnsimple.Zone` | `/zones` | `list/3`, `activate/3`, `deactivate/3`, `update_ns_records/4`, `get_zone_file/3`, `check_zone_distribution/3` |
+| `ReqDnsimple.Zone` | `/zones` | `list/3`, `get/3`, `activate/3`, `deactivate/3`, `update_ns_records/4`, `get_zone_file/3`, `check_zone_distribution/3` |
 | `ReqDnsimple.ZoneRecord` | `/zones/:zone/records`, `/zones/:zone/batch` | `list/4`, `get/4`, `create/4`, `update/5`, `delete/4`, `check_distribution/4`, `batch_change/4` |
 | `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/3` |
 | `ReqDnsimple.Contact` | `/contacts` | `list/3`, `get/3`, `delete/3` |

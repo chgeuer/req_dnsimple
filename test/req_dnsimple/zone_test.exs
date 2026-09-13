@@ -30,6 +30,124 @@ defmodule ReqDnsimple.ZoneTest do
     "updated_at" => "2026-09-01T10:30:00+02:00"
   }
 
+  describe "get/3" do
+    test "getZone sends one bodyless request and returns the complete typed zone" do
+      assert {:ok,
+              %ReqDnsimple.Zone{
+                id: 1,
+                account_id: 1010,
+                name: "example.test",
+                reverse: false,
+                secondary: false,
+                last_transferred_at: nil,
+                active: true,
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:30:00Z]
+              }} =
+               ReqDnsimple.Zone.get(
+                 client(200, %{"data" => @zone_data}),
+                 1010,
+                 "example.test"
+               )
+
+      assert_request(:get, "/v2/1010/zones/example.test", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "getZone preserves zero, empty, false, and a non-null transfer timestamp" do
+      transferred_zone =
+        @zone_data
+        |> Map.put("active", false)
+        |> Map.put("last_transferred_at", "2026-08-31T09:15:00+02:00")
+
+      assert {:ok,
+              %ReqDnsimple.Zone{
+                active: false,
+                reverse: false,
+                secondary: false,
+                last_transferred_at: ~U[2026-08-31 07:15:00Z]
+              }} =
+               ReqDnsimple.Zone.get(
+                 client(200, %{"data" => transferred_zone}),
+                 0,
+                 ""
+               )
+
+      assert_request(:get, "/v2/0/zones/", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "getZone rejects invalid path parameters before HTTP" do
+      request = client(200, %{"data" => @zone_data})
+
+      for {account_id, zone} <- [
+            {"1010", "example.test"},
+            {nil, "example.test"},
+            {1010, nil},
+            {1010, 42},
+            {1010, []}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Zone.get(request, account_id, zone)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "getZone preserves documented and shared HTTP and transport failures" do
+      for status <- [401, 403, 404, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"zone" => ["is unavailable"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Zone.get(client(status, body), 1010, "example.test")
+
+        assert_request(:get, "/v2/1010/zones/example.test", %{}, nil)
+        refute_received {:request, _request}
+      end
+
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Zone.get(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test"
+               )
+    end
+
+    test "getZone returns explicit errors for malformed success responses" do
+      malformed_bodies = [
+        %{},
+        %{"data" => nil},
+        %{"data" => []},
+        %{"data" => Map.delete(@zone_data, "last_transferred_at")},
+        %{"data" => Map.put(@zone_data, "id", "1")},
+        %{"data" => Map.put(@zone_data, "reverse", nil)},
+        %{"data" => Map.put(@zone_data, "last_transferred_at", "not-a-timestamp")},
+        %{"data" => Map.put(@zone_data, "created_at", nil)}
+      ]
+
+      for body <- malformed_bodies do
+        assert {:error, %{status: 200, response: ^body}} =
+                 ReqDnsimple.Zone.get(client(200, body), 1010, "example.test")
+
+        assert_request(:get, "/v2/1010/zones/example.test", %{}, nil)
+        refute_received {:request, _request}
+      end
+
+      assert {:error, %{status: 201, response: %{"data" => @zone_data}}} =
+               ReqDnsimple.Zone.get(
+                 client(201, %{"data" => @zone_data}),
+                 1010,
+                 "example.test"
+               )
+
+      assert_request(:get, "/v2/1010/zones/example.test", %{}, nil)
+      refute_received {:request, _request}
+    end
+  end
+
   describe "activate/3" do
     test "activateZoneService sends one bodyless request and returns the active zone" do
       assert {:ok,

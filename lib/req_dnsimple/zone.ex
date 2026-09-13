@@ -3,6 +3,11 @@ defmodule ReqDnsimple.Zone do
   DNSimple Zone API functionality.
   Provides zone management operations.
 
+  ## Retrieving a zone
+
+      ReqDnsimple.Zone.get(req, 1010, "example.test")
+      #=> {:ok, %ReqDnsimple.Zone{name: "example.test"}}
+
   ## Activating DNS service
 
       ReqDnsimple.Zone.activate(req, 1010, "example.test")
@@ -51,10 +56,45 @@ defmodule ReqDnsimple.Zone do
 
   defstruct ~w(id account_id name active reverse secondary created_at updated_at last_transferred_at)a
 
-  @activation_path_schema [
+  @zone_path_schema [
     account_id: [type: :integer, required: true],
     zone: [type: :string, required: true]
   ]
+
+  @doc """
+  Retrieves a zone by name.
+
+  Returns the complete typed zone, including activation, reverse and secondary
+  flags and its nullable last-transfer timestamp.
+  """
+  @spec get(Req.Request.t(), ReqDnsimple.account_id(), ReqDnsimple.zone_name()) ::
+          {:ok, t()} | {:error, term()}
+  def get(req, account_id, zone) do
+    with {:ok, _validated_params} <-
+           NimbleOptions.validate([account_id: account_id, zone: zone], @zone_path_schema) do
+      req =
+        Req.merge(req,
+          method: :get,
+          url: "/:account_id/zones/:zone",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, zone: zone]
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
+          case decode(data) do
+            {:ok, zone} -> {:ok, zone}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
 
   @doc """
   Activates DNS service for a zone and returns the resulting zone.
@@ -69,7 +109,7 @@ defmodule ReqDnsimple.Zone do
     with {:ok, _validated_params} <-
            NimbleOptions.validate(
              [account_id: account_id, zone: zone],
-             @activation_path_schema
+             @zone_path_schema
            ) do
       req =
         Req.merge(req,
@@ -108,7 +148,7 @@ defmodule ReqDnsimple.Zone do
     with {:ok, _validated_params} <-
            NimbleOptions.validate(
              [account_id: account_id, zone: zone],
-             @activation_path_schema
+             @zone_path_schema
            ) do
       req =
         Req.merge(req,
@@ -209,19 +249,21 @@ defmodule ReqDnsimple.Zone do
     |> Req.request()
   end
 
-  defp decode(%{
-         "id" => id,
-         "account_id" => account_id,
-         "name" => name,
-         "reverse" => reverse,
-         "secondary" => secondary,
-         "last_transferred_at" => last_transferred_at,
-         "active" => active,
-         "created_at" => created_at,
-         "updated_at" => updated_at
-       })
-       when is_integer(id) and is_integer(account_id) and is_binary(name) and is_boolean(reverse) and
-              is_boolean(secondary) and is_boolean(active) do
+  @doc false
+  @spec decode(term()) :: {:ok, t()} | :error
+  def decode(%{
+        "id" => id,
+        "account_id" => account_id,
+        "name" => name,
+        "reverse" => reverse,
+        "secondary" => secondary,
+        "last_transferred_at" => last_transferred_at,
+        "active" => active,
+        "created_at" => created_at,
+        "updated_at" => updated_at
+      })
+      when is_integer(id) and is_integer(account_id) and is_binary(name) and is_boolean(reverse) and
+             is_boolean(secondary) and is_boolean(active) do
     with {:ok, last_transferred_at} <- parse_nullable_datetime(last_transferred_at),
          {:ok, created_at} <- parse_datetime(created_at),
          {:ok, updated_at} <- parse_datetime(updated_at) do
@@ -242,7 +284,7 @@ defmodule ReqDnsimple.Zone do
     end
   end
 
-  defp decode(_data), do: :error
+  def decode(_data), do: :error
 
   defp parse_nullable_datetime(nil), do: {:ok, nil}
   defp parse_nullable_datetime(value), do: parse_datetime(value)

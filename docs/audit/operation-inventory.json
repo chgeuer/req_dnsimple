@@ -4033,7 +4033,7 @@
       "method": "GET",
       "path": "/{account}/zones/{zone}",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-060",
       "br_issue_id": "bd-35r",
       "proposed_interfaces": [
@@ -4080,8 +4080,19 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "get",
+          "arity": 3
+        }
+      ],
+      "contract_tests": [
+        {
+          "file": "test/req_dnsimple/zone_test.exs",
+          "describe": "get/3"
+        }
+      ]
     },
     {
       "operation_id": "getZoneFile",
