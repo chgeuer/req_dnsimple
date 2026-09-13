@@ -50,6 +50,7 @@ Different modules use slightly different return conventions:
 | `OAuth.exchange_code/2` | `{:ok, %OAuth.Token{}}` | `{:error, reason}` |
 | `Account.list/1` | `[%Account{}, ...]` | `{:error, reason}` |
 | `Zone.list/3` | `{:ok, [%Zone{}, ...]}` | `{:error, reason}` |
+| `Zone.activate/3` | `{:ok, %Zone{}}` | `{:error, reason}` |
 | `ZoneRecord.list/4` | `{:ok, {[%ZoneRecord{}, ...], pagination}}` | `{:error, reason}` |
 | `ZoneRecord.create/4` | `{:ok, %ZoneRecord{}}` | `{:error, reason}` |
 | `ZoneRecord.update/5` | `{:ok, %ZoneRecord{}}` | `{:error, reason}` |

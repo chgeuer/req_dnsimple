@@ -121,6 +121,18 @@ interfaces. `ZoneRecord` provides `list_page/4` and `list_all/4`. `list_all`
 preserves filters, sorting, and `per_page`, but rejects `page` because complete
 enumeration always begins at page one.
 
+### Activate DNS service for a zone
+
+```elixir
+{:ok, zone} = ReqDnsimple.Zone.activate(client, account_id, "example.com")
+# => {:ok, %ReqDnsimple.Zone{active: true, ...}}
+```
+
+Activation sends one bodyless request and returns the resulting zone. DNSimple
+may renew an expired domain subscription and charge the account during
+activation. The client does not preflight billing, register a domain, or make
+follow-up requests.
+
 ### Manage DNS records
 
 **List records for a zone:**

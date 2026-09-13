@@ -3,6 +3,15 @@ defmodule ReqDnsimple.Zone do
   DNSimple Zone API functionality.
   Provides zone management operations.
 
+  ## Activating DNS service
+
+      ReqDnsimple.Zone.activate(req, 1010, "example.test")
+      #=> {:ok, %ReqDnsimple.Zone{active: true}}
+
+  Activation sends one bodyless request and returns the resulting zone. DNSimple
+  may renew an expired domain subscription and charge the account as part of
+  activation; this client performs no billing preflight or additional mutation.
+
   ## Updating apex NS records
 
       ReqDnsimple.Zone.update_ns_records(req, 1010, "example.test",
@@ -33,6 +42,50 @@ defmodule ReqDnsimple.Zone do
         }
 
   defstruct ~w(id account_id name active reverse secondary created_at updated_at last_transferred_at)a
+
+  @activation_path_schema [
+    account_id: [type: :integer, required: true],
+    zone: [type: :string, required: true]
+  ]
+
+  @doc """
+  Activates DNS service for a zone and returns the resulting zone.
+
+  DNSimple may renew an expired domain subscription and charge the account.
+  This function sends only the requested activation and performs no billing
+  preflight, registration, or follow-up request.
+  """
+  @spec activate(Req.Request.t(), ReqDnsimple.account_id(), ReqDnsimple.zone_name()) ::
+          {:ok, t()} | {:error, term()}
+  def activate(req, account_id, zone) do
+    with {:ok, _validated_params} <-
+           NimbleOptions.validate(
+             [account_id: account_id, zone: zone],
+             @activation_path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :put,
+          url: "/:account_id/zones/:zone/activation",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, zone: zone]
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
+          case decode(data) do
+            {:ok, zone} -> {:ok, zone}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
 
   @spec from_json(map()) :: t()
   defp from_json(json) do
@@ -108,6 +161,53 @@ defmodule ReqDnsimple.Zone do
     )
     |> Req.request()
   end
+
+  defp decode(%{
+         "id" => id,
+         "account_id" => account_id,
+         "name" => name,
+         "reverse" => reverse,
+         "secondary" => secondary,
+         "last_transferred_at" => last_transferred_at,
+         "active" => active,
+         "created_at" => created_at,
+         "updated_at" => updated_at
+       })
+       when is_integer(id) and is_integer(account_id) and is_binary(name) and is_boolean(reverse) and
+              is_boolean(secondary) and is_boolean(active) do
+    with {:ok, last_transferred_at} <- parse_nullable_datetime(last_transferred_at),
+         {:ok, created_at} <- parse_datetime(created_at),
+         {:ok, updated_at} <- parse_datetime(updated_at) do
+      {:ok,
+       %__MODULE__{
+         id: id,
+         account_id: account_id,
+         name: name,
+         reverse: reverse,
+         secondary: secondary,
+         last_transferred_at: last_transferred_at,
+         active: active,
+         created_at: created_at,
+         updated_at: updated_at
+       }}
+    else
+      _invalid -> :error
+    end
+  end
+
+  defp decode(_data), do: :error
+
+  defp parse_nullable_datetime(nil), do: {:ok, nil}
+  defp parse_nullable_datetime(value), do: parse_datetime(value)
+
+  defp parse_datetime(value) when is_binary(value) do
+    case DateTime.from_iso8601(value) do
+      {:ok, datetime, _offset} -> {:ok, datetime}
+      {:error, _reason} -> :error
+    end
+  end
+
+  defp parse_datetime(_value), do: :error
 
   @update_ns_records_path_schema [
     account_id: [type: :integer, required: true],
