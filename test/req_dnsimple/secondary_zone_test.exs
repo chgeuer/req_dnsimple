@@ -65,6 +65,26 @@ defmodule ReqDnsimple.SecondaryZoneTest do
       refute_received {:request, _request}
     end
 
+    test "createSecondaryZone preserves an explicit false active field" do
+      data = Map.put(@zone_data, "active", false)
+
+      assert {:ok, %ReqDnsimple.Zone{active: false, secondary: true}} =
+               ReqDnsimple.SecondaryZone.create(
+                 client(201, %{"data" => data}),
+                 1010,
+                 name: "secondary.example.test"
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/secondary_dns/zones",
+        %{},
+        %{name: "secondary.example.test"}
+      )
+
+      refute_received {:request, _request}
+    end
+
     test "createSecondaryZone preserves zero account identifiers and an empty name" do
       assert {:ok, %ReqDnsimple.Zone{}} =
                ReqDnsimple.SecondaryZone.create(

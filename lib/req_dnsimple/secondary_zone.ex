@@ -49,7 +49,7 @@ defmodule ReqDnsimple.SecondaryZone do
 
       case Req.request(req) do
         {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
-          case ReqDnsimple.Zone.decode(data) do
+          case ReqDnsimple.Zone.decode(data, :optional) do
             {:ok, %ReqDnsimple.Zone{secondary: true} = zone} -> {:ok, zone}
             _invalid -> ReqDnsimple.response_error(response)
           end

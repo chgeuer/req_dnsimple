@@ -251,6 +251,10 @@ defmodule ReqDnsimple.Zone do
 
   @doc false
   @spec decode(term()) :: {:ok, t()} | :error
+  def decode(data), do: decode(data, :required)
+
+  @doc false
+  @spec decode(term(), :required | :optional) :: {:ok, t()} | :error
   def decode(
         %{
           "id" => id,
@@ -261,11 +265,13 @@ defmodule ReqDnsimple.Zone do
           "last_transferred_at" => last_transferred_at,
           "created_at" => created_at,
           "updated_at" => updated_at
-        } = data
+        } = data,
+        active_requirement
       )
-      when is_integer(id) and is_integer(account_id) and is_binary(name) and is_boolean(reverse) and
+      when active_requirement in [:required, :optional] and is_integer(id) and
+             is_integer(account_id) and is_binary(name) and is_boolean(reverse) and
              is_boolean(secondary) do
-    with {:ok, active} <- optional_boolean(data, "active"),
+    with {:ok, active} <- decode_active(data, active_requirement),
          {:ok, last_transferred_at} <- parse_nullable_datetime(last_transferred_at),
          {:ok, created_at} <- parse_datetime(created_at),
          {:ok, updated_at} <- parse_datetime(updated_at) do
@@ -286,13 +292,13 @@ defmodule ReqDnsimple.Zone do
     end
   end
 
-  def decode(_data), do: :error
+  def decode(_data, _active_requirement), do: :error
 
-  defp optional_boolean(data, key) do
-    case Map.fetch(data, key) do
-      :error -> {:ok, nil}
-      {:ok, value} when is_boolean(value) -> {:ok, value}
-      {:ok, _value} -> :error
+  defp decode_active(data, requirement) do
+    case {requirement, Map.fetch(data, "active")} do
+      {:optional, :error} -> {:ok, nil}
+      {_, {:ok, value}} when is_boolean(value) -> {:ok, value}
+      _invalid -> :error
     end
   end
 
