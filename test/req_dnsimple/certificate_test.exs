@@ -221,6 +221,195 @@ defmodule ReqDnsimple.CertificateTest do
     end
   end
 
+  describe "issue_letsencrypt_renewal/5" do
+    test "issueRenewalLetsencryptCertificate sends one bodyless request with both IDs" do
+      original_certificate_id = @renewal_data["old_certificate_id"]
+      renewal_id = @renewal_data["id"]
+      new_certificate_id = @renewal_data["new_certificate_id"]
+
+      refute original_certificate_id == renewal_id
+      refute renewal_id == new_certificate_id
+
+      response_data = Map.put(@certificate_data, "id", new_certificate_id)
+
+      assert {:ok,
+              %ReqDnsimple.Certificate{
+                id: 404,
+                domain_id: 100,
+                name: "api",
+                common_name: "api.example.test",
+                years: 1,
+                csr: nil,
+                state: "requesting",
+                auto_renew: false,
+                alternate_names: [],
+                authority_identifier: "letsencrypt",
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:00:00Z],
+                expires_at: nil,
+                expires_on: nil,
+                contact_id: nil
+              }} =
+               ReqDnsimple.Certificate.issue_letsencrypt_renewal(
+                 client(202, %{"data" => response_data}),
+                 1010,
+                 "example.test",
+                 original_certificate_id,
+                 renewal_id
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/domains/example.test/certificates/letsencrypt/202/renewals/505/issue",
+        %{},
+        nil
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "issueRenewalLetsencryptCertificate accepts integer paths and zero identifiers" do
+      assert {:ok, %ReqDnsimple.Certificate{id: 202}} =
+               ReqDnsimple.Certificate.issue_letsencrypt_renewal(
+                 client(202, %{"data" => @certificate_data}),
+                 0,
+                 0,
+                 0,
+                 0
+               )
+
+      assert_request(
+        :post,
+        "/v2/0/domains/0/certificates/letsencrypt/0/renewals/0/issue",
+        %{},
+        nil
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "issueRenewalLetsencryptCertificate rejects invalid path parameters before HTTP" do
+      request = client(202, %{"data" => @certificate_data})
+
+      for {account_id, domain, certificate_id, renewal_id} <- [
+            {"1010", "example.test", 202, 505},
+            {nil, "example.test", 202, 505},
+            {1010, nil, 202, 505},
+            {1010, :example, 202, 505},
+            {1010, "example.test", "202", 505},
+            {1010, "example.test", nil, 505},
+            {1010, "example.test", 202, "505"},
+            {1010, "example.test", 202, nil}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Certificate.issue_letsencrypt_renewal(
+                   request,
+                   account_id,
+                   domain,
+                   certificate_id,
+                   renewal_id
+                 )
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "issueRenewalLetsencryptCertificate preserves HTTP failures" do
+      for status <- [400, 404, 412, 401, 403, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"renewal" => ["cannot be issued"]}
+        }
+
+        request = client(status, body) |> Req.merge(retry: :transient)
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Certificate.issue_letsencrypt_renewal(
+                   request,
+                   1010,
+                   "example.test",
+                   202,
+                   505
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/domains/example.test/certificates/letsencrypt/202/renewals/505/issue",
+          %{},
+          nil
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "issueRenewalLetsencryptCertificate returns explicit errors for malformed success" do
+      malformed_payloads = [
+        %{},
+        %{"data" => nil},
+        %{"data" => Map.delete(@certificate_data, "id")},
+        %{"data" => Map.delete(@certificate_data, "csr")},
+        %{"data" => Map.delete(@certificate_data, "expires_at")},
+        %{"data" => Map.put(@certificate_data, "csr", :invalid)},
+        %{"data" => Map.put(@certificate_data, "state", "unknown")},
+        %{"data" => Map.put(@certificate_data, "alternate_names", [nil])},
+        %{"data" => Map.put(@certificate_data, "updated_at", "not-a-date")}
+      ]
+
+      for body <- malformed_payloads do
+        assert {:error, %{status: 202, response: ^body}} =
+                 ReqDnsimple.Certificate.issue_letsencrypt_renewal(
+                   client(202, body),
+                   1010,
+                   "example.test",
+                   202,
+                   505
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/domains/example.test/certificates/letsencrypt/202/renewals/505/issue"
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "issueRenewalLetsencryptCertificate preserves optional field omission and null" do
+      for data <- [
+            Map.delete(@certificate_data, "contact_id"),
+            Map.put(@certificate_data, "contact_id", nil)
+          ] do
+        assert {:ok, %ReqDnsimple.Certificate{contact_id: nil, csr: nil, expires_at: nil}} =
+                 ReqDnsimple.Certificate.issue_letsencrypt_renewal(
+                   client(202, %{"data" => data}),
+                   1010,
+                   "example.test",
+                   202,
+                   505
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/domains/example.test/certificates/letsencrypt/202/renewals/505/issue"
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "issueRenewalLetsencryptCertificate preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Certificate.issue_letsencrypt_renewal(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test",
+                 202,
+                 505
+               )
+    end
+  end
+
   describe "get/4" do
     test "getCertificate sends one bodyless request and decodes a pending certificate" do
       assert {:ok,

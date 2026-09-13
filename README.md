@@ -305,6 +305,21 @@ order ID. It sends one bodyless request and returns immediately without polling,
 downloading, or deploying the certificate.
 
 ```elixir
+{:ok, %ReqDnsimple.Certificate{state: "requesting"} = replacement} =
+  ReqDnsimple.Certificate.issue_letsencrypt_renewal(
+    client,
+    account_id,
+    "example.com",
+    renewal.old_certificate_id,
+    renewal.id
+  )
+```
+
+Renewal issuance binds the original certificate ID before the renewal order ID.
+It returns the replacement certificate, which can have a different ID, without
+creating another renewal order or waiting for issuance to complete.
+
+```elixir
 {:ok, %ReqDnsimple.Certificate{} = certificate} =
   ReqDnsimple.Certificate.get(client, account_id, "example.com", certificate_id)
 ```

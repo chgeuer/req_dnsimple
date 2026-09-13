@@ -28,6 +28,15 @@ defmodule ReqDnsimple.Certificate do
       ReqDnsimple.Certificate.issue_letsencrypt(req, 1010, "example.test", 202)
       #=> {:ok, %ReqDnsimple.Certificate{state: "requesting"}}
 
+      ReqDnsimple.Certificate.issue_letsencrypt_renewal(
+        req,
+        1010,
+        "example.test",
+        202,
+        505
+      )
+      #=> {:ok, %ReqDnsimple.Certificate{state: "requesting"}}
+
       ReqDnsimple.Certificate.download(req, 1010, "example.test", 202)
       #=> {:ok, %ReqDnsimple.Certificate.Download{}}
 
@@ -129,6 +138,13 @@ defmodule ReqDnsimple.Certificate do
     account_id: [type: :integer, required: true],
     domain: [type: {:or, [:string, :integer]}, required: true],
     certificate_id: [type: :integer, required: true]
+  ]
+
+  @issue_renewal_path_schema [
+    account_id: [type: :integer, required: true],
+    domain: [type: {:or, [:string, :integer]}, required: true],
+    certificate_id: [type: :integer, required: true],
+    renewal_id: [type: :integer, required: true]
   ]
 
   @purchase_path_schema [
@@ -304,6 +320,64 @@ defmodule ReqDnsimple.Certificate do
             account_id: account_id,
             domain: domain,
             certificate_id: certificate_id
+          ],
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 202, body: %{"data" => data}} = response} ->
+          case decode(data) do
+            {:ok, certificate} -> {:ok, certificate}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Requests issuance of a previously ordered Let's Encrypt renewal.
+
+  `certificate_id` is the original certificate ID and `renewal_id` is the
+  renewal order ID. This sends one bodyless request and returns the replacement
+  certificate in its current state without polling, downloading, or deploying
+  it.
+  """
+  @spec issue_letsencrypt_renewal(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer(),
+          integer(),
+          integer()
+        ) ::
+          {:ok, t()} | {:error, term()}
+  def issue_letsencrypt_renewal(req, account_id, domain, certificate_id, renewal_id) do
+    with {:ok, _validated_params} <-
+           NimbleOptions.validate(
+             [
+               account_id: account_id,
+               domain: domain,
+               certificate_id: certificate_id,
+               renewal_id: renewal_id
+             ],
+             @issue_renewal_path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :post,
+          url:
+            "/:account_id/domains/:domain/certificates/letsencrypt/:certificate_id/renewals/:renewal_id/issue",
+          path_params_style: :colon,
+          path_params: [
+            account_id: account_id,
+            domain: domain,
+            certificate_id: certificate_id,
+            renewal_id: renewal_id
           ],
           retry: false
         )
