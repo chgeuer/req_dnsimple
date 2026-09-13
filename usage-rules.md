@@ -60,6 +60,7 @@ Different modules use slightly different return conventions:
 | `ZoneRecord.get/4` | `{:ok, %ZoneRecord{}}` | `{:error, :not_found}` |
 | `ZoneRecord.check_distribution/4` | `{:ok, boolean()}` | `{:error, reason}` |
 | `ZoneRecord.batch_change/4` | `{:ok, %ZoneRecord.BatchResult{}}` | `{:error, reason}` |
+| `Contact.create/3` | `{:ok, %Contact{}}` | `{:error, reason}` |
 | `Contact.list/3` | `{:ok, [%Contact{}, ...]}` | `{:error, reason}` |
 | `Contact.get/3` | `{:ok, %Contact{}}` | `{:error, :not_found}` |
 | `Contact.delete/3` | `:ok` | `{:error, reason}` |

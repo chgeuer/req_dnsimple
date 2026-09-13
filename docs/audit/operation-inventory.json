@@ -700,7 +700,7 @@
       "method": "POST",
       "path": "/{account}/contacts",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-010",
       "br_issue_id": "bd-32n",
       "proposed_interfaces": [
@@ -747,8 +747,12 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.Contact.create/3"
+      ],
+      "contract_tests": [
+        "test/contact_test.exs: create/3"
+      ]
     },
     {
       "operation_id": "createDomain",
