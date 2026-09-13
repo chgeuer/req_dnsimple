@@ -58,6 +58,169 @@ defmodule ReqDnsimple.CertificateTest do
     "updated_at" => "2026-09-01T10:01:00+02:00"
   }
 
+  describe "issue_letsencrypt/4" do
+    test "issueLetsencryptCertificate sends one bodyless request with the certificate ID" do
+      purchase_id = @purchase_data["id"]
+      certificate_id = @purchase_data["certificate_id"]
+      refute purchase_id == certificate_id
+
+      assert {:ok,
+              %ReqDnsimple.Certificate{
+                id: 202,
+                domain_id: 100,
+                name: "api",
+                common_name: "api.example.test",
+                years: 1,
+                csr: nil,
+                state: "requesting",
+                auto_renew: false,
+                alternate_names: [],
+                authority_identifier: "letsencrypt",
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:00:00Z],
+                expires_at: nil,
+                expires_on: nil,
+                contact_id: nil
+              }} =
+               ReqDnsimple.Certificate.issue_letsencrypt(
+                 client(202, %{"data" => @certificate_data}),
+                 1010,
+                 "example.test",
+                 certificate_id
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/domains/example.test/certificates/letsencrypt/202/issue",
+        %{},
+        nil
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "issueLetsencryptCertificate accepts integer paths and preserves zero identifiers" do
+      assert {:ok, %ReqDnsimple.Certificate{id: 202}} =
+               ReqDnsimple.Certificate.issue_letsencrypt(
+                 client(202, %{"data" => @certificate_data}),
+                 0,
+                 0,
+                 0
+               )
+
+      assert_request(:post, "/v2/0/domains/0/certificates/letsencrypt/0/issue", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "issueLetsencryptCertificate rejects invalid path parameters before HTTP" do
+      request = client(202, %{"data" => @certificate_data})
+
+      for {account_id, domain, certificate_id} <- [
+            {"1010", "example.test", 202},
+            {nil, "example.test", 202},
+            {1010, nil, 202},
+            {1010, :example, 202},
+            {1010, "example.test", "202"},
+            {1010, "example.test", nil}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Certificate.issue_letsencrypt(
+                   request,
+                   account_id,
+                   domain,
+                   certificate_id
+                 )
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "issueLetsencryptCertificate preserves documented and shared HTTP failures" do
+      for status <- [400, 404, 412, 401, 403, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"certificate" => ["cannot be issued"]}
+        }
+
+        request = client(status, body) |> Req.merge(retry: :transient)
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Certificate.issue_letsencrypt(
+                   request,
+                   1010,
+                   "example.test",
+                   202
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/domains/example.test/certificates/letsencrypt/202/issue",
+          %{},
+          nil
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "issueLetsencryptCertificate returns explicit errors for malformed success" do
+      malformed_payloads = [
+        %{},
+        %{"data" => nil},
+        %{"data" => Map.delete(@certificate_data, "id")},
+        %{"data" => Map.delete(@certificate_data, "csr")},
+        %{"data" => Map.delete(@certificate_data, "expires_at")},
+        %{"data" => Map.put(@certificate_data, "common_name", nil)},
+        %{"data" => Map.put(@certificate_data, "state", "unknown")},
+        %{"data" => Map.put(@certificate_data, "auto_renew", 0)},
+        %{"data" => Map.put(@certificate_data, "alternate_names", [nil])},
+        %{"data" => Map.put(@certificate_data, "created_at", "not-a-date")}
+      ]
+
+      for body <- malformed_payloads do
+        assert {:error, %{status: 202, response: ^body}} =
+                 ReqDnsimple.Certificate.issue_letsencrypt(
+                   client(202, body),
+                   1010,
+                   "example.test",
+                   202
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/domains/example.test/certificates/letsencrypt/202/issue"
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "issueLetsencryptCertificate preserves an omitted optional contact ID" do
+      body = %{"data" => Map.delete(@certificate_data, "contact_id")}
+
+      assert {:ok, %ReqDnsimple.Certificate{contact_id: nil}} =
+               ReqDnsimple.Certificate.issue_letsencrypt(
+                 client(202, body),
+                 1010,
+                 "example.test",
+                 202
+               )
+
+      assert_request(:post, "/v2/1010/domains/example.test/certificates/letsencrypt/202/issue")
+      refute_received {:request, _request}
+    end
+
+    test "issueLetsencryptCertificate preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Certificate.issue_letsencrypt(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test",
+                 202
+               )
+    end
+  end
+
   describe "get/4" do
     test "getCertificate sends one bodyless request and decodes a pending certificate" do
       assert {:ok,

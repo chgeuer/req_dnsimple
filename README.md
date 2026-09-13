@@ -291,6 +291,20 @@ issue or deploy the replacement certificate automatically. Omitting attributes
 leaves renewal defaults to DNSimple.
 
 ```elixir
+{:ok, %ReqDnsimple.Certificate{state: "requesting"} = certificate} =
+  ReqDnsimple.Certificate.issue_letsencrypt(
+    client,
+    account_id,
+    "example.com",
+    purchase.certificate_id
+  )
+```
+
+Issuance uses the certificate ID returned by the purchase, not the purchase
+order ID. It sends one bodyless request and returns immediately without polling,
+downloading, or deploying the certificate.
+
+```elixir
 {:ok, %ReqDnsimple.Certificate{} = certificate} =
   ReqDnsimple.Certificate.get(client, account_id, "example.com", certificate_id)
 ```

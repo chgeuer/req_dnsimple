@@ -25,6 +25,9 @@ defmodule ReqDnsimple.Certificate do
       )
       #=> {:ok, %ReqDnsimple.Certificate.Renewal{}}
 
+      ReqDnsimple.Certificate.issue_letsencrypt(req, 1010, "example.test", 202)
+      #=> {:ok, %ReqDnsimple.Certificate{state: "requesting"}}
+
       ReqDnsimple.Certificate.download(req, 1010, "example.test", 202)
       #=> {:ok, %ReqDnsimple.Certificate.Download{}}
 
@@ -256,6 +259,59 @@ defmodule ReqDnsimple.Certificate do
         {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
           case decode_renewal(data) do
             {:ok, renewal} -> {:ok, renewal}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Requests issuance of an ordered Let's Encrypt certificate.
+
+  The final argument is the certificate ID returned by `Purchase`, not the
+  purchase order ID. This sends one bodyless request and returns the certificate
+  in its current state without polling, downloading, or deploying it.
+  """
+  @spec issue_letsencrypt(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer(),
+          integer()
+        ) ::
+          {:ok, t()} | {:error, term()}
+  def issue_letsencrypt(req, account_id, domain, certificate_id) do
+    with {:ok, _validated_params} <-
+           NimbleOptions.validate(
+             [
+               account_id: account_id,
+               domain: domain,
+               certificate_id: certificate_id
+             ],
+             @path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :post,
+          url: "/:account_id/domains/:domain/certificates/letsencrypt/:certificate_id/issue",
+          path_params_style: :colon,
+          path_params: [
+            account_id: account_id,
+            domain: domain,
+            certificate_id: certificate_id
+          ],
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 202, body: %{"data" => data}} = response} ->
+          case decode(data) do
+            {:ok, certificate} -> {:ok, certificate}
             :error -> ReqDnsimple.response_error(response)
           end
 
