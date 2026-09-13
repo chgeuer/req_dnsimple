@@ -91,6 +91,7 @@ Different modules use slightly different return conventions:
 | `EmailForward.create/4` | `{:ok, %EmailForward{}}` | `{:error, reason}` |
 | `EmailForward.get/4` | `{:ok, %EmailForward{}}` | `{:error, reason}` |
 | `EmailForward.delete/4` | `:ok` | `{:error, reason}` |
+| `Webhook.create/3` | `{:ok, %Webhook{}}` | `{:error, reason}` |
 | `Webhook.get/3` | `{:ok, %Webhook{}}` | `{:error, reason}` |
 | `Webhook.delete/3` | `:ok` | `{:error, reason}` |
 | `DomainPush.initiate/4` | `{:ok, %DomainPush{}}` | `{:error, reason}` |
@@ -250,12 +251,14 @@ domain's vanity A and AAAA configuration. It accepts a domain name or integer
 ID. Neither operation inspects or changes registrar delegation, and disabling
 does not delete records individually.
 
-### Retrieving and Deregistering Webhook Endpoints
+### Registering, Retrieving, and Deregistering Webhook Endpoints
 
-`ReqDnsimple.Webhook.get/3` sends one bodyless request and returns the registered
-callback URL with its nullable suppression timestamp. `delete/3` returns `:ok`
-only for HTTP 204. Both accept an integer or numeric-string webhook ID and do
-not contact the callback URL, inspect deliveries, or list registrations first.
+`ReqDnsimple.Webhook.create/3` requires an absolute HTTPS callback URL and sends
+it unchanged in one POST request. `get/3` sends one bodyless request and returns
+the registered callback URL with its nullable suppression timestamp. `delete/3`
+returns `:ok` only for HTTP 204. Retrieval and deletion accept an integer or
+numeric-string webhook ID. None of these operations contacts the callback URL,
+inspects deliveries, or lists registrations first.
 
 ## Module Reference
 
@@ -342,9 +345,10 @@ not contact the callback URL, inspect deliveries, or list registrations first.
   without deleting the source domain.
 - `ReqDnsimple.VanityNameServer` — Enable or disable a domain's vanity A and
   AAAA configuration by name or ID without changing registrar delegation.
-- `ReqDnsimple.Webhook` — Retrieve a typed webhook registration or explicitly
-  deregister it by integer or numeric-string ID without contacting its callback
-  URL or listing registrations. Struct: `id`, `url`, nullable `suppressed_at`.
+- `ReqDnsimple.Webhook` — Register an absolute HTTPS callback URL, retrieve a
+  typed webhook registration, or explicitly deregister it by integer or
+  numeric-string ID without contacting its callback URL or listing
+  registrations. Struct: `id`, `url`, nullable `suppressed_at`.
 - `ReqDnsimple.Certificate` — Order typed Let's Encrypt purchases and renewals
   without automatic issuance or deployment; renewal orders preserve distinct
   old and new certificate IDs. Explicitly request initial or renewal issuance
