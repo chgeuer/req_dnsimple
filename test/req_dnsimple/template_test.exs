@@ -397,6 +397,145 @@ defmodule ReqDnsimple.TemplateTest do
     end
   end
 
+  describe "update/4" do
+    test "updateTemplate patches all attributes at the original identifier and returns typed data" do
+      assert {:ok,
+              %ReqDnsimple.Template{
+                id: 1,
+                account_id: 1010,
+                name: "Offline template",
+                sid: "offline-template",
+                description: "Offline example",
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:30:00Z]
+              }} =
+               ReqDnsimple.Template.update(
+                 client(200, template_body()),
+                 1010,
+                 "current-template",
+                 sid: "offline-template",
+                 name: "Offline template",
+                 description: "Offline example"
+               )
+
+      assert_request(:patch, "/v2/1010/templates/current-template", %{}, %{
+        "sid" => "offline-template",
+        "name" => "Offline template",
+        "description" => "Offline example"
+      })
+
+      refute_received {:request, _request}
+    end
+
+    test "updateTemplate preserves omitted and explicitly empty fields" do
+      for {account_id, template, attrs, expected_body} <- [
+            {1010, "offline-template", [description: ""], %{"description" => ""}},
+            {0, 0, [sid: "", name: "", description: ""],
+             %{"sid" => "", "name" => "", "description" => ""}},
+            {1010, 42, [], %{}}
+          ] do
+        assert {:ok, %ReqDnsimple.Template{}} =
+                 ReqDnsimple.Template.update(
+                   client(200, template_body()),
+                   account_id,
+                   template,
+                   attrs
+                 )
+
+        assert_request(:patch, "/v2/#{account_id}/templates/#{template}", %{}, expected_body)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "updateTemplate rejects invalid paths and attributes before HTTP" do
+      request = client(200, template_body())
+
+      invalid_cases =
+        [
+          {"1010", "offline-template", [description: "Updated"]},
+          {nil, "offline-template", [description: "Updated"]},
+          {1010, nil, [description: "Updated"]},
+          {1010, 1.5, [description: "Updated"]},
+          {1010, [], [description: "Updated"]},
+          {1010, %{}, [description: "Updated"]},
+          {1010, "offline-template", [:invalid]},
+          {1010, "offline-template", [{:name}]},
+          {1010, "offline-template", [unknown: true]}
+        ] ++
+          for field <- [:sid, :name, :description],
+              value <- [nil, false, 0, [], %{}] do
+            {1010, "offline-template", [{field, value}]}
+          end
+
+      for {account_id, template, attrs} <- invalid_cases do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Template.update(request, account_id, template, attrs)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "updateTemplate preserves documented and shared HTTP failures" do
+      for status <- [400, 401, 403, 404, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"sid" => ["has already been taken"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Template.update(
+                   client(status, body),
+                   1010,
+                   "offline-template",
+                   description: "Updated"
+                 )
+
+        assert_request(:patch, "/v2/1010/templates/offline-template", %{}, %{
+          "description" => "Updated"
+        })
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "updateTemplate rejects malformed successful responses and unexpected statuses" do
+      malformed_responses = [
+        {200, %{}},
+        {200, %{"data" => nil}},
+        {200, %{"data" => Map.delete(template_body()["data"], "name")}},
+        {200, put_in(template_body(), ["data", "description"], nil)},
+        {200, put_in(template_body(), ["data", "created_at"], "not-a-timestamp")},
+        {201, template_body()}
+      ]
+
+      for {status, body} <- malformed_responses do
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Template.update(
+                   client(status, body),
+                   1010,
+                   "offline-template",
+                   description: "Updated"
+                 )
+
+        assert_request(:patch, "/v2/1010/templates/offline-template", %{}, %{
+          "description" => "Updated"
+        })
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "updateTemplate preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Template.update(
+                 transport_error_client(:timeout),
+                 1010,
+                 "offline-template",
+                 description: "Updated"
+               )
+    end
+  end
+
   describe "get/3" do
     test "getTemplate retrieves one typed template with one bodyless request" do
       body = template_body()

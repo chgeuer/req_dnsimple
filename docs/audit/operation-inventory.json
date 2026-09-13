@@ -7470,7 +7470,7 @@
       "method": "PATCH",
       "path": "/{account}/templates/{template}",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-089",
       "br_issue_id": "bd-es2",
       "proposed_interfaces": [
@@ -7522,8 +7522,12 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.Template.update/4"
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/template_test.exs: update/4"
+      ]
     },
     {
       "operation_id": "updateZoneNsRecords",

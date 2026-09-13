@@ -403,11 +403,17 @@ arbitrary-precision decimal library.
 
 {:ok, all_templates} =
   ReqDnsimple.Template.list_all(client, account_id, sort: [sid: :asc])
+
+{:ok, template} =
+  ReqDnsimple.Template.update(client, account_id, "offline-template",
+    description: ""
+  )
 ```
 
 `list_page/3` and its `list/3` alias fetch one page with string-keyed
 pagination metadata. `list_all/3` explicitly enumerates from page one while
-retaining sorting and `per_page`.
+retaining sorting and `per_page`. `update/4` patches only the supplied metadata
+and uses the caller's original template identifier for the request path.
 
 ### Domains
 
