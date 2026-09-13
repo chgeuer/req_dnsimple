@@ -9,6 +9,121 @@ defmodule ReqDnsimple.WebhookTest do
     "suppressed_at" => nil
   }
 
+  describe "list/3" do
+    test "listWebhooks sends ordered id sorting once and returns typed webhooks" do
+      suppressed =
+        @webhook_data
+        |> Map.put("id", 2)
+        |> Map.put("url", "https://receiver.example.test/suppressed")
+        |> Map.put("suppressed_at", "2026-09-01T10:00:00+02:00")
+
+      assert {:ok,
+              [
+                %ReqDnsimple.Webhook{
+                  id: 1,
+                  url: "https://receiver.example.test/events",
+                  suppressed_at: nil
+                },
+                %ReqDnsimple.Webhook{
+                  id: 2,
+                  url: "https://receiver.example.test/suppressed",
+                  suppressed_at: ~U[2026-09-01 08:00:00Z]
+                }
+              ]} =
+               ReqDnsimple.Webhook.list(
+                 client(200, %{"data" => [@webhook_data, suppressed]}),
+                 1010,
+                 sort: [id: :asc, id: :desc]
+               )
+
+      assert_request(
+        :get,
+        "/v2/1010/webhooks",
+        %{"sort" => "id:asc,id:desc"},
+        nil
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "listWebhooks preserves an empty collection and omitted options" do
+      assert {:ok, []} =
+               ReqDnsimple.Webhook.list(client(200, %{"data" => []}), 0)
+
+      assert_request(:get, "/v2/0/webhooks", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "listWebhooks rejects invalid paths and options before HTTP" do
+      request = client(200, %{"data" => []})
+
+      for {account_id, opts} <- [
+            {"1010", []},
+            {nil, []},
+            {1010, [:invalid]},
+            {1010, [{:name}]},
+            {1010, [unknown: true]},
+            {1010, [sort: "id:asc"]},
+            {1010, [sort: [name: :asc]]},
+            {1010, [sort: [id: :sideways]]}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Webhook.list(request, account_id, opts)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "listWebhooks preserves shared HTTP failures" do
+      for status <- [401, 403, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"account" => ["is unavailable"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Webhook.list(client(status, body), 1010)
+
+        assert_request(:get, "/v2/1010/webhooks", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "listWebhooks returns explicit errors for malformed successful responses" do
+      malformed_payloads = [
+        %{},
+        %{"data" => nil},
+        %{"data" => @webhook_data},
+        %{"data" => [Map.delete(@webhook_data, "id")]},
+        %{"data" => [Map.delete(@webhook_data, "url")]},
+        %{"data" => [Map.delete(@webhook_data, "suppressed_at")]},
+        %{"data" => [Map.put(@webhook_data, "id", "1")]},
+        %{"data" => [Map.put(@webhook_data, "url", nil)]},
+        %{"data" => [Map.put(@webhook_data, "suppressed_at", "not-a-timestamp")]}
+      ]
+
+      for body <- malformed_payloads do
+        assert {:error, %{status: 200, response: ^body}} =
+                 ReqDnsimple.Webhook.list(client(200, body), 1010)
+
+        assert_request(:get, "/v2/1010/webhooks", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "listWebhooks rejects unexpected success statuses and preserves transport failures" do
+      body = %{"data" => [@webhook_data]}
+
+      assert {:error, %{status: 201, response: ^body}} =
+               ReqDnsimple.Webhook.list(client(201, body), 1010)
+
+      assert_request(:get, "/v2/1010/webhooks", %{}, nil)
+
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Webhook.list(transport_error_client(:timeout), 1010)
+    end
+  end
+
   describe "create/3" do
     test "createWebhook sends the complete HTTPS URL once and returns a typed webhook" do
       url = "https://receiver.example.test/events?source=dnsimple"

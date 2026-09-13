@@ -15,12 +15,17 @@ defmodule ReqDnsimple.Webhook do
 
       {:ok, webhook} = ReqDnsimple.Webhook.get(client, 1010, 1)
 
+  List registered webhook endpoints:
+
+      {:ok, webhooks} =
+        ReqDnsimple.Webhook.list(client, 1010, sort: [id: :asc])
+
   Deregister a webhook endpoint by numeric ID:
 
       :ok = ReqDnsimple.Webhook.delete(client, 1010, 1)
 
   These operations do not contact the callback URL, inspect deliveries, or
-  discover other registrations.
+  perform hidden follow-up requests.
   """
 
   @type t :: %__MODULE__{
@@ -43,6 +48,55 @@ defmodule ReqDnsimple.Webhook do
   @create_schema [
     url: [type: :string, required: true]
   ]
+
+  @list_schema [
+    sort: [
+      type: {:custom, ReqDnsimple, :validate_sort, [[:id]]},
+      doc: "Sort by id. Format: [id: :asc]"
+    ]
+  ]
+
+  @doc """
+  Lists registered webhook endpoints.
+
+  Supports ordered `:sort` terms for `:id`. This endpoint is not paginated and
+  returns the complete `data` array without synthetic pagination metadata.
+
+  ## Example
+
+      ReqDnsimple.Webhook.list(req, 1010, sort: [id: :asc])
+      #=> {:ok, [%ReqDnsimple.Webhook{}]}
+  """
+  @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
+          {:ok, [t()]} | {:error, term()}
+  def list(req, account_id, opts \\ []) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate([account_id: account_id], @create_path_schema),
+         {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_schema) do
+      req =
+        Req.merge(req,
+          method: :get,
+          url: "/:account_id/webhooks",
+          path_params_style: :colon,
+          path_params: [account_id: account_id],
+          params: ReqDnsimple.convert_sort_to_string(validated_opts)
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
+          case decode_list(data) do
+            {:ok, webhooks} -> {:ok, webhooks}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
 
   @doc """
   Registers an HTTPS webhook endpoint.
@@ -164,6 +218,21 @@ defmodule ReqDnsimple.Webhook do
   end
 
   defp decode(_data), do: :error
+
+  defp decode_list(data) when is_list(data) do
+    Enum.reduce_while(data, {:ok, []}, fn item, {:ok, webhooks} ->
+      case decode(item) do
+        {:ok, webhook} -> {:cont, {:ok, [webhook | webhooks]}}
+        :error -> {:halt, :error}
+      end
+    end)
+    |> case do
+      {:ok, webhooks} -> {:ok, Enum.reverse(webhooks)}
+      :error -> :error
+    end
+  end
+
+  defp decode_list(_data), do: :error
 
   defp validate_https_url(url) do
     case URI.new(url) do
