@@ -65,6 +65,8 @@ Different modules use slightly different return conventions:
 | `Domain.get/3` | `{:ok, %Domain{}}` | `{:error, reason}` |
 | `Domain.list_page/3` | `{:ok, {[%Domain{}, ...], pagination}}` | `{:error, reason}` |
 | `Domain.list_all/3` | `{:ok, [%Domain{}, ...]}` | `{:error, reason}` |
+| `DnsAnalytics.list_page/3` and `DnsAnalytics.query/3` | `{:ok, {%DnsAnalytics.Result{}, pagination}}` | `{:error, reason}` |
+| `DnsAnalytics.list_all/3` | `{:ok, %DnsAnalytics.Result{}}` | `{:error, reason}` |
 | `DomainResearch.get_status/3` | `{:ok, %DomainResearch{}}` | `{:error, reason}` |
 | `Dnssec.get/3` | `{:ok, %Dnssec{}}` | `{:error, reason}` |
 | `Dnssec.enable/3` | `{:ok, %Dnssec{}}` | `{:error, reason}` |
@@ -177,6 +179,14 @@ zones accept `:id` and `:name`; records accept `:id`, `:name`, `:content`, and `
 contacts accept `:id`, `:label`, and `:email`; billing charges accept only `:invoiced`.
 They are automatically converted to DNSimple's `"name:asc,id:desc"` string format
 by `ReqDnsimple.convert_sort_to_string/1`.
+
+DNS analytics use the same ordered sort form for `:date`, `:zone_name`, and
+`:volume`. Their `:groupings` option is an ordered list containing only `:date`
+and `:zone_name`; an explicit empty list is sent as an empty query value.
+`start_date` and `end_date` are ISO 8601 dates with an inclusive span of at most
+31 days. `list_page/3` and `query/3` return a typed tabular result plus
+pagination, while `list_all/3` combines only pages whose headers and echoed
+query settings remain compatible.
 
 ### CRUD Operations on Zone Records
 

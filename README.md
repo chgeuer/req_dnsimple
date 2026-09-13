@@ -121,6 +121,27 @@ interfaces. `ZoneRecord` provides `list_page/4` and `list_all/4`. `list_all`
 preserves filters, sorting, and `per_page`, but rejects `page` because complete
 enumeration always begins at page one.
 
+### Query DNS analytics
+
+DNS analytics retain the endpoint's tabular headers, rows, and echoed query
+metadata:
+
+```elixir
+{:ok, {result, pagination}} =
+  ReqDnsimple.DnsAnalytics.list_page(client, account_id,
+    start_date: "2026-09-01",
+    end_date: "2026-09-02",
+    groupings: [:date, :zone_name],
+    sort: [date: :asc, volume: :desc],
+    page: 1,
+    per_page: 1000
+  )
+```
+
+`query/3` is a single-page alias. `list_all/3` explicitly enumerates from page
+one and returns one `%ReqDnsimple.DnsAnalytics.Result{}` with compatible rows
+combined in server order and the first page's query retained as provenance.
+
 ### Activate DNS service for a zone
 
 ```elixir
