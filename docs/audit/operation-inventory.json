@@ -1100,7 +1100,7 @@
       "method": "POST",
       "path": "/{account}/secondary_dns/zones",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-016",
       "br_issue_id": "bd-cke",
       "proposed_interfaces": [
@@ -1147,8 +1147,12 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.SecondaryZone.create/3"
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/secondary_zone_test.exs: create/3"
+      ]
     },
     {
       "operation_id": "createTemplate",

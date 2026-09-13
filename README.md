@@ -1030,6 +1030,24 @@ resources and returns the updated primary server. Deletion removes only the
 selected primary-server configuration; it does not unlink zones or perform DNS
 requests.
 
+### Secondary DNS zones
+
+```elixir
+{:ok, zone} =
+  ReqDnsimple.SecondaryZone.create(
+    client,
+    account_id,
+    name: "secondary.example.test"
+  )
+```
+
+Creation sends one `POST` request and returns the existing `ReqDnsimple.Zone`
+struct with `secondary: true`. A response may omit `active`, in which case it
+remains `nil`; a null `last_transferred_at` also remains `nil`. DNSimple may
+require ownership verification and a subscription. Those failures are returned
+without changing delegation, creating primary servers, or making preflight or
+follow-up requests.
+
 ### One-click services
 
 ```elixir
@@ -1129,6 +1147,7 @@ a claim that every published DNSimple endpoint is wrapped.
 | `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `get_prices/3`, `get_transfer_lock/3`, `enable_transfer_lock/3`, `disable_transfer_lock/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `enable_auto_renewal/3`, `enable_whois_privacy/3`, `disable_whois_privacy/3`, `register/4`, `transfer/4`, `renew/3`, `renew/4`, `restore/3`, `restore/4`, `get_delegation/3`, `change_delegation/4` |
 | `ReqDnsimple.Tld` | `/tlds[/:tld]`, `/tlds/:tld/extended_attributes` | `get/2`, `list/1`, `list/2`, `list_page/1`, `list_page/2`, `list_all/1`, `list_all/2`, `list_extended_attributes/2` |
 | `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries` | `create/3`, `get/3`, `list/3`, `list_page/3`, `list_all/3`, `link/4`, `unlink/4`, `delete/3`, `from_json/1` |
+| `ReqDnsimple.SecondaryZone` | `/secondary_dns/zones` | `create/3` |
 | `ReqDnsimple.Service` | `/services[/:service]`, `/domains/:domain/services[/:service]` | `get/2`, `list/1`, `list/2`, `list_page/1`, `list_page/2`, `list_all/1`, `list_all/2`, `list_applied/3`, `list_applied/4`, `list_page_applied/3`, `list_page_applied/4`, `list_all_applied/3`, `list_all_applied/4`, `apply/4`, `apply/5`, `unapply/4` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |
 | `ReqDnsimple.Helper` | Req utilities | `append/2` (URL/param merging) |

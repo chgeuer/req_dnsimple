@@ -39,6 +39,14 @@ defmodule ReqDnsimple.PublicTypespecTest do
     )
 
     assert_spec(ReqDnsimple.PrimaryServer, :delete, 3, ":ok | {:error, term()}")
+
+    assert_spec(
+      ReqDnsimple.SecondaryZone,
+      :create,
+      3,
+      "{:ok, ReqDnsimple.Zone.t()} | {:error, term()}"
+    )
+
     assert_spec(ReqDnsimple.Registrar, :disable_auto_renewal, 3, ":ok | {:error, term()}")
 
     for module <- [ReqDnsimple.BillingCharge, ReqDnsimple.Contact, ReqDnsimple.Zone] do
@@ -60,6 +68,7 @@ defmodule ReqDnsimple.PublicTypespecTest do
 
   test "public resource types represent documented nullable and identifier fields" do
     assert_type(ReqDnsimple.Zone, :t, "last_transferred_at: DateTime.t() | nil")
+    assert_type(ReqDnsimple.Zone, :t, "active: boolean() | nil")
 
     assert_type(ReqDnsimple.ZoneRecord, :t, "zone_id: ReqDnsimple.zone_name()")
     assert_type(ReqDnsimple.ZoneRecord, :t, "parent_id: ReqDnsimple.record_id() | nil")

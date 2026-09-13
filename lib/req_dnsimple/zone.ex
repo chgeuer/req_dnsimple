@@ -46,7 +46,7 @@ defmodule ReqDnsimple.Zone do
           id: ReqDnsimple.zone_id(),
           account_id: ReqDnsimple.account_id(),
           name: ReqDnsimple.zone_name(),
-          active: boolean(),
+          active: boolean() | nil,
           reverse: boolean(),
           secondary: boolean(),
           created_at: DateTime.t(),
@@ -251,20 +251,22 @@ defmodule ReqDnsimple.Zone do
 
   @doc false
   @spec decode(term()) :: {:ok, t()} | :error
-  def decode(%{
-        "id" => id,
-        "account_id" => account_id,
-        "name" => name,
-        "reverse" => reverse,
-        "secondary" => secondary,
-        "last_transferred_at" => last_transferred_at,
-        "active" => active,
-        "created_at" => created_at,
-        "updated_at" => updated_at
-      })
+  def decode(
+        %{
+          "id" => id,
+          "account_id" => account_id,
+          "name" => name,
+          "reverse" => reverse,
+          "secondary" => secondary,
+          "last_transferred_at" => last_transferred_at,
+          "created_at" => created_at,
+          "updated_at" => updated_at
+        } = data
+      )
       when is_integer(id) and is_integer(account_id) and is_binary(name) and is_boolean(reverse) and
-             is_boolean(secondary) and is_boolean(active) do
-    with {:ok, last_transferred_at} <- parse_nullable_datetime(last_transferred_at),
+             is_boolean(secondary) do
+    with {:ok, active} <- optional_boolean(data, "active"),
+         {:ok, last_transferred_at} <- parse_nullable_datetime(last_transferred_at),
          {:ok, created_at} <- parse_datetime(created_at),
          {:ok, updated_at} <- parse_datetime(updated_at) do
       {:ok,
@@ -285,6 +287,14 @@ defmodule ReqDnsimple.Zone do
   end
 
   def decode(_data), do: :error
+
+  defp optional_boolean(data, key) do
+    case Map.fetch(data, key) do
+      :error -> {:ok, nil}
+      {:ok, value} when is_boolean(value) -> {:ok, value}
+      {:ok, _value} -> :error
+    end
+  end
 
   defp parse_nullable_datetime(nil), do: {:ok, nil}
   defp parse_nullable_datetime(value), do: parse_datetime(value)

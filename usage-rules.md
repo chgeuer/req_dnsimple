@@ -438,6 +438,11 @@ deliveries.
   primary server and zone. Struct: `id`, `account_id`, `name`, `ip`, integer
   `port`, ordered `linked_secondary_zones`, and timestamps. Deletion does not
   unlink zones or perform DNS requests.
+- `ReqDnsimple.SecondaryZone` — Create a secondary DNS zone from its required
+  name and return the existing `ReqDnsimple.Zone` struct. An omitted `active`
+  field remains `nil`, as does a null `last_transferred_at`. Ownership or
+  subscription errors are returned without delegation changes, primary-server
+  creation, verification requests, or other follow-up work.
 - `ReqDnsimple.Service` — Retrieve a global one-click service by sid or ID,
   including typed timestamps and setting definitions; list one paginated page
   or explicitly enumerate the global catalog; list one paginated page or
