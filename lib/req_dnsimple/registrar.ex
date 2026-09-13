@@ -13,6 +13,9 @@ defmodule ReqDnsimple.Registrar do
       ReqDnsimple.Registrar.get_transfer_lock(req, 1010, "example.test")
       #=> {:ok, %ReqDnsimple.Registrar.TransferLock{enabled: true}}
 
+      ReqDnsimple.Registrar.enable_transfer_lock(req, 1010, "example.test")
+      #=> {:ok, %ReqDnsimple.Registrar.TransferLock{enabled: true}}
+
       ReqDnsimple.Registrar.disable_transfer_lock(req, 1010, "example.test")
       #=> {:ok, %ReqDnsimple.Registrar.TransferLock{enabled: false}}
 
@@ -415,6 +418,54 @@ defmodule ReqDnsimple.Registrar do
 
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
+          case decode_transfer_lock(data) do
+            {:ok, transfer_lock} -> {:ok, transfer_lock}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Enables a domain's transfer lock.
+
+  The domain can be identified by name or integer ID. This function sends
+  exactly one bodyless request and does not look up the domain or perform any
+  other registrar operation.
+
+  Returns the resulting enabled state as a typed `TransferLock` resource.
+  Other HTTP responses, malformed success bodies, validation failures, and
+  transport failures are returned as explicit error tuples.
+  """
+  @spec enable_transfer_lock(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer()
+        ) ::
+          {:ok, TransferLock.t()} | {:error, term()}
+  def enable_transfer_lock(req, account_id, domain) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain],
+             @delegation_path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :post,
+          url: "/:account_id/registrar/domains/:domain/transfer_lock",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain: domain],
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
           case decode_transfer_lock(data) do
             {:ok, transfer_lock} -> {:ok, transfer_lock}
             :error -> ReqDnsimple.response_error(response)

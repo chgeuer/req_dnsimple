@@ -97,6 +97,7 @@ Different modules use slightly different return conventions:
 | `Registrar.check/3` | `{:ok, %Registrar.CheckResult{}}` | `{:error, reason}` |
 | `Registrar.get_prices/3` | `{:ok, %Registrar.Prices{}}` | `{:error, reason}` |
 | `Registrar.get_transfer_lock/3` | `{:ok, %Registrar.TransferLock{}}` | `{:error, reason}` |
+| `Registrar.enable_transfer_lock/3` | `{:ok, %Registrar.TransferLock{}}` | `{:error, reason}` |
 | `Registrar.disable_transfer_lock/3` | `{:ok, %Registrar.TransferLock{}}` | `{:error, reason}` |
 | `RegistrantChange.create/3` | `{:ok, %RegistrantChange{}}` | `{:error, reason}` |
 | `RegistrantChange.get/3` | `{:ok, %RegistrantChange{}}` | `{:error, reason}` |
@@ -338,12 +339,12 @@ not contact the callback URL, inspect deliveries, or list registrations first.
   option values remain strings, free-text attributes retain empty option lists,
   omitted display titles remain `nil`, and present titles are strings.
 - `ReqDnsimple.Registrar` — Check domain availability by name, explicitly
-  retrieve registration and lifecycle prices by name, retrieve or disable the
-  transfer lock by name or ID, authorize transfer-out by name, enable or
-  disable automatic renewal by name or ID, enable or disable WHOIS privacy by name or ID,
-  submit a registration or inbound transfer for an existing contact, submit a
-  renewal or expired-domain restore by name, or retrieve or replace registrar
-  delegation by name or ID.
+  retrieve registration and lifecycle prices by name, retrieve, enable, or
+  disable the transfer lock by name or ID, authorize transfer-out by name,
+  enable or disable automatic renewal by name or ID, enable or disable WHOIS
+  privacy by name or ID, submit a registration or inbound transfer for an
+  existing contact, submit a renewal or expired-domain restore by name, or
+  retrieve or replace registrar delegation by name or ID.
   The low-volume check preserves availability, premium, and optional trustee
   flags without using paid Domain Research, registering the domain, or retrying
   rate limits. Price retrieval preserves numeric registration, renewal,

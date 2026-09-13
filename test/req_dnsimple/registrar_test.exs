@@ -2320,6 +2320,122 @@ defmodule ReqDnsimple.RegistrarTest do
     end
   end
 
+  describe "enable_transfer_lock/3" do
+    test "enableDomainTransferLock sends one bodyless request and returns typed enabled state" do
+      body = %{"data" => %{"enabled" => true, "ignored" => "field"}}
+
+      assert {:ok, %ReqDnsimple.Registrar.TransferLock{enabled: true}} =
+               ReqDnsimple.Registrar.enable_transfer_lock(
+                 client(201, body),
+                 1010,
+                 "example.test"
+               )
+
+      assert_request(
+        :post,
+        "/v2/1010/registrar/domains/example.test/transfer_lock",
+        %{},
+        nil
+      )
+
+      refute_received {:request, _request}
+    end
+
+    test "enableDomainTransferLock preserves false and accepts integer, zero, and empty identifiers" do
+      request = client(201, %{"data" => %{"enabled" => false}})
+
+      assert {:ok, %ReqDnsimple.Registrar.TransferLock{enabled: false}} =
+               ReqDnsimple.Registrar.enable_transfer_lock(request, 0, 42)
+
+      assert_request(:post, "/v2/0/registrar/domains/42/transfer_lock", %{}, nil)
+      refute_received {:request, _request}
+
+      assert {:ok, %ReqDnsimple.Registrar.TransferLock{enabled: false}} =
+               ReqDnsimple.Registrar.enable_transfer_lock(request, 1010, "")
+
+      assert_request(:post, "/v2/1010/registrar/domains//transfer_lock", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "enableDomainTransferLock rejects invalid path parameters before HTTP" do
+      request = client(201, %{"data" => %{"enabled" => true}})
+
+      for {account_id, domain} <- [
+            {"1010", "example.test"},
+            {nil, "example.test"},
+            {1010, nil},
+            {1010, 1.0},
+            {1010, []}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.Registrar.enable_transfer_lock(request, account_id, domain)
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "enableDomainTransferLock preserves documented and shared HTTP failures" do
+      for status <- [400, 401, 403, 404, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"domain" => ["is unavailable"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.Registrar.enable_transfer_lock(
+                   client(status, body),
+                   1010,
+                   "example.test"
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/registrar/domains/example.test/transfer_lock",
+          %{},
+          nil
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "enableDomainTransferLock returns explicit errors for malformed success" do
+      for body <- [
+            %{},
+            %{"data" => nil},
+            %{"data" => %{}},
+            %{"data" => %{"enabled" => nil}},
+            %{"data" => %{"enabled" => "true"}},
+            %{"data" => %{"enabled" => 1}}
+          ] do
+        assert {:error, %{status: 201, response: ^body}} =
+                 ReqDnsimple.Registrar.enable_transfer_lock(
+                   client(201, body),
+                   1010,
+                   "example.test"
+                 )
+
+        assert_request(
+          :post,
+          "/v2/1010/registrar/domains/example.test/transfer_lock",
+          %{},
+          nil
+        )
+
+        refute_received {:request, _request}
+      end
+    end
+
+    test "enableDomainTransferLock preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.Registrar.enable_transfer_lock(
+                 transport_error_client(:timeout),
+                 1010,
+                 "example.test"
+               )
+    end
+  end
+
   describe "disable_transfer_lock/3" do
     test "disableDomainTransferLock sends one bodyless request and returns typed disabled state" do
       body = %{"data" => %{"enabled" => false, "ignored" => "field"}}

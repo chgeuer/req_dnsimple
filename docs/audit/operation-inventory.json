@@ -2575,7 +2575,7 @@
       "method": "POST",
       "path": "/{account}/registrar/domains/{domain}/transfer_lock",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-039",
       "br_issue_id": "bd-2tx",
       "proposed_interfaces": [
@@ -2622,8 +2622,12 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        "ReqDnsimple.Registrar.enable_transfer_lock/3"
+      ],
+      "contract_tests": [
+        "test/req_dnsimple/registrar_test.exs: enable_transfer_lock/3"
+      ]
     },
     {
       "operation_id": "enableVanityNameServers",
