@@ -1652,7 +1652,7 @@
       "method": "DELETE",
       "path": "/{account}/registrar/registrant_changes/{registrantchange}",
       "in_scope": true,
-      "implementation": "pending",
+      "implementation": "implemented",
       "finding_id": "API-025",
       "br_issue_id": "bd-2ao",
       "proposed_interfaces": [
@@ -1705,8 +1705,20 @@
           "role": "one API request"
         }
       ],
-      "implemented_interfaces": [],
-      "contract_tests": []
+      "implemented_interfaces": [
+        {
+          "module": "ReqDnsimple.RegistrantChange",
+          "function": "cancel",
+          "arity": 3,
+          "signature": "ReqDnsimple.RegistrantChange.cancel(req, account_id, registrant_change_id)"
+        }
+      ],
+      "contract_tests": [
+        {
+          "file": "test/req_dnsimple/registrant_change_test.exs",
+          "describe": "cancel/3"
+        }
+      ]
     },
     {
       "operation_id": "deleteTemplate",

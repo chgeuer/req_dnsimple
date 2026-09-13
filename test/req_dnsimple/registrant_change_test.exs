@@ -368,4 +368,151 @@ defmodule ReqDnsimple.RegistrantChangeTest do
                )
     end
   end
+
+  describe "cancel/3" do
+    test "deleteRegistrantChange sends one bodyless request and returns a cancelling change" do
+      data = Map.put(@registrant_change_data, "state", "cancelling")
+
+      assert {:ok,
+              %ReqDnsimple.RegistrantChange{
+                id: 1,
+                account_id: 1010,
+                contact_id: 11,
+                domain_id: 100,
+                state: "cancelling",
+                extended_attributes: %{
+                  "x-fi-registrant-idnumber" => "fake-offline-id"
+                },
+                registry_owner_change: true,
+                irt_lock_lifted_by: nil,
+                created_at: ~U[2026-09-01 08:00:00Z],
+                updated_at: ~U[2026-09-01 08:30:00Z]
+              }} =
+               ReqDnsimple.RegistrantChange.cancel(
+                 client(202, %{"data" => data}),
+                 1010,
+                 1
+               )
+
+      assert_request(:delete, "/v2/1010/registrar/registrant_changes/1", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "deleteRegistrantChange returns :ok for immediate cancellation" do
+      assert :ok = ReqDnsimple.RegistrantChange.cancel(client(204, nil), 1010, 1)
+
+      assert_request(:delete, "/v2/1010/registrar/registrant_changes/1", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "deleteRegistrantChange preserves zero values, empty attributes, false and a lock date" do
+      data =
+        Map.merge(@registrant_change_data, %{
+          "id" => 0,
+          "account_id" => 0,
+          "contact_id" => 0,
+          "domain_id" => 0,
+          "state" => "cancelled",
+          "extended_attributes" => %{},
+          "registry_owner_change" => false,
+          "irt_lock_lifted_by" => "2026-09-02"
+        })
+
+      assert {:ok,
+              %ReqDnsimple.RegistrantChange{
+                id: 0,
+                account_id: 0,
+                contact_id: 0,
+                domain_id: 0,
+                state: "cancelled",
+                extended_attributes: %{},
+                registry_owner_change: false,
+                irt_lock_lifted_by: ~D[2026-09-02]
+              }} =
+               ReqDnsimple.RegistrantChange.cancel(client(202, %{"data" => data}), 0, 0)
+
+      assert_request(:delete, "/v2/0/registrar/registrant_changes/0", %{}, nil)
+      refute_received {:request, _request}
+    end
+
+    test "deleteRegistrantChange rejects invalid path parameters before HTTP" do
+      request = client(204, nil)
+
+      for {account_id, registrant_change_id} <- [
+            {"1010", 1},
+            {nil, 1},
+            {1010, "1"},
+            {1010, nil},
+            {1010, 1.5},
+            {1010, []}
+          ] do
+        assert {:error, %NimbleOptions.ValidationError{}} =
+                 ReqDnsimple.RegistrantChange.cancel(
+                   request,
+                   account_id,
+                   registrant_change_id
+                 )
+      end
+
+      refute_received {:request, _request}
+    end
+
+    test "deleteRegistrantChange preserves documented and shared HTTP failures" do
+      for status <- [400, 401, 403, 404, 429, 500, 418] do
+        body = %{
+          "message" => "Fake offline request failure",
+          "errors" => %{"registrant_change" => ["cannot be cancelled"]}
+        }
+
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.RegistrantChange.cancel(client(status, body), 1010, 1)
+
+        assert_request(:delete, "/v2/1010/registrar/registrant_changes/1", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "deleteRegistrantChange returns explicit errors for malformed success" do
+      malformed_payloads = [
+        %{},
+        %{"data" => nil},
+        %{"data" => Map.delete(@registrant_change_data, "id")},
+        %{"data" => Map.put(@registrant_change_data, "account_id", "1010")},
+        %{"data" => Map.put(@registrant_change_data, "state", "unknown")},
+        %{"data" => Map.put(@registrant_change_data, "extended_attributes", %{key: "value"})},
+        %{"data" => Map.put(@registrant_change_data, "registry_owner_change", 1)},
+        %{"data" => Map.put(@registrant_change_data, "irt_lock_lifted_by", "not-a-date")},
+        %{"data" => Map.put(@registrant_change_data, "updated_at", "not-a-timestamp")}
+      ]
+
+      for body <- malformed_payloads do
+        assert {:error, %{status: 202, response: ^body}} =
+                 ReqDnsimple.RegistrantChange.cancel(client(202, body), 1010, 1)
+
+        assert_request(:delete, "/v2/1010/registrar/registrant_changes/1", %{}, nil)
+        refute_received {:request, _request}
+      end
+
+      for {status, body} <- [
+            {200, %{"data" => @registrant_change_data}},
+            {201, %{"data" => @registrant_change_data}},
+            {205, nil}
+          ] do
+        assert {:error, %{status: ^status, response: ^body}} =
+                 ReqDnsimple.RegistrantChange.cancel(client(status, body), 1010, 1)
+
+        assert_request(:delete, "/v2/1010/registrar/registrant_changes/1", %{}, nil)
+        refute_received {:request, _request}
+      end
+    end
+
+    test "deleteRegistrantChange preserves transport failures" do
+      assert {:error, %Req.TransportError{reason: :timeout}} =
+               ReqDnsimple.RegistrantChange.cancel(
+                 transport_error_client(:timeout),
+                 1010,
+                 1
+               )
+    end
+  end
 end

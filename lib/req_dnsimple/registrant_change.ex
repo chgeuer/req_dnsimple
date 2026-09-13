@@ -1,6 +1,6 @@
 defmodule ReqDnsimple.RegistrantChange do
   @moduledoc """
-  Creates and retrieves registrar contact-change requests.
+  Creates, retrieves, and cancels registrar contact-change requests.
 
   ## Example
 
@@ -17,6 +17,9 @@ defmodule ReqDnsimple.RegistrantChange do
 
       ReqDnsimple.RegistrantChange.get(req, 1010, 1)
       #=> {:ok, %ReqDnsimple.RegistrantChange{}}
+
+      ReqDnsimple.RegistrantChange.cancel(req, 1010, 1)
+      #=> {:ok, %ReqDnsimple.RegistrantChange{state: "cancelling"}}
   """
 
   @type state :: String.t()
@@ -156,6 +159,55 @@ defmodule ReqDnsimple.RegistrantChange do
             {:ok, registrant_change} -> {:ok, registrant_change}
             :error -> ReqDnsimple.response_error(response)
           end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+  end
+
+  @doc """
+  Cancels a registrar contact-change request.
+
+  Returns `{:ok, %ReqDnsimple.RegistrantChange{}}` for an asynchronous
+  cancellation (`202`) and `:ok` when cancellation completes immediately
+  (`204`). It sends one bodyless request and does not poll for completion.
+  """
+  @spec cancel(Req.Request.t(), ReqDnsimple.account_id(), integer()) ::
+          {:ok, t()} | :ok | {:error, term()}
+  def cancel(req, account_id, registrant_change_id) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [
+               account_id: account_id,
+               registrant_change_id: registrant_change_id
+             ],
+             @path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :delete,
+          url: "/:account_id/registrar/registrant_changes/:registrant_change_id",
+          path_params_style: :colon,
+          path_params: [
+            account_id: account_id,
+            registrant_change_id: registrant_change_id
+          ],
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 202, body: %{"data" => data}} = response} ->
+          case decode(data) do
+            {:ok, registrant_change} -> {:ok, registrant_change}
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, %Req.Response{status: 204}} ->
+          :ok
 
         {:ok, response} ->
           ReqDnsimple.response_error(response)

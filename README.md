@@ -564,6 +564,9 @@ separate from hosted-zone apex NS records and `Zone.update_ns_records/4`.
 
 {:ok, %ReqDnsimple.RegistrantChange{} = change} =
   ReqDnsimple.RegistrantChange.get(client, account_id, registrant_change_id)
+
+{:ok, %ReqDnsimple.RegistrantChange{state: "cancelling"}} =
+  ReqDnsimple.RegistrantChange.cancel(client, account_id, registrant_change_id)
 ```
 
 Registrant-change creation accepts domain/contact integer IDs or string forms,
@@ -572,7 +575,8 @@ request without polling. Creation preserves omitted versus explicitly empty
 registry extended attributes and performs no requirements check. Retrieval
 returns the current state, dynamic registry extended attributes with string
 keys, and typed date/timestamp fields. A pending registry lock-lift date remains
-`nil`.
+`nil`. Cancellation returns the typed current request for an asynchronous
+cancellation or `:ok` when cancellation completes immediately; it does not poll.
 
 ### Domain Research
 
