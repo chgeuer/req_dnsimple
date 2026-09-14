@@ -81,6 +81,38 @@ defmodule ReqDnsimple.DnsAnalytics do
   ]
 
   @doc """
+  Uses the client's configured account with default options.
+  See `list_page/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list_page(Req.Request.t()) ::
+          {:ok, {Result.t(), ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req) do
+    list_page(req, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list_page/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list_page(Req.Request.t(), keyword()) ::
+          {:ok, {Result.t(), ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec list_page(Req.Request.t(), ReqDnsimple.account_id()) ::
+          {:ok, {Result.t(), ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req, account_id)
+      when is_integer(account_id) or is_binary(account_id) do
+    list_page(req, account_id, [])
+  end
+
+  def list_page(req, opts) do
+    ReqDnsimple.Client.with_account(req, &list_page(req, &1, opts))
+  end
+
+  @doc """
   Queries one page of DNS analytics.
 
   Dates use `YYYY-MM-DD`; when both are present their inclusive span may not
@@ -89,7 +121,7 @@ defmodule ReqDnsimple.DnsAnalytics do
   """
   @spec list_page(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, {Result.t(), ReqDnsimple.Pagination.metadata()}} | {:error, term()}
-  def list_page(req, account_id, opts \\ []) do
+  def list_page(req, account_id, opts) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate([account_id: account_id], @path_schema),
          {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_schema),
@@ -115,6 +147,38 @@ defmodule ReqDnsimple.DnsAnalytics do
   end
 
   @doc """
+  Uses the client's configured account with default options.
+  See `query/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec query(Req.Request.t()) ::
+          {:ok, {Result.t(), ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def query(req) do
+    query(req, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `query/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec query(Req.Request.t(), keyword()) ::
+          {:ok, {Result.t(), ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec query(Req.Request.t(), ReqDnsimple.account_id()) ::
+          {:ok, {Result.t(), ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def query(req, account_id)
+      when is_integer(account_id) or is_binary(account_id) do
+    query(req, account_id, [])
+  end
+
+  def query(req, opts) do
+    ReqDnsimple.Client.with_account(req, &query(req, &1, opts))
+  end
+
+  @doc """
   Queries one page of DNS analytics.
 
   This is a convenience alias for `list_page/3` and never enumerates
@@ -122,7 +186,39 @@ defmodule ReqDnsimple.DnsAnalytics do
   """
   @spec query(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, {Result.t(), ReqDnsimple.Pagination.metadata()}} | {:error, term()}
-  def query(req, account_id, opts \\ []), do: list_page(req, account_id, opts)
+  def query(req, account_id, opts), do: list_page(req, account_id, opts)
+
+  @doc """
+  Uses the client's configured account with default options.
+  See `list_all/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list_all(Req.Request.t()) ::
+          {:ok, Result.t()} | {:error, term()}
+  def list_all(req) do
+    list_all(req, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list_all/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list_all(Req.Request.t(), keyword()) ::
+          {:ok, Result.t()} | {:error, term()}
+  @spec list_all(Req.Request.t(), ReqDnsimple.account_id()) ::
+          {:ok, Result.t()} | {:error, term()}
+  def list_all(req, account_id)
+      when is_integer(account_id) or is_binary(account_id) do
+    list_all(req, account_id, [])
+  end
+
+  def list_all(req, opts) do
+    ReqDnsimple.Client.with_account(req, &list_all(req, &1, opts))
+  end
 
   @doc """
   Enumerates all compatible DNS analytics pages in server order.
@@ -132,7 +228,7 @@ defmodule ReqDnsimple.DnsAnalytics do
   """
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, Result.t()} | {:error, term()}
-  def list_all(req, account_id, opts \\ []) do
+  def list_all(req, account_id, opts) do
     with {:ok, opts} <- ReqDnsimple.validate_keyword_list(opts) do
       if Keyword.has_key?(opts, :page) do
         {:error, {:invalid_option, :page}}

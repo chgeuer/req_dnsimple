@@ -300,6 +300,17 @@ defmodule ReqDnsimple.Registrar do
   ]
 
   @doc """
+  Uses the client's configured account. See `check/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec check(Req.Request.t(), String.t()) ::
+          {:ok, CheckResult.t()} | {:error, term()}
+  def check(req, domain_name) do
+    ReqDnsimple.Client.with_account(req, &check(req, &1, domain_name))
+  end
+
+  @doc """
   Checks whether a domain name is available for registration.
 
   This low-volume endpoint has a stricter rate limit than most DNSimple API
@@ -344,6 +355,17 @@ defmodule ReqDnsimple.Registrar do
   end
 
   @doc """
+  Uses the client's configured account. See `get_prices/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec get_prices(Req.Request.t(), String.t()) ::
+          {:ok, Prices.t()} | {:error, term()}
+  def get_prices(req, domain_name) do
+    ReqDnsimple.Client.with_account(req, &get_prices(req, &1, domain_name))
+  end
+
+  @doc """
   Retrieves registration and lifecycle prices for a domain name.
 
   Prices are returned as JSON numbers in a `Prices` struct. The transfer and
@@ -382,6 +404,20 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `get_transfer_lock/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec get_transfer_lock(
+          Req.Request.t(),
+          binary() | integer()
+        ) ::
+          {:ok, TransferLock.t()} | {:error, term()}
+  def get_transfer_lock(req, domain) do
+    ReqDnsimple.Client.with_account(req, &get_transfer_lock(req, &1, domain))
   end
 
   @doc """
@@ -433,6 +469,20 @@ defmodule ReqDnsimple.Registrar do
   end
 
   @doc """
+  Uses the client's configured account. See `enable_transfer_lock/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec enable_transfer_lock(
+          Req.Request.t(),
+          binary() | integer()
+        ) ::
+          {:ok, TransferLock.t()} | {:error, term()}
+  def enable_transfer_lock(req, domain) do
+    ReqDnsimple.Client.with_account(req, &enable_transfer_lock(req, &1, domain))
+  end
+
+  @doc """
   Enables a domain's transfer lock.
 
   The domain can be identified by name or integer ID. This function sends
@@ -478,6 +528,20 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `disable_transfer_lock/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec disable_transfer_lock(
+          Req.Request.t(),
+          binary() | integer()
+        ) ::
+          {:ok, TransferLock.t()} | {:error, term()}
+  def disable_transfer_lock(req, domain) do
+    ReqDnsimple.Client.with_account(req, &disable_transfer_lock(req, &1, domain))
   end
 
   @doc """
@@ -529,6 +593,17 @@ defmodule ReqDnsimple.Registrar do
   end
 
   @doc """
+  Uses the client's configured account. See `authorize_transfer_out/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec authorize_transfer_out(Req.Request.t(), String.t()) ::
+          :ok | {:error, term()}
+  def authorize_transfer_out(req, domain_name) do
+    ReqDnsimple.Client.with_account(req, &authorize_transfer_out(req, &1, domain_name))
+  end
+
+  @doc """
   Authorizes a domain transfer out.
 
   DNSimple unlocks the domain and emails the authorization code to the
@@ -565,6 +640,20 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `disable_auto_renewal/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec disable_auto_renewal(
+          Req.Request.t(),
+          binary() | integer()
+        ) ::
+          :ok | {:error, term()}
+  def disable_auto_renewal(req, domain) do
+    ReqDnsimple.Client.with_account(req, &disable_auto_renewal(req, &1, domain))
   end
 
   @doc """
@@ -612,6 +701,20 @@ defmodule ReqDnsimple.Registrar do
   end
 
   @doc """
+  Uses the client's configured account. See `enable_auto_renewal/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec enable_auto_renewal(
+          Req.Request.t(),
+          binary() | integer()
+        ) ::
+          :ok | {:error, term()}
+  def enable_auto_renewal(req, domain) do
+    ReqDnsimple.Client.with_account(req, &enable_auto_renewal(req, &1, domain))
+  end
+
+  @doc """
   Enables automatic renewal for a domain.
 
   This function sends exactly one bodyless request. It does not renew the
@@ -653,6 +756,20 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `enable_whois_privacy/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec enable_whois_privacy(
+          Req.Request.t(),
+          binary() | integer()
+        ) ::
+          {:ok, WhoisPrivacy.t()} | {:error, term()}
+  def enable_whois_privacy(req, domain) do
+    ReqDnsimple.Client.with_account(req, &enable_whois_privacy(req, &1, domain))
   end
 
   @doc """
@@ -705,6 +822,20 @@ defmodule ReqDnsimple.Registrar do
   end
 
   @doc """
+  Uses the client's configured account. See `disable_whois_privacy/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec disable_whois_privacy(
+          Req.Request.t(),
+          binary() | integer()
+        ) ::
+          {:ok, WhoisPrivacy.t()} | {:error, term()}
+  def disable_whois_privacy(req, domain) do
+    ReqDnsimple.Client.with_account(req, &disable_whois_privacy(req, &1, domain))
+  end
+
+  @doc """
   Disables WHOIS privacy for a domain.
 
   This function sends exactly one bodyless DELETE request and does not look up
@@ -752,6 +883,49 @@ defmodule ReqDnsimple.Registrar do
   end
 
   @doc """
+  Uses the client's configured account with default options.
+  See `renew/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec renew(
+          Req.Request.t(),
+          String.t()
+        ) ::
+          {:ok, Renewal.t()} | {:error, term()}
+  def renew(req, domain_name) do
+    renew(req, domain_name, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `renew/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec renew(
+          Req.Request.t(),
+          String.t(),
+          keyword()
+        ) ::
+          {:ok, Renewal.t()} | {:error, term()}
+  @spec renew(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          String.t()
+        ) ::
+          {:ok, Renewal.t()} | {:error, term()}
+  def renew(req, account_id, domain_name)
+      when is_integer(domain_name) or is_binary(domain_name) do
+    renew(req, account_id, domain_name, [])
+  end
+
+  def renew(req, domain_name, attrs) do
+    ReqDnsimple.Client.with_account(req, &renew(req, &1, domain_name, attrs))
+  end
+
+  @doc """
   Submits a domain renewal.
 
   The optional `:period` is sent unchanged; when omitted, DNSimple chooses the
@@ -770,7 +944,7 @@ defmodule ReqDnsimple.Registrar do
           keyword()
         ) ::
           {:ok, Renewal.t()} | {:error, term()}
-  def renew(req, account_id, domain_name, attrs \\ []) do
+  def renew(req, account_id, domain_name, attrs) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
              [account_id: account_id, domain_name: domain_name],
@@ -809,6 +983,21 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `register/4` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec register(
+          Req.Request.t(),
+          String.t(),
+          keyword()
+        ) ::
+          {:ok, Registration.t()} | {:error, term()}
+  def register(req, domain_name, attrs) do
+    ReqDnsimple.Client.with_account(req, &register(req, &1, domain_name, attrs))
   end
 
   @doc """
@@ -868,6 +1057,21 @@ defmodule ReqDnsimple.Registrar do
   end
 
   @doc """
+  Uses the client's configured account. See `transfer/4` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec transfer(
+          Req.Request.t(),
+          String.t(),
+          keyword()
+        ) ::
+          {:ok, Transfer.t()} | {:error, term()}
+  def transfer(req, domain_name, attrs) do
+    ReqDnsimple.Client.with_account(req, &transfer(req, &1, domain_name, attrs))
+  end
+
+  @doc """
   Submits an inbound domain transfer for an existing contact.
 
   `:registrant_id` is required. Optional settings are `:auth_code`,
@@ -923,6 +1127,49 @@ defmodule ReqDnsimple.Registrar do
   end
 
   @doc """
+  Uses the client's configured account with default options.
+  See `restore/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec restore(
+          Req.Request.t(),
+          String.t()
+        ) ::
+          {:ok, Restore.t()} | {:error, term()}
+  def restore(req, domain_name) do
+    restore(req, domain_name, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `restore/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec restore(
+          Req.Request.t(),
+          String.t(),
+          keyword()
+        ) ::
+          {:ok, Restore.t()} | {:error, term()}
+  @spec restore(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          String.t()
+        ) ::
+          {:ok, Restore.t()} | {:error, term()}
+  def restore(req, account_id, domain_name)
+      when is_integer(domain_name) or is_binary(domain_name) do
+    restore(req, account_id, domain_name, [])
+  end
+
+  def restore(req, domain_name, attrs) do
+    ReqDnsimple.Client.with_account(req, &restore(req, &1, domain_name, attrs))
+  end
+
+  @doc """
   Submits an expired-domain restore.
 
   Premium domains can include the caller-confirmed `:premium_price`, which is
@@ -941,7 +1188,7 @@ defmodule ReqDnsimple.Registrar do
           keyword()
         ) ::
           {:ok, Restore.t()} | {:error, term()}
-  def restore(req, account_id, domain_name, attrs \\ []) do
+  def restore(req, account_id, domain_name, attrs) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
              [account_id: account_id, domain_name: domain_name],
@@ -980,6 +1227,20 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `get_delegation/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec get_delegation(
+          Req.Request.t(),
+          binary() | integer()
+        ) ::
+          {:ok, [String.t()]} | {:error, term()}
+  def get_delegation(req, domain) do
+    ReqDnsimple.Client.with_account(req, &get_delegation(req, &1, domain))
   end
 
   @doc """
@@ -1027,6 +1288,21 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `change_delegation/4` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec change_delegation(
+          Req.Request.t(),
+          binary() | integer(),
+          keyword()
+        ) ::
+          {:ok, [String.t()]} | {:error, term()}
+  def change_delegation(req, domain, attrs) do
+    ReqDnsimple.Client.with_account(req, &change_delegation(req, &1, domain, attrs))
   end
 
   @doc """

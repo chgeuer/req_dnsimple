@@ -27,6 +27,17 @@ defmodule ReqDnsimple.SecondaryZone do
   ]
 
   @doc """
+  Uses the client's configured account. See `create/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec create(Req.Request.t(), keyword()) ::
+          {:ok, ReqDnsimple.Zone.t()} | {:error, term()}
+  def create(req, attrs) do
+    ReqDnsimple.Client.with_account(req, &create(req, &1, attrs))
+  end
+
+  @doc """
   Creates a secondary DNS zone.
 
   `name` is required. Ownership-verification and subscription failures are

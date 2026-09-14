@@ -23,6 +23,14 @@ It currently reconciles 103 supported operations (13 original and 90 added)
 with executable contract-test locations and records eight additional published
 operations as explicitly `out-of-scope`.
 
+Account-scoped overloads do not add DNSimple endpoints. The inventory's
+`scoped_interfaces` covers 95 account-path operations and 137 interface families,
+including pagination helpers, root shortcuts, and existing bang functions.
+Each entry records its module, function, supported arities, and account-free
+arguments. The top-level `client_scope` summarizes construction and account
+selection; original explicit-account interfaces and source/contract-test
+provenance remain intact.
+
 ## Installation
 
 ```elixir
@@ -35,21 +43,111 @@ end
 
 ## Quick Start
 
-### Create a client
+Runnable, read-only examples and an explicitly opt-in record lifecycle are in
+the [sample index](samples/README.md), including every command and required
+environment variable. Start with DNSimple sandbox.
+
+### Create an account-scoped client
 
 ```elixir
-client = ReqDnsimple.new_client("dnsimple_u_your_token_here")
+account_id = System.fetch_env!("DNSIMPLE_ACCOUNT_ID")
+
+client =
+  ReqDnsimple.new_client(System.fetch_env!("DNSIMPLE_TOKEN"),
+    account_id: account_id
+  )
+```
+
+`new_client/2` requires `account_id` for **both** account tokens (`dnsimple_a_`)
+and user tokens (`dnsimple_u_`). Supply a positive integer or an all-digit
+positive numeric string, such as `"00123"`; strings are normalized once to an
+integer. Missing or malformed configuration raises `ArgumentError` before any
+HTTP request. It never discovers an account or checks token permissions.
+
+The result is still a `Req.Request`, not a new wrapper struct. Account scope is
+internal Req metadata, preserved by `Req.merge/2`. Other constructor options
+configure Req normally, including `base_url`, `headers`, `adapter`, `retry`,
+and `receive_timeout`:
+
+```elixir
+client =
+  ReqDnsimple.new_client(System.fetch_env!("DNSIMPLE_TOKEN"),
+    account_id: account_id,
+    base_url: "https://api.sandbox.dnsimple.com/v2",
+    retry: false,
+    receive_timeout: 15_000
+  )
+  |> Req.merge(headers: [{"x-app", "dns-example"}])
 ```
 
 You can also pass a zero-arity function for dynamic token resolution. The
 function is evaluated for each request and may return either the token string or
-`{:bearer, token}`:
+`{:bearer, token}`. Neither constructor nor `for_account/2` evaluates it:
 
 ```elixir
-client = ReqDnsimple.new_client(fn ->
-  System.fetch_env!("DNSIMPLE_TOKEN")
-end)
+client =
+  ReqDnsimple.new_client(
+    fn -> {:bearer, System.fetch_env!("DNSIMPLE_TOKEN")} end,
+    account_id: account_id
+  )
 ```
+
+### Scope, explicit overrides, and compatibility
+
+Every existing operation whose second argument is `account_id` also has a
+scoped form omitting it. This includes resource modules, list aliases,
+`list_page`/`list_all`, applied `Service` operations, root shortcuts,
+`ns_records`, and the existing zone-listing bang helpers. Trailing options
+remain optional where they were optional before.
+
+```elixir
+{:ok, zones} = ReqDnsimple.Zone.list(client, name_like: "example")
+{:ok, zone} = ReqDnsimple.Zone.get(client, "example.com")
+
+other_account_id = System.fetch_env!("DNSIMPLE_OTHER_ACCOUNT_ID")
+other_client = ReqDnsimple.for_account(client, other_account_id)
+
+# An explicit account overrides scope for this call only.
+{:ok, other_zones} = ReqDnsimple.Zone.list(client, other_account_id, per_page: 20)
+{:ok, original_zones} = ReqDnsimple.Zone.list(client, per_page: 20)
+```
+
+`for_account/2` validates the same positive ID forms and returns an immutable
+copy with identical authentication, base URL, transport options, and adapter.
+The original is unchanged. Re-scoping sends no HTTP request and does not verify
+permissions; DNSimple remains the authority.
+
+For new discovery or global workflows, use `new_unscoped_client/1,2`. It accepts
+the same Req transport options, but rejects `account_id` rather than silently
+creating a scoped client:
+
+```elixir
+discovery =
+  ReqDnsimple.new_unscoped_client(fn -> System.fetch_env!("DNSIMPLE_TOKEN") end,
+    base_url: "https://api.sandbox.dnsimple.com/v2"
+  )
+
+{:error, :missing_account_id} = ReqDnsimple.Zone.list(discovery)
+```
+
+A new account-free operation on an unscoped client returns
+`{:error, :missing_account_id}` locally, without HTTP or credential resolution.
+Bang forms raise `ReqDnsimple.Error` with `reason: :missing_account_id`.
+Invalid operation attributes or options retain the established
+`NimbleOptions.ValidationError` behavior.
+
+**Compatibility:** `new_client/1` retains its exact legacy unscoped behavior,
+including accepting account tokens. Existing explicit-account calls remain
+supported on either kind of client:
+
+```elixir
+legacy = ReqDnsimple.new_client(System.fetch_env!("DNSIMPLE_TOKEN"))
+{:ok, zones} = ReqDnsimple.Zone.list(legacy, account_id)
+```
+
+Global `whoami/1`, `Account.list/1`, `OAuth.exchange_code/2`, TLD catalogs, and
+the global Service catalog do not require scope and also work on scoped clients.
+Scoping does not change any operation's established return shape.
 
 ### Exchange an OAuth authorization code
 
@@ -75,8 +173,8 @@ The result is `{:ok, %ReqDnsimple.OAuth.Token{}}`; `scope` may be `nil`.
 ### Identify yourself
 
 ```elixir
-{:user, user} = ReqDnsimple.whoami(client)
-# => {:user, %{"id" => 12345, "email" => "you@example.com", ...}}
+identity = ReqDnsimple.whoami(client)
+# => {:user, user} or {:account, account}
 ```
 
 `whoami/1` selects `{:user, user}` or `{:account, account}` from the non-null
@@ -84,12 +182,33 @@ identity in the successful response, independently of token spelling or the
 client's authentication configuration. If both identities are present or both
 are absent, it returns `{:unknown_token, full_response_body}`.
 
-### List accounts
+### Discover an account explicitly
+
+An account token can identify its account with an explicit `whoami/1` request:
 
 ```elixir
-accounts = ReqDnsimple.Account.list(client)
-# => [%ReqDnsimple.Account{id: 12345, email: "you@example.com", name: "Example Team", ...}]
+discovery = ReqDnsimple.new_unscoped_client(System.fetch_env!("DNSIMPLE_TOKEN"))
+{:account, %{"id" => discovered_id}} = ReqDnsimple.whoami(discovery)
+client = ReqDnsimple.for_account(discovery, discovered_id)
 ```
+
+For a user token, list accessible accounts, then select an account deliberately:
+
+```elixir
+discovery = ReqDnsimple.new_unscoped_client(System.fetch_env!("DNSIMPLE_TOKEN"))
+accounts = ReqDnsimple.Account.list(discovery)
+# Account.list/1 returns a bare list, not {:ok, accounts}.
+Enum.map(accounts, & &1.id)
+
+# Set this to an account selected by the user/application, not the first result.
+client = ReqDnsimple.for_account(discovery, System.fetch_env!("DNSIMPLE_ACCOUNT_ID"))
+```
+
+Do not choose `hd(accounts)` automatically, and never treat `user.id` from
+`whoami/1` as an account ID. Prefixes are guidance only; the identity response
+and DNSimple's permission checks are authoritative. The
+[discovery samples](samples/README.md#read-only-programs) handle error results
+and enforce explicit user-account selection.
 
 `Account.name` is optional because older responses may omit it. DNSimple's
 account examples and official SDK include the field even though its OpenAPI
@@ -98,36 +217,38 @@ schema does not.
 ### List zones
 
 ```elixir
-{:ok, zones} = ReqDnsimple.Zone.list(client, account_id)
+{:ok, zones} = ReqDnsimple.Zone.list(client)
 # => {:ok, [%ReqDnsimple.Zone{name: "example.com", ...}, ...]}
 ```
 
 Filter and sort:
 
 ```elixir
-{:ok, zones} = ReqDnsimple.Zone.list(client, account_id,
+{:ok, zones} = ReqDnsimple.Zone.list(client,
   name_like: "example",
   sort: [:id, name: :asc]
 )
 ```
 
-Use `list_page/3` when pagination metadata is needed, or `list_all/3` to fetch
-every page from page one:
+Use scoped `list_page/1,2` when pagination metadata is needed, or `list_all/1,2`
+to fetch every page from page one:
 
 ```elixir
-{:ok, {zones, pagination}} = ReqDnsimple.Zone.list_page(client, account_id, per_page: 50)
-{:ok, all_zones} = ReqDnsimple.Zone.list_all(client, account_id, name_like: "example")
+{:ok, {zones, pagination}} = ReqDnsimple.Zone.list_page(client, per_page: 50)
+{:ok, all_zones} = ReqDnsimple.Zone.list_all(client, name_like: "example")
 ```
 
-`Contact` and `BillingCharge` provide the same `list_page/3` and `list_all/3`
-interfaces. `ZoneRecord` provides `list_page/4` and `list_all/4`. `list_all`
+`Contact` and `BillingCharge` provide the same scoped `list_page/1,2` and
+`list_all/1,2` interfaces. `ZoneRecord` provides `list_page/2,3` and
+`list_all/2,3`, with the zone argument retained. Explicit-account forms remain
+available, as listed in the API catalog below. `list_all`
 preserves filters, sorting, and `per_page`, but rejects `page` because complete
 enumeration always begins at page one.
 
 ### Get a zone
 
 ```elixir
-{:ok, zone} = ReqDnsimple.Zone.get(client, account_id, "example.com")
+{:ok, zone} = ReqDnsimple.Zone.get(client, "example.com")
 # => {:ok, %ReqDnsimple.Zone{name: "example.com", active: true, ...}}
 ```
 
@@ -141,7 +262,7 @@ metadata:
 
 ```elixir
 {:ok, {result, pagination}} =
-  ReqDnsimple.DnsAnalytics.list_page(client, account_id,
+  ReqDnsimple.DnsAnalytics.list_page(client,
     start_date: "2026-09-01",
     end_date: "2026-09-02",
     groupings: [:date, :zone_name],
@@ -151,14 +272,18 @@ metadata:
   )
 ```
 
-`query/3` is a single-page alias. `list_all/3` explicitly enumerates from page
+Scoped `query/2` is a single-page alias. `list_all/2` explicitly enumerates from page
 one and returns one `%ReqDnsimple.DnsAnalytics.Result{}` with compatible rows
 combined in server order and the first page's query retained as provenance.
 
 ### Activate DNS service for a zone
 
+The mutation snippets below illustrate individual APIs; they can change live
+DNS or incur charges. For an executable, guarded mutation example, use the
+[opt-in sandbox record lifecycle](samples/README.md#opt-in-mutation-one-record-lifecycle).
+
 ```elixir
-{:ok, zone} = ReqDnsimple.Zone.activate(client, account_id, "example.com")
+{:ok, zone} = ReqDnsimple.Zone.activate(client, "example.com")
 # => {:ok, %ReqDnsimple.Zone{active: true, ...}}
 ```
 
@@ -170,7 +295,7 @@ follow-up requests.
 ### Deactivate DNS service for a zone
 
 ```elixir
-{:ok, zone} = ReqDnsimple.Zone.deactivate(client, account_id, "example.com")
+{:ok, zone} = ReqDnsimple.Zone.deactivate(client, "example.com")
 # => {:ok, %ReqDnsimple.Zone{active: false, ...}}
 ```
 
@@ -184,7 +309,7 @@ follow-up request, or additional mutation.
 
 ```elixir
 {:ok, {records, pagination}} = ReqDnsimple.ZoneRecord.list(
-  client, account_id, "example.com",
+  client, "example.com",
   type: "A",
   sort: [:id, name: :asc]
 )
@@ -194,18 +319,19 @@ follow-up request, or additional mutation.
 
 ```elixir
 {:ok, record} = ReqDnsimple.ZoneRecord.create(
-  client, account_id, "example.com",
+  client, "example.com",
   name: "www", type: "A", content: "93.184.215.14", ttl: 3600
 )
 ```
 
-The equivalent `ReqDnsimple.create_zone_record/4` helper and
-`ReqDnsimple.ZoneRecord.create/4` both expose function documentation for Livebook
-code help. You can also display the accepted attributes without making a request:
+The equivalent scoped `ReqDnsimple.create_zone_record/3` helper and
+`ReqDnsimple.ZoneRecord.create/3` accept the same attributes as their legacy
+`/4` forms. Both scoped and explicit-account arities expose full attribute
+documentation for Livebook code help; display it without making a request:
 
 ```elixir
 require IEx.Helpers
-IEx.Helpers.h(ReqDnsimple.create_zone_record/4)
+IEx.Helpers.h(ReqDnsimple.create_zone_record/3)
 ```
 
 After changing a local path dependency, restart the Livebook runtime and
@@ -216,7 +342,7 @@ compiled documentation.
 
 ```elixir
 {:ok, record} = ReqDnsimple.ZoneRecord.update(
-  client, account_id, "example.com", record_id,
+  client, "example.com", record_id,
   content: "93.184.215.15", ttl: 1800
 )
 ```
@@ -234,7 +360,7 @@ declares integers only.
 
 ```elixir
 {:ok, %ReqDnsimple.ZoneRecord.BatchResult{} = result} =
-  ReqDnsimple.ZoneRecord.batch_change(client, account_id, "example.com",
+  ReqDnsimple.ZoneRecord.batch_change(client, "example.com",
     creates: [[name: "", type: "A", content: "192.0.2.1"]],
     updates: [[id: record_id, ttl: 0, regions: []]],
     deletes: [[id: obsolete_record_id]]
@@ -248,14 +374,14 @@ Each list is optional; explicitly empty lists are sent unchanged.
 **Delete a record:**
 
 ```elixir
-:ok = ReqDnsimple.ZoneRecord.delete(client, account_id, "example.com", record_id)
+:ok = ReqDnsimple.ZoneRecord.delete(client, "example.com", record_id)
 ```
 
 ### Update hosted-zone NS records
 
 ```elixir
 {:ok, ns_records} =
-  ReqDnsimple.Zone.update_ns_records(client, account_id, "example.com",
+  ReqDnsimple.Zone.update_ns_records(client, "example.com",
     ns_names: ["ns1.example.com", "ns2.example.com"],
     ns_set_ids: [name_server_set_id]
   )
@@ -271,7 +397,7 @@ domain's registrar delegation.
 
 ```elixir
 {:ok, vanity_name_servers} =
-  ReqDnsimple.VanityNameServer.enable(client, account_id, "example.com")
+  ReqDnsimple.VanityNameServer.enable(client, "example.com")
 ```
 
 Enabling sends one bodyless request and returns the typed vanity A and AAAA
@@ -279,7 +405,7 @@ records created by DNSimple. The API can reject the request when the account's
 plan or payment state does not permit vanity name servers.
 
 ```elixir
-:ok = ReqDnsimple.VanityNameServer.disable(client, account_id, "example.com")
+:ok = ReqDnsimple.VanityNameServer.disable(client, "example.com")
 ```
 
 Disabling sends one bodyless request to remove the domain's vanity A and AAAA
@@ -290,7 +416,7 @@ does not delete records individually.
 
 ```elixir
 {:ok, webhooks} =
-  ReqDnsimple.Webhook.list(client, account_id, sort: [id: :asc])
+  ReqDnsimple.Webhook.list(client, sort: [id: :asc])
 ```
 
 Webhook listing returns the complete, non-paginated collection and supports
@@ -300,7 +426,6 @@ ordered `id` sorting.
 {:ok, webhook} =
   ReqDnsimple.Webhook.create(
     client,
-    account_id,
     url: "https://receiver.example/events?source=dnsimple"
   )
 ```
@@ -309,7 +434,7 @@ Webhook registration requires an absolute HTTPS callback URL and sends it
 unchanged in one POST request without contacting or probing the callback.
 
 ```elixir
-{:ok, webhook} = ReqDnsimple.Webhook.get(client, account_id, webhook_id)
+{:ok, webhook} = ReqDnsimple.Webhook.get(client, webhook_id)
 # => {:ok, %ReqDnsimple.Webhook{url: "https://receiver.example/events", suppressed_at: nil}}
 ```
 
@@ -317,7 +442,7 @@ Webhook retrieval returns the registered callback URL and its nullable
 suppression timestamp without contacting the callback URL.
 
 ```elixir
-:ok = ReqDnsimple.Webhook.delete(client, account_id, webhook_id)
+:ok = ReqDnsimple.Webhook.delete(client, webhook_id)
 ```
 
 Listing, retrieval, and deletion send one bodyless request. Retrieval and
@@ -327,21 +452,21 @@ operations contacts the callback URL or inspects deliveries.
 ### Get a zone file
 
 ```elixir
-{:ok, zone_file} = ReqDnsimple.Zone.get_zone_file(client, account_id, "example.com")
+{:ok, zone_file} = ReqDnsimple.Zone.get_zone_file(client, "example.com")
 # => {:ok, "$ORIGIN example.com.\n$TTL 3600\n..."}
 ```
 
 ### Check zone distribution
 
 ```elixir
-{:ok, true} = ReqDnsimple.Zone.check_zone_distribution(client, account_id, "example.com")
+{:ok, true} = ReqDnsimple.Zone.check_zone_distribution(client, "example.com")
 ```
 
 ### Check zone record distribution
 
 ```elixir
 {:ok, false} =
-  ReqDnsimple.ZoneRecord.check_distribution(client, account_id, "example.com", record_id)
+  ReqDnsimple.ZoneRecord.check_distribution(client, "example.com", record_id)
 ```
 
 ### Order and retrieve certificates
@@ -350,7 +475,6 @@ operations contacts the callback URL or inspects deliveries.
 {:ok, %ReqDnsimple.Certificate.Purchase{} = purchase} =
   ReqDnsimple.Certificate.purchase_letsencrypt(
     client,
-    account_id,
     "example.com",
     auto_renew: false,
     name: "api",
@@ -368,7 +492,6 @@ deploy the certificate automatically.
 {:ok, %ReqDnsimple.Certificate.Renewal{} = renewal} =
   ReqDnsimple.Certificate.purchase_letsencrypt_renewal(
     client,
-    account_id,
     "example.com",
     certificate_id,
     auto_renew: false,
@@ -384,7 +507,6 @@ leaves renewal defaults to DNSimple.
 {:ok, %ReqDnsimple.Certificate{state: "requesting"} = certificate} =
   ReqDnsimple.Certificate.issue_letsencrypt(
     client,
-    account_id,
     "example.com",
     purchase.certificate_id
   )
@@ -398,7 +520,6 @@ downloading, or deploying the certificate.
 {:ok, %ReqDnsimple.Certificate{state: "requesting"} = replacement} =
   ReqDnsimple.Certificate.issue_letsencrypt_renewal(
     client,
-    account_id,
     "example.com",
     renewal.old_certificate_id,
     renewal.id
@@ -413,7 +534,6 @@ creating another renewal order or waiting for issuance to complete.
 {:ok, {certificates, pagination}} =
   ReqDnsimple.Certificate.list_page(
     client,
-    account_id,
     "example.com",
     sort: [expiration: :asc, common_name: :desc],
     page: 2,
@@ -423,7 +543,6 @@ creating another renewal order or waiting for issuance to complete.
 {:ok, all_certificates} =
   ReqDnsimple.Certificate.list_all(
     client,
-    account_id,
     "example.com",
     sort: [id: :desc],
     per_page: 100
@@ -431,12 +550,12 @@ creating another renewal order or waiting for issuance to complete.
 ```
 
 Certificate listing preserves the server's descending-ID order when sorting is
-omitted. `list_page/4` (and its `list/4` alias) returns one page with pagination;
-`list_all/4` explicitly enumerates from page one.
+omitted. Scoped `list_page/3` (and its `list/3` alias) returns one page with
+pagination; `list_all/3` explicitly enumerates from page one.
 
 ```elixir
 {:ok, %ReqDnsimple.Certificate{} = certificate} =
-  ReqDnsimple.Certificate.get(client, account_id, "example.com", certificate_id)
+  ReqDnsimple.Certificate.get(client, "example.com", certificate_id)
 ```
 
 Certificate metadata includes its issuance state, alternate names, renewal
@@ -444,7 +563,7 @@ setting, and typed creation/update and nullable expiry values.
 
 ```elixir
 {:ok, %ReqDnsimple.Certificate.Download{} = bundle} =
-  ReqDnsimple.Certificate.download(client, account_id, "example.com", certificate_id)
+  ReqDnsimple.Certificate.download(client, "example.com", certificate_id)
 ```
 
 The bundle contains the server certificate, nullable root certificate, and
@@ -453,7 +572,7 @@ preserved exactly and are not parsed or written to files.
 
 ```elixir
 {:ok, %ReqDnsimple.Certificate.PrivateKey{private_key: private_key}} =
-  ReqDnsimple.Certificate.get_private_key(client, account_id, "example.com", certificate_id)
+  ReqDnsimple.Certificate.get_private_key(client, "example.com", certificate_id)
 ```
 
 The private key PEM is likewise preserved byte-for-byte and is not parsed,
@@ -462,7 +581,7 @@ logged, persisted, or written to a file.
 ### Billing charges
 
 ```elixir
-{:ok, charges} = ReqDnsimple.BillingCharge.list(client, account_id,
+{:ok, charges} = ReqDnsimple.BillingCharge.list(client,
   start_date: "2024-01-01",
   end_date: "2024-12-31",
   sort: [invoiced: :desc]
@@ -477,7 +596,7 @@ arbitrary-precision decimal library.
 
 ```elixir
 {:ok, contact} =
-  ReqDnsimple.Contact.create(client, account_id,
+  ReqDnsimple.Contact.create(client,
     first_name: "Test",
     last_name: "Contact",
     email: "contact@example.test",
@@ -490,58 +609,58 @@ arbitrary-precision decimal library.
   )
 
 {:ok, contact} =
-  ReqDnsimple.Contact.update(client, account_id, contact_id,
+  ReqDnsimple.Contact.update(client, contact_id,
     label: "",
     address2: nil,
     fax: nil
   )
 
-{:ok, contacts} = ReqDnsimple.Contact.list(client, account_id, sort: [label: :asc])
-{:ok, contact}  = ReqDnsimple.Contact.get(client, account_id, contact_id)
-:ok = ReqDnsimple.Contact.delete(client, account_id, contact_id)
+{:ok, contacts} = ReqDnsimple.Contact.list(client, sort: [label: :asc])
+{:ok, contact}  = ReqDnsimple.Contact.get(client, contact_id)
+:ok = ReqDnsimple.Contact.delete(client, contact_id)
 ```
 
 ### DNS templates
 
 ```elixir
 {:ok, {templates, pagination}} =
-  ReqDnsimple.Template.list_page(client, account_id,
+  ReqDnsimple.Template.list_page(client,
     sort: [id: :asc, name: :desc],
     page: 2,
     per_page: 30
   )
 
 {:ok, all_templates} =
-  ReqDnsimple.Template.list_all(client, account_id, sort: [sid: :asc])
+  ReqDnsimple.Template.list_all(client, sort: [sid: :asc])
 
 {:ok, template} =
-  ReqDnsimple.Template.update(client, account_id, "offline-template",
+  ReqDnsimple.Template.update(client, "offline-template",
     description: ""
   )
 ```
 
-`list_page/3` and its `list/3` alias fetch one page with string-keyed
-pagination metadata. `list_all/3` explicitly enumerates from page one while
-retaining sorting and `per_page`. `update/4` patches only the supplied metadata
+Scoped `list_page/2` and its `list/2` alias fetch one page with string-keyed
+pagination metadata. `list_all/2` explicitly enumerates from page one while
+retaining sorting and `per_page`. `update/3` patches only the supplied metadata
 and uses the caller's original template identifier for the request path.
 
 ### Domains
 
 ```elixir
 {:ok, hosted_domain} =
-  ReqDnsimple.Domain.create(client, account_id, name: "example.test")
+  ReqDnsimple.Domain.create(client, name: "example.test")
 
-{:ok, domain} = ReqDnsimple.Domain.get(client, account_id, "example.com")
+{:ok, domain} = ReqDnsimple.Domain.get(client, "example.com")
 
 {:ok, {domains, pagination}} =
-  ReqDnsimple.Domain.list_page(client, account_id,
+  ReqDnsimple.Domain.list_page(client,
     name_like: "example",
     sort: [name: :asc],
     per_page: 30
   )
 
 {:ok, all_domains} =
-  ReqDnsimple.Domain.list_all(client, account_id, registrant_id: 42)
+  ReqDnsimple.Domain.list_all(client, registrant_id: 42)
 ```
 
 Domain creation adds the named domain and its hosted zone in one request and
@@ -549,8 +668,8 @@ returns a typed `ReqDnsimple.Domain` struct. DNSimple may charge for the DNS
 service subscription. It does not register or purchase the domain, change
 delegation, verify ownership, or issue a separate zone-creation request.
 Retrieval accepts a name or integer ID and returns registration state, privacy,
-renewal, and nullable expiry metadata. `list_page/3` and its `list/3` alias
-return one typed page with string-keyed pagination metadata; `list_all/3`
+renewal, and nullable expiry metadata. Scoped `list_page/2` and its `list/2`
+alias return one typed page with string-keyed pagination metadata; `list_all/2`
 explicitly enumerates from page one while retaining `name_like` and
 `registrant_id` filters, `id`/`name`/`expiration` sorting, and page size.
 
@@ -582,7 +701,7 @@ Check a domain before registration or transfer:
 
 ```elixir
 {:ok, %ReqDnsimple.Registrar.CheckResult{} = result} =
-  ReqDnsimple.Registrar.check(client, account_id, "example.com")
+  ReqDnsimple.Registrar.check(client, "example.com")
 ```
 
 The registrar check is intended for low-volume interactive use and has a
@@ -595,7 +714,7 @@ purchase:
 
 ```elixir
 {:ok, %ReqDnsimple.Registrar.Prices{} = prices} =
-  ReqDnsimple.Registrar.get_prices(client, account_id, "example.com")
+  ReqDnsimple.Registrar.get_prices(client, "example.com")
 ```
 
 Registration, renewal, transfer, restore, and trustee prices remain JSON
@@ -607,7 +726,6 @@ Submit a registration for an existing contact without hidden preflight requests:
 {:ok, %ReqDnsimple.Registrar.Registration{} = registration} =
   ReqDnsimple.Registrar.register(
     client,
-    account_id,
     "example.com",
     registrant_id: contact_id,
     whois_privacy: false,
@@ -633,7 +751,6 @@ requests:
 {:ok, %ReqDnsimple.Registrar.Transfer{} = transfer} =
   ReqDnsimple.Registrar.transfer(
     client,
-    account_id,
     "example.com",
     registrant_id: contact_id,
     auth_code: "transfer-code",
@@ -656,7 +773,7 @@ Retrieve the current transfer-lock state without changing it:
 
 ```elixir
 {:ok, %ReqDnsimple.Registrar.TransferLock{enabled: enabled}} =
-  ReqDnsimple.Registrar.get_transfer_lock(client, account_id, "example.com")
+  ReqDnsimple.Registrar.get_transfer_lock(client, "example.com")
 ```
 
 The operation accepts a domain name or integer ID, sends one bodyless request,
@@ -668,7 +785,7 @@ operation:
 
 ```elixir
 {:ok, %ReqDnsimple.Registrar.TransferLock{enabled: true}} =
-  ReqDnsimple.Registrar.enable_transfer_lock(client, account_id, "example.com")
+  ReqDnsimple.Registrar.enable_transfer_lock(client, "example.com")
 ```
 
 The operation accepts a domain name or integer ID, sends one bodyless POST, and
@@ -679,7 +796,7 @@ or initiating a transfer:
 
 ```elixir
 {:ok, %ReqDnsimple.Registrar.TransferLock{enabled: false}} =
-  ReqDnsimple.Registrar.disable_transfer_lock(client, account_id, "example.com")
+  ReqDnsimple.Registrar.disable_transfer_lock(client, "example.com")
 ```
 
 The operation accepts a domain name or integer ID, sends one bodyless DELETE,
@@ -689,8 +806,8 @@ Enable or disable future automatic renewal without renewing or otherwise
 modifying the domain:
 
 ```elixir
-:ok = ReqDnsimple.Registrar.enable_auto_renewal(client, account_id, "example.com")
-:ok = ReqDnsimple.Registrar.disable_auto_renewal(client, account_id, "example.com")
+:ok = ReqDnsimple.Registrar.enable_auto_renewal(client, "example.com")
+:ok = ReqDnsimple.Registrar.disable_auto_renewal(client, "example.com")
 ```
 
 Both operations accept a domain name or integer ID, send one bodyless request,
@@ -700,7 +817,7 @@ Enable WHOIS privacy without a price lookup or purchase preflight:
 
 ```elixir
 {:ok, %ReqDnsimple.Registrar.WhoisPrivacy{} = privacy} =
-  ReqDnsimple.Registrar.enable_whois_privacy(client, account_id, "example.com")
+  ReqDnsimple.Registrar.enable_whois_privacy(client, "example.com")
 ```
 
 The operation accepts a domain name or integer ID and returns the typed privacy
@@ -712,7 +829,7 @@ Disable WHOIS privacy without a lookup, refund, or other registrar operation:
 
 ```elixir
 {:ok, %ReqDnsimple.Registrar.WhoisPrivacy{enabled: false} = privacy} =
-  ReqDnsimple.Registrar.disable_whois_privacy(client, account_id, "example.com")
+  ReqDnsimple.Registrar.disable_whois_privacy(client, "example.com")
 ```
 
 The operation accepts a domain name or integer ID, sends one bodyless DELETE,
@@ -724,7 +841,6 @@ Submit a renewal without a price lookup or follow-up polling:
 {:ok, %ReqDnsimple.Registrar.Renewal{} = renewal} =
   ReqDnsimple.Registrar.renew(
     client,
-    account_id,
     "example.com",
     period: 2,
     premium_price: "20.00"
@@ -741,7 +857,6 @@ Submit an expired-domain restore without a price lookup or eligibility preflight
 {:ok, %ReqDnsimple.Registrar.Restore{} = restore} =
   ReqDnsimple.Registrar.restore(
     client,
-    account_id,
     "example.com",
     premium_price: "109.00"
   )
@@ -756,7 +871,7 @@ Retrieve the current registrar delegation without reading hosted-zone records:
 
 ```elixir
 {:ok, ["ns1.example.com", "ns2.example.com"]} =
-  ReqDnsimple.Registrar.get_delegation(client, account_id, "example.com")
+  ReqDnsimple.Registrar.get_delegation(client, "example.com")
 ```
 
 The operation accepts a domain name or integer ID and returns the ordered
@@ -766,7 +881,6 @@ name-server hostnames exactly as DNSimple supplies them.
 {:ok, name_servers} =
   ReqDnsimple.Registrar.change_delegation(
     client,
-    account_id,
     "example.com",
     name_servers: ["ns1.example.com", "ns2.example.com"]
   )
@@ -775,7 +889,7 @@ name-server hostnames exactly as DNSimple supplies them.
 Delegation changes accept a domain name or integer ID and replace the registrar
 name-server list in one request. The supplied order and explicit empty lists are
 preserved; the wrapper does not fetch or merge the old delegation. This is
-separate from hosted-zone apex NS records and `Zone.update_ns_records/4`.
+separate from hosted-zone apex NS records and `Zone.update_ns_records/3,4`.
 
 ### Registrant changes
 
@@ -783,7 +897,6 @@ separate from hosted-zone apex NS records and `Zone.update_ns_records/4`.
 {:ok, %ReqDnsimple.RegistrantChange{} = change} =
   ReqDnsimple.RegistrantChange.create(
     client,
-    account_id,
     domain_id: "example.test",
     contact_id: "11",
     extended_attributes: %{
@@ -792,12 +905,11 @@ separate from hosted-zone apex NS records and `Zone.update_ns_records/4`.
   )
 
 {:ok, %ReqDnsimple.RegistrantChange{} = change} =
-  ReqDnsimple.RegistrantChange.get(client, account_id, registrant_change_id)
+  ReqDnsimple.RegistrantChange.get(client, registrant_change_id)
 
 {:ok, {changes, pagination}} =
   ReqDnsimple.RegistrantChange.list_page(
     client,
-    account_id,
     sort: [id: :asc],
     state: "completed",
     domain_id: "100",
@@ -807,10 +919,10 @@ separate from hosted-zone apex NS records and `Zone.update_ns_records/4`.
   )
 
 {:ok, all_pending_changes} =
-  ReqDnsimple.RegistrantChange.list_all(client, account_id, state: "pending")
+  ReqDnsimple.RegistrantChange.list_all(client, state: "pending")
 
 {:ok, %ReqDnsimple.RegistrantChange{state: "cancelling"}} =
-  ReqDnsimple.RegistrantChange.cancel(client, account_id, registrant_change_id)
+  ReqDnsimple.RegistrantChange.cancel(client, registrant_change_id)
 ```
 
 Registrant-change creation accepts domain/contact integer IDs or string forms,
@@ -826,7 +938,7 @@ cancellation or `:ok` when cancellation completes immediately; it does not poll.
 
 ```elixir
 {:ok, research} =
-  ReqDnsimple.DomainResearch.get_status(client, account_id, domain: "example.com")
+  ReqDnsimple.DomainResearch.get_status(client, domain: "example.com")
 ```
 
 Domain Research is a paid service requiring the `domain_research_read` OAuth
@@ -839,26 +951,31 @@ automatically retry quota responses.
 ### Domain pushes
 
 ```elixir
+source_client =
+  ReqDnsimple.for_account(client, System.fetch_env!("DNSIMPLE_SOURCE_ACCOUNT_ID"))
+
+target_client =
+  ReqDnsimple.for_account(client, System.fetch_env!("DNSIMPLE_TARGET_ACCOUNT_ID"))
+
 {:ok, push} =
   ReqDnsimple.DomainPush.initiate(
-    client,
-    source_account_id,
+    source_client,
     domain,
     new_account_identifier: target_account_identifier
   )
 
 {:ok, {pushes, pagination}} =
-  ReqDnsimple.DomainPush.list_page(client, account_id, page: 1, per_page: 30)
+  ReqDnsimple.DomainPush.list_page(target_client, page: 1, per_page: 30)
 
-{:ok, all_pushes} = ReqDnsimple.DomainPush.list_all(client, account_id)
-:ok = ReqDnsimple.DomainPush.accept(client, account_id, push_id, contact_id: contact_id)
-:ok = ReqDnsimple.DomainPush.reject(client, account_id, push_id)
+{:ok, all_pushes} = ReqDnsimple.DomainPush.list_all(target_client)
+:ok = ReqDnsimple.DomainPush.accept(target_client, push_id, contact_id: contact_id)
+:ok = ReqDnsimple.DomainPush.reject(target_client, push_id)
 ```
 
 Initiating a push is source-account scoped and requires exactly one target:
 `:new_account_identifier`, or the deprecated `:new_account_email`. Pending-push
-listing and acceptance are target-account scoped. `list_page/3` and `list/3`
-return one typed page with string-keyed pagination metadata; `list_all/3`
+listing and acceptance are target-account scoped. Scoped `list_page/2` and
+`list/2` return one typed page with string-keyed pagination metadata; `list_all/2`
 deliberately enumerates from page one and accepts only `:per_page`. Accepting a
 push sends exactly one request using the selected target-account contact.
 Rejecting a push sends a bodyless request and does not delete the source domain.
@@ -867,9 +984,9 @@ None of these operations performs a preflight request.
 ### DNSSEC
 
 ```elixir
-{:ok, dnssec} = ReqDnsimple.Dnssec.get(client, account_id, "example.com")
-{:ok, dnssec} = ReqDnsimple.Dnssec.enable(client, account_id, "example.com")
-:ok = ReqDnsimple.Dnssec.disable(client, account_id, "example.com")
+{:ok, dnssec} = ReqDnsimple.Dnssec.get(client, "example.com")
+{:ok, dnssec} = ReqDnsimple.Dnssec.enable(client, "example.com")
+:ok = ReqDnsimple.Dnssec.disable(client, "example.com")
 ```
 
 Retrieval returns the enabled and active states separately, with typed creation
@@ -889,7 +1006,6 @@ confirmation.
 {:ok, delegation_signer_record} =
   ReqDnsimple.DelegationSignerRecord.create(
     client,
-    account_id,
     "example.com",
     algorithm: "13",
     digest: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -900,7 +1016,6 @@ confirmation.
 {:ok, delegation_signer_record} =
   ReqDnsimple.DelegationSignerRecord.get(
     client,
-    account_id,
     "example.com",
     ds_record_id
   )
@@ -908,7 +1023,6 @@ confirmation.
 {:ok, {delegation_signer_records, pagination}} =
   ReqDnsimple.DelegationSignerRecord.list_page(
     client,
-    account_id,
     "example.com",
     sort: [id: :asc, created_at: :desc],
     page: 2,
@@ -918,7 +1032,6 @@ confirmation.
 {:ok, all_delegation_signer_records} =
   ReqDnsimple.DelegationSignerRecord.list_all(
     client,
-    account_id,
     "example.com",
     sort: [created_at: :desc]
   )
@@ -926,7 +1039,6 @@ confirmation.
 :ok =
   ReqDnsimple.DelegationSignerRecord.delete(
     client,
-    account_id,
     "example.com",
     ds_record_id
   )
@@ -935,8 +1047,8 @@ confirmation.
 Creation accepts a string algorithm with either a complete DS tuple or KEY
 `public_key`, and returns a typed `ReqDnsimple.DelegationSignerRecord`. DS and
 KEY proof fields that do not apply to the returned representation are `nil`.
-`list_page/4` and its `list/4` alias return one typed page with string-keyed
-pagination metadata; `list_all/4` explicitly enumerates from page one while
+Scoped `list_page/3` and its `list/3` alias return one typed page with string-keyed
+pagination metadata; `list_all/3` explicitly enumerates from page one while
 retaining `id`/`created_at` sorting and page size. Deletion removes only the
 selected registry delegation-signer record. It does not disable DNSSEC or
 delete hosted-zone records.
@@ -947,19 +1059,17 @@ delete hosted-zone records.
 {:ok, email_forward} =
   ReqDnsimple.EmailForward.create(
     client,
-    account_id,
     "example.com",
     alias_name: "support",
     destination_email: "recipient@example.test"
   )
 
 {:ok, email_forward} =
-  ReqDnsimple.EmailForward.get(client, account_id, "example.com", email_forward_id)
+  ReqDnsimple.EmailForward.get(client, "example.com", email_forward_id)
 
 {:ok, {email_forwards, pagination}} =
   ReqDnsimple.EmailForward.list_page(
     client,
-    account_id,
     "example.com",
     sort: [id: :asc, alias_email: :desc],
     page: 2,
@@ -969,19 +1079,18 @@ delete hosted-zone records.
 {:ok, all_email_forwards} =
   ReqDnsimple.EmailForward.list_all(
     client,
-    account_id,
     "example.com",
     sort: [destination_email: :asc]
   )
 
-:ok = ReqDnsimple.EmailForward.delete(client, account_id, "example.com", email_forward_id)
+:ok = ReqDnsimple.EmailForward.delete(client, "example.com", email_forward_id)
 ```
 
 Creation sends the local-part `alias_name` unchanged and returns a typed
 `ReqDnsimple.EmailForward` with its full alias email, destination email,
 activation state, and timestamps. The returned `alias_email` is distinct from
-the creation input. `list_page/4` and its `list/4` alias return one typed page
-with string-keyed pagination metadata; `list_all/4` explicitly enumerates from
+the creation input. Scoped `list_page/3` and its `list/3` alias return one typed page
+with string-keyed pagination metadata; `list_all/3` explicitly enumerates from
 page one while retaining `id`/`alias_email`/`destination_email` sorting and page
 size. Creation does not provision DNS records or send a test email. Deletion
 removes only the selected email forward and does not modify the domain's MX
@@ -993,30 +1102,27 @@ records.
 {:ok, primary_server} =
   ReqDnsimple.PrimaryServer.create(
     client,
-    account_id,
     name: "Primary",
     ip: "192.0.2.1",
     port: 5353
   )
 
-{:ok, primary_server} = ReqDnsimple.PrimaryServer.get(client, account_id, primary_server_id)
+{:ok, primary_server} = ReqDnsimple.PrimaryServer.get(client, primary_server_id)
 
 {:ok, {primary_servers, pagination}} =
   ReqDnsimple.PrimaryServer.list_page(
     client,
-    account_id,
     sort: [id: :asc, name: :desc],
     page: 2,
     per_page: 30
   )
 
 {:ok, all_primary_servers} =
-  ReqDnsimple.PrimaryServer.list_all(client, account_id, sort: [name: :asc])
+  ReqDnsimple.PrimaryServer.list_all(client, sort: [name: :asc])
 
 {:ok, primary_server} =
   ReqDnsimple.PrimaryServer.link(
     client,
-    account_id,
     primary_server_id,
     zone: "secondary.example.test"
   )
@@ -1024,20 +1130,19 @@ records.
 {:ok, primary_server} =
   ReqDnsimple.PrimaryServer.unlink(
     client,
-    account_id,
     primary_server_id,
     zone: "secondary.example.test"
   )
 
-:ok = ReqDnsimple.PrimaryServer.delete(client, account_id, primary_server_id)
+:ok = ReqDnsimple.PrimaryServer.delete(client, primary_server_id)
 ```
 
 The returned `ReqDnsimple.PrimaryServer` includes its IP, integer port, and the
 ordered list of linked secondary-zone names. Creation requires a name and IP,
 sends a supplied integer port unchanged, and leaves an omitted port to the API.
 It performs no reachability check or follow-up request. Retrieval makes no
-zone-transfer or reachability requests. `list_page/3` and its `list/3` alias
-return one typed page with string-keyed pagination metadata; `list_all/3`
+zone-transfer or reachability requests. Scoped `list_page/2` and its `list/2`
+alias return one typed page with string-keyed pagination metadata; `list_all/2`
 explicitly enumerates from page one while retaining sorting and page size.
 Listing supports ordered `id` and `name` sorting. Linking sends the required
 secondary-zone name in one request without looking up or creating either
@@ -1052,7 +1157,6 @@ requests.
 {:ok, zone} =
   ReqDnsimple.SecondaryZone.create(
     client,
-    account_id,
     name: "secondary.example.test"
   )
 ```
@@ -1083,27 +1187,25 @@ follow-up requests.
 {:ok, {services, pagination}} =
   ReqDnsimple.Service.list_page_applied(
     client,
-    account_id,
     "example.com",
     page: 2,
     per_page: 30
   )
 
 {:ok, all_services} =
-  ReqDnsimple.Service.list_all_applied(client, account_id, "example.com", per_page: 100)
+  ReqDnsimple.Service.list_all_applied(client, "example.com", per_page: 100)
 
-:ok = ReqDnsimple.Service.apply(client, account_id, "example.com", "service-sid")
+:ok = ReqDnsimple.Service.apply(client, "example.com", "service-sid")
 
 :ok =
   ReqDnsimple.Service.apply(
     client,
-    account_id,
     "example.com",
     "service-sid",
     settings: %{"app" => "my-app"}
   )
 
-:ok = ReqDnsimple.Service.unapply(client, account_id, "example.com", "service-sid")
+:ok = ReqDnsimple.Service.unapply(client, "example.com", "service-sid")
 ```
 
 Service retrieval accepts a sid or integer ID and returns a typed
@@ -1112,9 +1214,9 @@ Service retrieval accepts a sid or integer ID and returns a typed
 catalog, accepting ordered `id`/`sid` sorting and pagination options.
 `list_all/2` explicitly enumerates the catalog from page one while preserving
 sorting and `per_page`, and rejects an explicit `page`.
-`list_page_applied/4` and its `list_applied/4` alias return one typed page of
+Scoped `list_page_applied/3` and its `list_applied/3` alias return one typed page of
 services applied to a domain with string-keyed pagination metadata.
-`list_all_applied/4` explicitly enumerates from page one, preserves `per_page`,
+`list_all_applied/3` explicitly enumerates from page one, preserves `per_page`,
 and rejects an explicit `page`.
 Omitting `settings` sends no request body; an explicit empty map sends
 `{"settings": {}}`. Setting names remain strings. Applying a service performs
@@ -1128,14 +1230,24 @@ The top-level `ReqDnsimple` module provides shorthand delegates for common opera
 
 ```elixir
 # These are equivalent:
-ReqDnsimple.list_zones(client, account_id)
-ReqDnsimple.Zone.list(client, account_id)
+ReqDnsimple.list_zones(client, name_like: "example", per_page: 20)
+ReqDnsimple.Zone.list(client, name_like: "example", per_page: 20)
 
-ReqDnsimple.create_zone_record(client, account_id, "example.com", attrs)
-ReqDnsimple.ZoneRecord.create(client, account_id, "example.com", attrs)
+ReqDnsimple.create_zone_record(client, "example.com", attrs)
+ReqDnsimple.ZoneRecord.create(client, "example.com", attrs)
+
+ReqDnsimple.list_contacts(client, sort: [label: :asc], per_page: 20)
+ReqDnsimple.Contact.list(client, sort: [label: :asc], per_page: 20)
+
+ReqDnsimple.list_billing_charges(client, sort: [invoiced: :desc], per_page: 20)
+ReqDnsimple.BillingCharge.list(client, sort: [invoiced: :desc], per_page: 20)
 ```
 
-`ReqDnsimple.ns_records/3` is a read-only convenience for enumerating every
+Root `list_zones`, `list_zones!`, `list_contacts`, and `list_billing_charges`
+accept the same options as their resource-module counterparts, in both scoped
+and explicit-account forms. All existing explicit-account shortcuts still work.
+
+`ReqDnsimple.ns_records/2,3` is a read-only convenience for enumerating every
 apex (`name=""`) NS record in a zone through the zone-record collection. These
 records describe the zone apex; they are distinct from registrar delegation and
 from the separate API that explicitly replaces a zone's NS records.
@@ -1144,34 +1256,38 @@ from the separate API that explicitly replaces a zone's NS records.
 
 This catalog describes the currently exported modules and operations; it is not
 a claim that every published DNSimple endpoint is wrapped.
+Arity lists include both account-scoped and legacy explicit-account forms.
+For account operations, omit only the second (`account_id`) argument when using
+a scoped client; optional trailing options remain available. Global operations
+do not gain an account argument.
 
 | Module | DNSimple API | Operations |
 |--------|-------------|------------|
-| `ReqDnsimple` | Client, `/whoami`, apex NS record enumeration, result handling | `new_client/1`, `whoami/1`, `token_type/1`, `ns_records/3`, `list_zones!/2`, `unwrap!/1` |
+| `ReqDnsimple` | Client, `/whoami`, apex NS record enumeration, result handling | `new_client/1,2`, `new_unscoped_client/1,2`, `for_account/2`, `whoami/1`, `token_type/1`, `ns_records/2,3`, `list_zones/1,2,3`, `list_zones!/1,2,3`, `list_contacts/1,2,3`, `list_billing_charges/1,2,3`, `unwrap!/1` |
 | `ReqDnsimple.OAuth` | `/oauth/access_token` | `exchange_code/2` |
 | `ReqDnsimple.Account` | `/accounts` | `list/1` |
-| `ReqDnsimple.Zone` | `/zones` | `list/2`, `list/3`, `list!/2`, `list!/3`, `list_page/2`, `list_page/3`, `list_all/2`, `list_all/3`, `get/3`, `activate/3`, `deactivate/3`, `update_ns_records/4`, `get_zone_file/3`, `check_zone_distribution/3` |
-| `ReqDnsimple.ZoneRecord` | `/zones/:zone/records`, `/zones/:zone/batch` | `list/3`, `list/4`, `list_page/3`, `list_page/4`, `list_all/3`, `list_all/4`, `get/4`, `create/4`, `update/5`, `delete/4`, `check_distribution/4`, `batch_change/4` |
-| `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/2`, `list/3`, `list_page/2`, `list_page/3`, `list_all/2`, `list_all/3` |
-| `ReqDnsimple.Contact` | `/contacts` | `create/3`, `update/4`, `list/2`, `list/3`, `list_page/2`, `list_page/3`, `list_all/2`, `list_all/3`, `get/3`, `delete/3` |
-| `ReqDnsimple.Domain` | `/domains`, `/domains/:domain` | `create/3`, `get/3`, `list/3`, `list_page/3`, `list_all/3`, `delete/3` |
-| `ReqDnsimple.DomainResearch` | `/domains/research/status` | `get_status/3` |
-| `ReqDnsimple.DnsAnalytics` | `/dns_analytics` | `query/2`, `query/3`, `list_page/2`, `list_page/3`, `list_all/2`, `list_all/3` |
-| `ReqDnsimple.Dnssec` | `/domains/:domain/dnssec` | `get/3`, `enable/3`, `disable/3` |
-| `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records[/:ds_record]` | `create/4`, `get/4`, `list/4`, `list_page/4`, `list_all/4`, `delete/4` |
-| `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards[/:email_forward]` | `create/4`, `list/3`, `list/4`, `list_page/3`, `list_page/4`, `list_all/3`, `list_all/4`, `get/4`, `delete/4` |
-| `ReqDnsimple.DomainPush` | `/domains/:domain/pushes`, `/pushes[/:push]` | `initiate/4`, `list/3`, `list_page/3`, `list_all/3`, `accept/4`, `reject/3` |
-| `ReqDnsimple.VanityNameServer` | `/vanity/:domain` | `enable/3`, `disable/3` |
-| `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/3`, `get_prices/3`, `get_transfer_lock/3`, `enable_transfer_lock/3`, `disable_transfer_lock/3`, `authorize_transfer_out/3`, `disable_auto_renewal/3`, `enable_auto_renewal/3`, `enable_whois_privacy/3`, `disable_whois_privacy/3`, `register/4`, `transfer/4`, `renew/3`, `renew/4`, `restore/3`, `restore/4`, `get_delegation/3`, `change_delegation/4` |
-| `ReqDnsimple.RegistrantChange` | `/registrar/registrant_changes[/:registrant_change]` | `create/3`, `get/3`, `list/2`, `list/3`, `list_page/2`, `list_page/3`, `list_all/2`, `list_all/3`, `cancel/3` |
-| `ReqDnsimple.Certificate` | `/domains/:domain/certificates` | `purchase_letsencrypt/3`, `purchase_letsencrypt/4`, `purchase_letsencrypt_renewal/4`, `purchase_letsencrypt_renewal/5`, `issue_letsencrypt/4`, `issue_letsencrypt_renewal/5`, `list/3`, `list/4`, `list_page/3`, `list_page/4`, `list_all/3`, `list_all/4`, `get/4`, `download/4`, `get_private_key/4` |
+| `ReqDnsimple.Zone` | `/zones` | `list/1,2,3`, `list!/1,2,3`, `list_page/1,2,3`, `list_all/1,2,3`, `get/2,3`, `activate/2,3`, `deactivate/2,3`, `update_ns_records/3,4`, `get_zone_file/2,3`, `check_zone_distribution/2,3` |
+| `ReqDnsimple.ZoneRecord` | `/zones/:zone/records`, `/zones/:zone/batch` | `list/2,3,4`, `list_page/2,3,4`, `list_all/2,3,4`, `get/3,4`, `create/3,4`, `update/4,5`, `delete/3,4`, `check_distribution/3,4`, `batch_change/3,4` |
+| `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/1,2,3`, `list_page/1,2,3`, `list_all/1,2,3` |
+| `ReqDnsimple.Contact` | `/contacts` | `create/2,3`, `update/3,4`, `list/1,2,3`, `list_page/1,2,3`, `list_all/1,2,3`, `get/2,3`, `delete/2,3` |
+| `ReqDnsimple.Domain` | `/domains`, `/domains/:domain` | `create/2,3`, `get/2,3`, `list/1,2,3`, `list_page/1,2,3`, `list_all/1,2,3`, `delete/2,3` |
+| `ReqDnsimple.DomainResearch` | `/domains/research/status` | `get_status/2,3` |
+| `ReqDnsimple.DnsAnalytics` | `/dns_analytics` | `query/1,2,3`, `list_page/1,2,3`, `list_all/1,2,3` |
+| `ReqDnsimple.Dnssec` | `/domains/:domain/dnssec` | `get/2,3`, `enable/2,3`, `disable/2,3` |
+| `ReqDnsimple.DelegationSignerRecord` | `/domains/:domain/ds_records[/:ds_record]` | `create/3,4`, `get/3,4`, `list/2,3,4`, `list_page/2,3,4`, `list_all/2,3,4`, `delete/3,4` |
+| `ReqDnsimple.EmailForward` | `/domains/:domain/email_forwards[/:email_forward]` | `create/3,4`, `list/2,3,4`, `list_page/2,3,4`, `list_all/2,3,4`, `get/3,4`, `delete/3,4` |
+| `ReqDnsimple.DomainPush` | `/domains/:domain/pushes`, `/pushes[/:push]` | `initiate/3,4`, `list/1,2,3`, `list_page/1,2,3`, `list_all/1,2,3`, `accept/3,4`, `reject/2,3` |
+| `ReqDnsimple.VanityNameServer` | `/vanity/:domain` | `enable/2,3`, `disable/2,3` |
+| `ReqDnsimple.Registrar` | `/registrar/domains/:domain` | `check/2,3`, `get_prices/2,3`, `get_transfer_lock/2,3`, `enable_transfer_lock/2,3`, `disable_transfer_lock/2,3`, `authorize_transfer_out/2,3`, `disable_auto_renewal/2,3`, `enable_auto_renewal/2,3`, `enable_whois_privacy/2,3`, `disable_whois_privacy/2,3`, `register/3,4`, `transfer/3,4`, `renew/2,3,4`, `restore/2,3,4`, `get_delegation/2,3`, `change_delegation/3,4` |
+| `ReqDnsimple.RegistrantChange` | `/registrar/registrant_changes[/:registrant_change]` | `create/2,3`, `get/2,3`, `list/1,2,3`, `list_page/1,2,3`, `list_all/1,2,3`, `cancel/2,3` |
+| `ReqDnsimple.Certificate` | `/domains/:domain/certificates` | `purchase_letsencrypt/2,3,4`, `purchase_letsencrypt_renewal/3,4,5`, `issue_letsencrypt/3,4`, `issue_letsencrypt_renewal/4,5`, `list/2,3,4`, `list_page/2,3,4`, `list_all/2,3,4`, `get/3,4`, `download/3,4`, `get_private_key/3,4` |
 | `ReqDnsimple.Tld` | `/tlds[/:tld]`, `/tlds/:tld/extended_attributes` | `get/2`, `list/1`, `list/2`, `list_page/1`, `list_page/2`, `list_all/1`, `list_all/2`, `list_extended_attributes/2` |
-| `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries` | `create/3`, `get/3`, `list/3`, `list_page/3`, `list_all/3`, `link/4`, `unlink/4`, `delete/3`, `from_json/1` |
-| `ReqDnsimple.SecondaryZone` | `/secondary_dns/zones` | `create/3` |
-| `ReqDnsimple.Service` | `/services[/:service]`, `/domains/:domain/services[/:service]` | `get/2`, `list/1`, `list/2`, `list_page/1`, `list_page/2`, `list_all/1`, `list_all/2`, `list_applied/3`, `list_applied/4`, `list_page_applied/3`, `list_page_applied/4`, `list_all_applied/3`, `list_all_applied/4`, `apply/4`, `apply/5`, `unapply/4` |
-| `ReqDnsimple.Template` | `/templates[/:template]`, `/domains/:domain/templates/:template` | `create/3`, `get/3`, `update/4`, `list/2`, `list/3`, `list_page/2`, `list_page/3`, `list_all/2`, `list_all/3`, `apply/4`, `delete/3` |
-| `ReqDnsimple.TemplateRecord` | `/templates/:template/records[/:record]` | `create/4`, `get/4`, `list/3`, `list/4`, `list_page/3`, `list_page/4`, `list_all/3`, `list_all/4`, `delete/4` |
-| `ReqDnsimple.Webhook` | `/webhooks[/:webhook]` | `list/2`, `list/3`, `create/3`, `get/3`, `delete/3` |
+| `ReqDnsimple.PrimaryServer` | `/secondary_dns/primaries` | `create/2,3`, `get/2,3`, `list/1,2,3`, `list_page/1,2,3`, `list_all/1,2,3`, `link/3,4`, `unlink/3,4`, `delete/2,3`, `from_json/1` |
+| `ReqDnsimple.SecondaryZone` | `/secondary_dns/zones` | `create/2,3` |
+| `ReqDnsimple.Service` | `/services[/:service]`, `/domains/:domain/services[/:service]` | `get/2`, `list/1,2`, `list_page/1,2`, `list_all/1,2`, `list_applied/2,3,4`, `list_page_applied/2,3,4`, `list_all_applied/2,3,4`, `apply/3,4,5`, `unapply/3,4` |
+| `ReqDnsimple.Template` | `/templates[/:template]`, `/domains/:domain/templates/:template` | `create/2,3`, `get/2,3`, `update/3,4`, `list/1,2,3`, `list_page/1,2,3`, `list_all/1,2,3`, `apply/3,4`, `delete/2,3` |
+| `ReqDnsimple.TemplateRecord` | `/templates/:template/records[/:record]` | `create/3,4`, `get/3,4`, `list/2,3,4`, `list_page/2,3,4`, `list_all/2,3,4`, `delete/3,4` |
+| `ReqDnsimple.Webhook` | `/webhooks[/:webhook]` | `list/1,2,3`, `create/2,3`, `get/2,3`, `delete/2,3` |
 | `ReqDnsimple.NsRecord` | NS record struct | `from_json/1` |
 | `ReqDnsimple.Helper` | Req utilities | `append/2` (URL/param merging) |
 
@@ -1185,6 +1301,8 @@ a claim that every published DNSimple endpoint is wrapped.
 - **Create/Update** return `{:ok, struct}` or `{:error, reason}`
 - **Delete** returns `:ok` or `{:error, reason}`
 - **Validation errors** return `{:error, %NimbleOptions.ValidationError{}}`
+- **Missing account scope** on new account-free calls returns
+  `{:error, :missing_account_id}` without an HTTP request
 - **Generic HTTP errors** return
   `{:error, %{status: status, response: response_body}}`; responses with a
   `Retry-After` header also include `retry_after: value`. Endpoint-specific
@@ -1195,8 +1313,8 @@ a claim that every published DNSimple endpoint is wrapped.
 Zone listing has opt-in raising variants:
 
 ```elixir
-zones = ReqDnsimple.list_zones!(client, account_id)
-zones = ReqDnsimple.Zone.list!(client, account_id, name_like: "example", per_page: 100)
+zones = ReqDnsimple.list_zones!(client, per_page: 100)
+zones = ReqDnsimple.Zone.list!(client, name_like: "example", per_page: 100)
 ```
 
 Both return a list directly and fetch only one page, matching their non-bang
@@ -1207,7 +1325,7 @@ use the shared `ReqDnsimple.unwrap!/1` helper:
 
 ```elixir
 {records, pagination} =
-  ReqDnsimple.ZoneRecord.list_page(client, account_id, "example.com")
+  ReqDnsimple.ZoneRecord.list_page(client, "example.com")
   |> ReqDnsimple.unwrap!()
 ```
 
@@ -1218,7 +1336,7 @@ including any HTTP status, response body, and retry information.
 Only zone listing currently has named bang counterparts; other endpoint `!`
 functions are not defined. `unwrap!/1` preserves the inner success value,
 including pagination tuples, and leaves `:ok` unchanged. It rejects unsupported
-shapes, including the bare lists from `Account.list/1` and `ns_records/3` and the
+shapes, including the bare lists from `Account.list/1` and `ns_records/2,3` and the
 tagged identity tuples from `whoami/1`.
 
 ## Sorting and Filtering
@@ -1227,21 +1345,21 @@ List operations accept keyword options validated by NimbleOptions:
 
 ```elixir
 # Sort ascending by name
-ReqDnsimple.Zone.list(client, account_id, sort: [name: :asc])
+ReqDnsimple.Zone.list(client, sort: [name: :asc])
 
 # Sort descending, multiple fields
-ReqDnsimple.ZoneRecord.list(client, account_id, "example.com",
+ReqDnsimple.ZoneRecord.list(client, "example.com",
   sort: [type: :asc, name: :desc]
 )
 
 # Filter by name pattern
-ReqDnsimple.ZoneRecord.list(client, account_id, "example.com",
+ReqDnsimple.ZoneRecord.list(client, "example.com",
   name_like: "www",
   type: "A"
 )
 
 # Pagination
-ReqDnsimple.Zone.list(client, account_id, page: 2, per_page: 50)
+ReqDnsimple.Zone.list(client, page: 2, per_page: 50)
 ```
 
 ## Token Types
@@ -1254,6 +1372,11 @@ ReqDnsimple.token_type("dnsimple_u_abc")  # => :user_token
 ReqDnsimple.token_type("dnsimple_a_abc")  # => :account_token
 ReqDnsimple.token_type("other")           # => :unknown_token
 ```
+
+Classification is guidance only, not identity discovery or authorization.
+Passing a client with dynamic credentials to `token_type/1` evaluates its
+callback, so do not use it during construction, re-scoping, or sample setup.
+Use explicit `whoami/1` or `Account.list/1` discovery as described above.
 
 ## DNSimple API Reference
 

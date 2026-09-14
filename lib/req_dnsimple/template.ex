@@ -1,4 +1,6 @@
 defmodule ReqDnsimple.Template do
+  import Kernel, except: [apply: 3]
+
   @moduledoc """
   DNS template operations.
 
@@ -118,6 +120,17 @@ defmodule ReqDnsimple.Template do
   ]
 
   @doc """
+  Uses the client's configured account. See `create/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec create(Req.Request.t(), keyword()) ::
+          {:ok, t()} | {:error, term()}
+  def create(req, attrs) do
+    ReqDnsimple.Client.with_account(req, &create(req, &1, attrs))
+  end
+
+  @doc """
   Creates an account template from a required short identifier and name.
 
   The optional description is omitted unless explicitly supplied. This sends
@@ -154,6 +167,20 @@ defmodule ReqDnsimple.Template do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `update/4` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec update(
+          Req.Request.t(),
+          binary() | integer(),
+          keyword()
+        ) :: {:ok, t()} | {:error, term()}
+  def update(req, template, attrs) do
+    ReqDnsimple.Client.with_account(req, &update(req, &1, template, attrs))
   end
 
   @doc """
@@ -204,6 +231,38 @@ defmodule ReqDnsimple.Template do
   end
 
   @doc """
+  Uses the client's configured account with default options.
+  See `list_page/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list_page(Req.Request.t()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req) do
+    list_page(req, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list_page/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list_page(Req.Request.t(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec list_page(Req.Request.t(), ReqDnsimple.account_id()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req, account_id)
+      when is_integer(account_id) or is_binary(account_id) do
+    list_page(req, account_id, [])
+  end
+
+  def list_page(req, opts) do
+    ReqDnsimple.Client.with_account(req, &list_page(req, &1, opts))
+  end
+
+  @doc """
   Lists one page of account templates.
 
   Supports ordered `:sort` terms for `:id`, `:name`, and `:sid`, plus `:page`
@@ -211,7 +270,7 @@ defmodule ReqDnsimple.Template do
   """
   @spec list_page(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
-  def list_page(req, account_id, opts \\ []) do
+  def list_page(req, account_id, opts) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate([account_id: account_id], @create_path_schema),
          {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_schema) do
@@ -236,6 +295,38 @@ defmodule ReqDnsimple.Template do
   end
 
   @doc """
+  Uses the client's configured account with default options.
+  See `list/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list(Req.Request.t()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list(req) do
+    list(req, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list(Req.Request.t(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec list(Req.Request.t(), ReqDnsimple.account_id()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list(req, account_id)
+      when is_integer(account_id) or is_binary(account_id) do
+    list(req, account_id, [])
+  end
+
+  def list(req, opts) do
+    ReqDnsimple.Client.with_account(req, &list(req, &1, opts))
+  end
+
+  @doc """
   Lists one page of account templates.
 
   This is a convenience alias for `list_page/3`; it never enumerates additional
@@ -243,7 +334,39 @@ defmodule ReqDnsimple.Template do
   """
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
-  def list(req, account_id, opts \\ []), do: list_page(req, account_id, opts)
+  def list(req, account_id, opts), do: list_page(req, account_id, opts)
+
+  @doc """
+  Uses the client's configured account with default options.
+  See `list_all/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list_all(Req.Request.t()) ::
+          {:ok, [t()]} | {:error, term()}
+  def list_all(req) do
+    list_all(req, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list_all/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list_all(Req.Request.t(), keyword()) ::
+          {:ok, [t()]} | {:error, term()}
+  @spec list_all(Req.Request.t(), ReqDnsimple.account_id()) ::
+          {:ok, [t()]} | {:error, term()}
+  def list_all(req, account_id)
+      when is_integer(account_id) or is_binary(account_id) do
+    list_all(req, account_id, [])
+  end
+
+  def list_all(req, opts) do
+    ReqDnsimple.Client.with_account(req, &list_all(req, &1, opts))
+  end
 
   @doc """
   Enumerates every page of account templates in server order.
@@ -253,8 +376,19 @@ defmodule ReqDnsimple.Template do
   """
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, [t()]} | {:error, term()}
-  def list_all(req, account_id, opts \\ []) do
+  def list_all(req, account_id, opts) do
     ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, &1))
+  end
+
+  @doc """
+  Uses the client's configured account. See `get/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec get(Req.Request.t(), binary() | integer()) ::
+          {:ok, t()} | {:error, term()}
+  def get(req, template) do
+    ReqDnsimple.Client.with_account(req, &get(req, &1, template))
   end
 
   @doc """
@@ -296,6 +430,20 @@ defmodule ReqDnsimple.Template do
   end
 
   @doc """
+  Uses the client's configured account. See `apply/4` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec apply(
+          Req.Request.t(),
+          binary() | integer(),
+          binary() | integer()
+        ) :: :ok | {:error, term()}
+  def apply(req, domain, template) do
+    ReqDnsimple.Client.with_account(req, &apply(req, &1, domain, template))
+  end
+
+  @doc """
   Applies a template to a domain.
 
   The domain and template may be a short name or integer ID. This sends exactly
@@ -333,6 +481,17 @@ defmodule ReqDnsimple.Template do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `delete/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec delete(Req.Request.t(), binary() | integer()) ::
+          :ok | {:error, term()}
+  def delete(req, template) do
+    ReqDnsimple.Client.with_account(req, &delete(req, &1, template))
   end
 
   @doc """

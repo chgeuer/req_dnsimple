@@ -57,6 +57,38 @@ defmodule ReqDnsimple.Webhook do
   ]
 
   @doc """
+  Uses the client's configured account with default options.
+  See `list/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list(Req.Request.t()) ::
+          {:ok, [t()]} | {:error, term()}
+  def list(req) do
+    list(req, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list(Req.Request.t(), keyword()) ::
+          {:ok, [t()]} | {:error, term()}
+  @spec list(Req.Request.t(), ReqDnsimple.account_id()) ::
+          {:ok, [t()]} | {:error, term()}
+  def list(req, account_id)
+      when is_integer(account_id) or is_binary(account_id) do
+    list(req, account_id, [])
+  end
+
+  def list(req, opts) do
+    ReqDnsimple.Client.with_account(req, &list(req, &1, opts))
+  end
+
+  @doc """
   Lists registered webhook endpoints.
 
   Supports ordered `:sort` terms for `:id`. This endpoint is not paginated and
@@ -69,7 +101,7 @@ defmodule ReqDnsimple.Webhook do
   """
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, [t()]} | {:error, term()}
-  def list(req, account_id, opts \\ []) do
+  def list(req, account_id, opts) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate([account_id: account_id], @create_path_schema),
          {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_schema) do
@@ -96,6 +128,17 @@ defmodule ReqDnsimple.Webhook do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `create/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec create(Req.Request.t(), keyword()) ::
+          {:ok, t()} | {:error, term()}
+  def create(req, attrs) do
+    ReqDnsimple.Client.with_account(req, &create(req, &1, attrs))
   end
 
   @doc """
@@ -138,6 +181,17 @@ defmodule ReqDnsimple.Webhook do
   end
 
   @doc """
+  Uses the client's configured account. See `get/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec get(Req.Request.t(), integer() | binary()) ::
+          {:ok, t()} | {:error, term()}
+  def get(req, webhook_id) do
+    ReqDnsimple.Client.with_account(req, &get(req, &1, webhook_id))
+  end
+
+  @doc """
   Retrieves a registered webhook endpoint by integer or numeric-string ID.
 
   A webhook's `suppressed_at` timestamp is `nil` when delivery is not
@@ -173,6 +227,17 @@ defmodule ReqDnsimple.Webhook do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `delete/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec delete(Req.Request.t(), integer() | binary()) ::
+          :ok | {:error, term()}
+  def delete(req, webhook_id) do
+    ReqDnsimple.Client.with_account(req, &delete(req, &1, webhook_id))
   end
 
   @doc """

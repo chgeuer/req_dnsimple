@@ -102,6 +102,17 @@ defmodule ReqDnsimple.Contact do
   ]
 
   @doc """
+  Uses the client's configured account. See `create/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec create(Req.Request.t(), keyword()) ::
+          {:ok, t()} | {:error, term()}
+  def create(req, attrs) do
+    ReqDnsimple.Client.with_account(req, &create(req, &1, attrs))
+  end
+
+  @doc """
   Creates a reusable registrant contact.
 
   All required contact details are sent in one POST request. Optional fields
@@ -154,6 +165,20 @@ defmodule ReqDnsimple.Contact do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `update/4` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec update(
+          Req.Request.t(),
+          ReqDnsimple.contact_id(),
+          keyword()
+        ) :: {:ok, t()} | {:error, term()}
+  def update(req, contact_id, attrs) do
+    ReqDnsimple.Client.with_account(req, &update(req, &1, contact_id, attrs))
   end
 
   @doc """
@@ -241,6 +266,17 @@ defmodule ReqDnsimple.Contact do
     )
   end
 
+  @doc """
+  Uses the client's configured account. See `get/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec get(Req.Request.t(), ReqDnsimple.contact_id()) ::
+          {:ok, __MODULE__.t()} | {:error, term()}
+  def get(req, contact_id) do
+    ReqDnsimple.Client.with_account(req, &get(req, &1, contact_id))
+  end
+
   @spec get(Req.Request.t(), ReqDnsimple.account_id(), ReqDnsimple.contact_id()) ::
           {:ok, __MODULE__.t()} | {:error, term()}
   def get(req, account_id, contact_id) do
@@ -270,6 +306,17 @@ defmodule ReqDnsimple.Contact do
       {:error, e} ->
         {:error, e}
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `delete/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec delete(Req.Request.t(), ReqDnsimple.contact_id()) ::
+          :ok | {:error, term()}
+  def delete(req, contact_id) do
+    ReqDnsimple.Client.with_account(req, &delete(req, &1, contact_id))
   end
 
   @doc """
@@ -318,9 +365,41 @@ defmodule ReqDnsimple.Contact do
     per_page: [type: :pos_integer, doc: "Number of records per page"]
   ]
 
+  @doc """
+  Uses the client's configured account with default options.
+  See `list/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list(Req.Request.t()) ::
+          {:ok, [__MODULE__.t()]} | {:error, term()}
+  def list(req) do
+    list(req, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list(Req.Request.t(), keyword()) ::
+          {:ok, [__MODULE__.t()]} | {:error, term()}
+  @spec list(Req.Request.t(), ReqDnsimple.account_id()) ::
+          {:ok, [__MODULE__.t()]} | {:error, term()}
+  def list(req, account_id)
+      when is_integer(account_id) or is_binary(account_id) do
+    list(req, account_id, [])
+  end
+
+  def list(req, opts) do
+    ReqDnsimple.Client.with_account(req, &list(req, &1, opts))
+  end
+
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, [__MODULE__.t()]} | {:error, term()}
-  def list(req, account_id, opts \\ []) do
+  def list(req, account_id, opts) do
     with {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_contacts_schema),
          {:ok, %Req.Response{status: 200, body: %{"data" => data}}} <-
            request_list(req, account_id, validated_opts) do
@@ -332,9 +411,41 @@ defmodule ReqDnsimple.Contact do
     end
   end
 
+  @doc """
+  Uses the client's configured account with default options.
+  See `list_page/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list_page(Req.Request.t()) ::
+          {:ok, {[__MODULE__.t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req) do
+    list_page(req, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list_page/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list_page(Req.Request.t(), keyword()) ::
+          {:ok, {[__MODULE__.t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec list_page(Req.Request.t(), ReqDnsimple.account_id()) ::
+          {:ok, {[__MODULE__.t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req, account_id)
+      when is_integer(account_id) or is_binary(account_id) do
+    list_page(req, account_id, [])
+  end
+
+  def list_page(req, opts) do
+    ReqDnsimple.Client.with_account(req, &list_page(req, &1, opts))
+  end
+
   @spec list_page(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, {[__MODULE__.t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
-  def list_page(req, account_id, opts \\ []) do
+  def list_page(req, account_id, opts) do
     with {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_contacts_schema) do
       case request_list(req, account_id, validated_opts) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data, "pagination" => pagination}}} ->
@@ -352,9 +463,41 @@ defmodule ReqDnsimple.Contact do
     end
   end
 
+  @doc """
+  Uses the client's configured account with default options.
+  See `list_all/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list_all(Req.Request.t()) ::
+          {:ok, [__MODULE__.t()]} | {:error, term()}
+  def list_all(req) do
+    list_all(req, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list_all/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list_all(Req.Request.t(), keyword()) ::
+          {:ok, [__MODULE__.t()]} | {:error, term()}
+  @spec list_all(Req.Request.t(), ReqDnsimple.account_id()) ::
+          {:ok, [__MODULE__.t()]} | {:error, term()}
+  def list_all(req, account_id)
+      when is_integer(account_id) or is_binary(account_id) do
+    list_all(req, account_id, [])
+  end
+
+  def list_all(req, opts) do
+    ReqDnsimple.Client.with_account(req, &list_all(req, &1, opts))
+  end
+
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, [__MODULE__.t()]} | {:error, term()}
-  def list_all(req, account_id, opts \\ []) do
+  def list_all(req, account_id, opts) do
     ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, &1))
   end
 

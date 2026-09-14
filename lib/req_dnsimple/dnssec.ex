@@ -37,6 +37,17 @@ defmodule ReqDnsimple.Dnssec do
   ]
 
   @doc """
+  Uses the client's configured account. See `get/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec get(Req.Request.t(), binary() | integer()) ::
+          {:ok, t()} | {:error, term()}
+  def get(req, domain) do
+    ReqDnsimple.Client.with_account(req, &get(req, &1, domain))
+  end
+
+  @doc """
   Retrieves a domain's DNSSEC status.
 
   The enabled and active states are returned separately, along with the
@@ -73,6 +84,17 @@ defmodule ReqDnsimple.Dnssec do
   end
 
   @doc """
+  Uses the client's configured account. See `enable/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec enable(Req.Request.t(), binary() | integer()) ::
+          {:ok, t()} | {:error, term()}
+  def enable(req, domain) do
+    ReqDnsimple.Client.with_account(req, &enable(req, &1, domain))
+  end
+
+  @doc """
   Enables DNSSEC for a domain.
 
   Returns the DNSSEC state immediately after DNSimple accepts the request. For
@@ -106,6 +128,17 @@ defmodule ReqDnsimple.Dnssec do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `disable/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec disable(Req.Request.t(), binary() | integer()) ::
+          :ok | {:error, term()}
+  def disable(req, domain) do
+    ReqDnsimple.Client.with_account(req, &disable(req, &1, domain))
   end
 
   @doc """

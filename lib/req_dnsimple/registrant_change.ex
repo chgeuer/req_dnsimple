@@ -93,6 +93,17 @@ defmodule ReqDnsimple.RegistrantChange do
   ]
 
   @doc """
+  Uses the client's configured account. See `create/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec create(Req.Request.t(), keyword()) ::
+          {:ok, t()} | {:error, term()}
+  def create(req, attrs) do
+    ReqDnsimple.Client.with_account(req, &create(req, &1, attrs))
+  end
+
+  @doc """
   Starts a registrar contact-change request.
 
   `domain_id` and `contact_id` accept their integer IDs or string forms; a
@@ -150,6 +161,17 @@ defmodule ReqDnsimple.RegistrantChange do
   end
 
   @doc """
+  Uses the client's configured account. See `get/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec get(Req.Request.t(), integer()) ::
+          {:ok, t()} | {:error, term()}
+  def get(req, registrant_change_id) do
+    ReqDnsimple.Client.with_account(req, &get(req, &1, registrant_change_id))
+  end
+
+  @doc """
   Retrieves a registrar contact-change request.
 
   Returns its current state and registry requirements in a typed struct. The
@@ -195,6 +217,38 @@ defmodule ReqDnsimple.RegistrantChange do
   end
 
   @doc """
+  Uses the client's configured account with default options.
+  See `list_page/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list_page(Req.Request.t()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req) do
+    list_page(req, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list_page/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list_page(Req.Request.t(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec list_page(Req.Request.t(), ReqDnsimple.account_id()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req, account_id)
+      when is_integer(account_id) or is_binary(account_id) do
+    list_page(req, account_id, [])
+  end
+
+  def list_page(req, opts) do
+    ReqDnsimple.Client.with_account(req, &list_page(req, &1, opts))
+  end
+
+  @doc """
   Lists one page of registrar contact-change requests.
 
   Supports `:state`, string `:domain_id` and `:contact_id` filters, `:page`,
@@ -217,7 +271,7 @@ defmodule ReqDnsimple.RegistrantChange do
   """
   @spec list_page(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
-  def list_page(req, account_id, opts \\ []) do
+  def list_page(req, account_id, opts) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate([account_id: account_id], @create_path_schema),
          {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_schema) do
@@ -251,6 +305,38 @@ defmodule ReqDnsimple.RegistrantChange do
   end
 
   @doc """
+  Uses the client's configured account with default options.
+  See `list/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list(Req.Request.t()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list(req) do
+    list(req, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list(Req.Request.t(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec list(Req.Request.t(), ReqDnsimple.account_id()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list(req, account_id)
+      when is_integer(account_id) or is_binary(account_id) do
+    list(req, account_id, [])
+  end
+
+  def list(req, opts) do
+    ReqDnsimple.Client.with_account(req, &list(req, &1, opts))
+  end
+
+  @doc """
   Lists one page of registrar contact-change requests.
 
   This convenience alias delegates to `list_page/3` and never enumerates
@@ -258,7 +344,39 @@ defmodule ReqDnsimple.RegistrantChange do
   """
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
-  def list(req, account_id, opts \\ []), do: list_page(req, account_id, opts)
+  def list(req, account_id, opts), do: list_page(req, account_id, opts)
+
+  @doc """
+  Uses the client's configured account with default options.
+  See `list_all/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list_all(Req.Request.t()) ::
+          {:ok, [t()]} | {:error, term()}
+  def list_all(req) do
+    list_all(req, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list_all/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list_all(Req.Request.t(), keyword()) ::
+          {:ok, [t()]} | {:error, term()}
+  @spec list_all(Req.Request.t(), ReqDnsimple.account_id()) ::
+          {:ok, [t()]} | {:error, term()}
+  def list_all(req, account_id)
+      when is_integer(account_id) or is_binary(account_id) do
+    list_all(req, account_id, [])
+  end
+
+  def list_all(req, opts) do
+    ReqDnsimple.Client.with_account(req, &list_all(req, &1, opts))
+  end
 
   @doc """
   Enumerates every matching registrar contact-change request in server order.
@@ -268,8 +386,19 @@ defmodule ReqDnsimple.RegistrantChange do
   """
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, [t()]} | {:error, term()}
-  def list_all(req, account_id, opts \\ []) do
+  def list_all(req, account_id, opts) do
     ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, &1))
+  end
+
+  @doc """
+  Uses the client's configured account. See `cancel/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec cancel(Req.Request.t(), integer()) ::
+          {:ok, t()} | :ok | {:error, term()}
+  def cancel(req, registrant_change_id) do
+    ReqDnsimple.Client.with_account(req, &cancel(req, &1, registrant_change_id))
   end
 
   @doc """

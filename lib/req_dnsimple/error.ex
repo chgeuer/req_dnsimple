@@ -13,6 +13,9 @@ defmodule ReqDnsimple.Error do
   @type t :: %__MODULE__{reason: term()}
 
   @impl true
+  def message(%__MODULE__{reason: :missing_account_id}),
+    do: "DNSimple account_id is required; configure it with new_client/2 or for_account/2"
+
   def message(%__MODULE__{reason: :not_found}), do: "DNSimple resource not found"
 
   def message(%__MODULE__{reason: %{status: status}}) when is_integer(status),

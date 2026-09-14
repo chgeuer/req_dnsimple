@@ -62,6 +62,17 @@ defmodule ReqDnsimple.Zone do
   ]
 
   @doc """
+  Uses the client's configured account. See `get/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec get(Req.Request.t(), ReqDnsimple.zone_name()) ::
+          {:ok, t()} | {:error, term()}
+  def get(req, zone) do
+    ReqDnsimple.Client.with_account(req, &get(req, &1, zone))
+  end
+
+  @doc """
   Retrieves a zone by name.
 
   Returns the complete typed zone, including activation, reverse and secondary
@@ -94,6 +105,17 @@ defmodule ReqDnsimple.Zone do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `activate/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec activate(Req.Request.t(), ReqDnsimple.zone_name()) ::
+          {:ok, t()} | {:error, term()}
+  def activate(req, zone) do
+    ReqDnsimple.Client.with_account(req, &activate(req, &1, zone))
   end
 
   @doc """
@@ -133,6 +155,17 @@ defmodule ReqDnsimple.Zone do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `deactivate/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec deactivate(Req.Request.t(), ReqDnsimple.zone_name()) ::
+          {:ok, t()} | {:error, term()}
+  def deactivate(req, zone) do
+    ReqDnsimple.Client.with_account(req, &deactivate(req, &1, zone))
   end
 
   @doc """
@@ -192,9 +225,41 @@ defmodule ReqDnsimple.Zone do
     per_page: [type: :pos_integer, doc: "Number of records per page"]
   ]
 
+  @doc """
+  Uses the client's configured account with default options.
+  See `list/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list(Req.Request.t()) ::
+          {:ok, [__MODULE__.t()]} | {:error, term()}
+  def list(req) do
+    list(req, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list(Req.Request.t(), keyword()) ::
+          {:ok, [__MODULE__.t()]} | {:error, term()}
+  @spec list(Req.Request.t(), ReqDnsimple.account_id()) ::
+          {:ok, [__MODULE__.t()]} | {:error, term()}
+  def list(req, account_id)
+      when is_integer(account_id) or is_binary(account_id) do
+    list(req, account_id, [])
+  end
+
+  def list(req, opts) do
+    ReqDnsimple.Client.with_account(req, &list(req, &1, opts))
+  end
+
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, [__MODULE__.t()]} | {:error, term()}
-  def list(req, account_id, opts \\ []) do
+  def list(req, account_id, opts) do
     with {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_zones_schema),
          {:ok, %Req.Response{status: 200, body: %{"data" => data}}} <-
            request_list(req, account_id, validated_opts) do
@@ -204,6 +269,35 @@ defmodule ReqDnsimple.Zone do
       {:ok, response} -> ReqDnsimple.response_error(response)
       {:error, error} -> {:error, error}
     end
+  end
+
+  @doc """
+  Uses the client's configured account with default options.
+  See `list!/3` for operation options and return values.
+  Raises `ReqDnsimple.Error` without making a request when the client is unscoped.
+  """
+  @spec list!(Req.Request.t()) :: [t()]
+  def list!(req) do
+    list!(req, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list!/3` for operation options and return values.
+  Raises `ReqDnsimple.Error` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list!(Req.Request.t(), keyword()) :: [t()]
+  @spec list!(Req.Request.t(), ReqDnsimple.account_id()) :: [t()]
+  def list!(req, account_id)
+      when is_integer(account_id) or is_binary(account_id) do
+    list!(req, account_id, [])
+  end
+
+  def list!(req, opts) do
+    list(req, opts) |> ReqDnsimple.unwrap!()
   end
 
   @doc """
@@ -221,15 +315,47 @@ defmodule ReqDnsimple.Zone do
   #{NimbleOptions.docs(@list_zones_schema)}
   """
   @spec list!(Req.Request.t(), ReqDnsimple.account_id(), keyword()) :: [t()]
-  def list!(req, account_id, opts \\ []) do
+  def list!(req, account_id, opts) do
     req
     |> list(account_id, opts)
     |> ReqDnsimple.unwrap!()
   end
 
+  @doc """
+  Uses the client's configured account with default options.
+  See `list_page/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list_page(Req.Request.t()) ::
+          {:ok, {[__MODULE__.t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req) do
+    list_page(req, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list_page/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list_page(Req.Request.t(), keyword()) ::
+          {:ok, {[__MODULE__.t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec list_page(Req.Request.t(), ReqDnsimple.account_id()) ::
+          {:ok, {[__MODULE__.t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req, account_id)
+      when is_integer(account_id) or is_binary(account_id) do
+    list_page(req, account_id, [])
+  end
+
+  def list_page(req, opts) do
+    ReqDnsimple.Client.with_account(req, &list_page(req, &1, opts))
+  end
+
   @spec list_page(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, {[__MODULE__.t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
-  def list_page(req, account_id, opts \\ []) do
+  def list_page(req, account_id, opts) do
     with {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_zones_schema) do
       case request_list(req, account_id, validated_opts) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data, "pagination" => pagination}}} ->
@@ -247,9 +373,41 @@ defmodule ReqDnsimple.Zone do
     end
   end
 
+  @doc """
+  Uses the client's configured account with default options.
+  See `list_all/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list_all(Req.Request.t()) ::
+          {:ok, [__MODULE__.t()]} | {:error, term()}
+  def list_all(req) do
+    list_all(req, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list_all/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list_all(Req.Request.t(), keyword()) ::
+          {:ok, [__MODULE__.t()]} | {:error, term()}
+  @spec list_all(Req.Request.t(), ReqDnsimple.account_id()) ::
+          {:ok, [__MODULE__.t()]} | {:error, term()}
+  def list_all(req, account_id)
+      when is_integer(account_id) or is_binary(account_id) do
+    list_all(req, account_id, [])
+  end
+
+  def list_all(req, opts) do
+    ReqDnsimple.Client.with_account(req, &list_all(req, &1, opts))
+  end
+
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, [__MODULE__.t()]} | {:error, term()}
-  def list_all(req, account_id, opts \\ []) do
+  def list_all(req, account_id, opts) do
     ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, &1))
   end
 
@@ -346,6 +504,21 @@ defmodule ReqDnsimple.Zone do
   ]
 
   @doc """
+  Uses the client's configured account. See `update_ns_records/4` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec update_ns_records(
+          Req.Request.t(),
+          ReqDnsimple.zone_name() | ReqDnsimple.zone_id(),
+          keyword()
+        ) ::
+          {:ok, [ReqDnsimple.ZoneRecord.t()]} | {:error, term()}
+  def update_ns_records(req, zone, attrs) do
+    ReqDnsimple.Client.with_account(req, &update_ns_records(req, &1, zone, attrs))
+  end
+
+  @doc """
   Replaces a hosted zone's apex NS records.
 
   Accepts explicit name-server names, name-server-set IDs, or both. This sends
@@ -408,6 +581,17 @@ defmodule ReqDnsimple.Zone do
     end
   end
 
+  @doc """
+  Uses the client's configured account. See `get_zone_file/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec get_zone_file(Req.Request.t(), ReqDnsimple.zone_name()) ::
+          {:ok, binary()} | {:error, term()}
+  def get_zone_file(req, zone_name) do
+    ReqDnsimple.Client.with_account(req, &get_zone_file(req, &1, zone_name))
+  end
+
   @spec get_zone_file(Req.Request.t(), ReqDnsimple.account_id(), ReqDnsimple.zone_name()) ::
           {:ok, binary()} | {:error, term()}
   def get_zone_file(req, account_id, zone_name) do
@@ -440,6 +624,20 @@ defmodule ReqDnsimple.Zone do
       {:error, e} ->
         {:error, e}
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `check_zone_distribution/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec check_zone_distribution(
+          Req.Request.t(),
+          ReqDnsimple.zone_name()
+        ) ::
+          {:ok, boolean()} | {:error, term()}
+  def check_zone_distribution(req, zone_name) do
+    ReqDnsimple.Client.with_account(req, &check_zone_distribution(req, &1, zone_name))
   end
 
   @spec check_zone_distribution(

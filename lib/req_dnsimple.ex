@@ -2,10 +2,22 @@ defmodule ReqDnsimple do
   @moduledoc """
   DNSimple API client for Elixir using Req.
 
-  Provides client configuration and basic API interaction capabilities.
+  Configure credentials and account scope once, then pass the client to resource
+  operations without repeating the account ID:
+
+      client = ReqDnsimple.new_client(token, account_id: 1010)
+      ReqDnsimple.Zone.list_all(client)
+      ReqDnsimple.ZoneRecord.list_page(client, "example.com", type: "A")
+
+  Clients are ordinary `Req.Request` structs and remain compatible with
+  `Req.merge/2`. Use `new_unscoped_client/2` for identity and account discovery,
+  then `for_account/2` to select an account without changing credentials.
+
+  Existing explicit-account calls and their return shapes remain supported.
   """
 
   @type account_id :: integer()
+  @type account_id_input :: pos_integer() | binary()
   @type contact_id :: integer()
   @type http_error :: %{
           required(:status) => non_neg_integer(),
@@ -18,26 +30,99 @@ defmodule ReqDnsimple do
   @type zone_id :: integer()
   @type zone_name :: binary()
 
-  @base_url "https://api.dnsimple.com/v2"
+  @doc """
+  Creates an unscoped client using the legacy one-argument interface.
 
+  Prefer `new_client/2` with `:account_id` for ordinary operations, or
+  `new_unscoped_client/2` for explicit account discovery. This function retains
+  its existing behavior for both user and account tokens.
+  """
   @spec new_client(binary() | token_callback()) :: Req.Request.t()
-  def new_client(token) when is_binary(token) do
-    Req.new(
-      base_url: @base_url,
-      auth: {:bearer, token}
-    )
+  def new_client(token) when is_binary(token) or is_function(token, 0) do
+    ReqDnsimple.Client.new_unscoped(token, [])
   end
 
-  def new_client(token_fun) when is_function(token_fun, 0) do
-    Req.new(
-      base_url: @base_url,
-      auth: fn ->
-        case token_fun.() do
-          token when is_binary(token) -> {:bearer, token}
-          auth -> auth
-        end
-      end
-    )
+  @doc """
+  Creates an account-scoped `Req.Request` with credentials and a selected account.
+
+  The required `:account_id` accepts a positive integer or a positive numeric
+  string, normalized to an integer. It is required for both user and account
+  tokens. Remaining options configure Req, including `:base_url`, `:headers`,
+  `:adapter`, and `:retry`. Invalid configuration raises `ArgumentError`.
+
+  Construction makes no HTTP requests and does not evaluate token callbacks.
+  A callback is resolved for each request and may return a token string or
+  `{:bearer, token}`. Clients remain compatible with `Req.merge/2`.
+
+  Account-scoped operations can omit their account argument. Existing explicit
+  account arguments override the selected account for that call only.
+
+  ## Examples
+
+      client = ReqDnsimple.new_client(token, account_id: "1010")
+      ReqDnsimple.Zone.list_all(client, name_like: "example")
+
+      client =
+        ReqDnsimple.new_client(fn -> System.fetch_env!("DNSIMPLE_TOKEN") end,
+          account_id: 1010,
+          base_url: "https://api.sandbox.dnsimple.com/v2"
+        )
+
+  See `new_unscoped_client/2` for discovery and `for_account/2` for explicit
+  account selection without replacing transport configuration or credentials.
+  """
+  @spec new_client(binary() | token_callback(), keyword()) :: Req.Request.t()
+  def new_client(token, opts) do
+    ReqDnsimple.Client.new(token, opts)
+  end
+
+  @doc """
+  Creates an explicitly unscoped client for identity, account discovery, or catalogs.
+
+  Options configure Req; `:account_id` is not accepted. Use `new_client/2` to
+  configure an account immediately or `for_account/2` after discovery.
+
+  Both user and account tokens are supported. No HTTP request is made and a
+  dynamic token callback is not evaluated during construction.
+
+  Account-free forms of account-scoped operations return
+  `{:error, :missing_account_id}` until an account is selected. Global
+  operations such as `whoami/1`, `ReqDnsimple.Account.list/1`, and
+  `ReqDnsimple.Tld.list_all/1` do not require account scope.
+
+  ## Examples
+
+      discovery = ReqDnsimple.new_unscoped_client(account_token)
+      {:account, %{"id" => id}} = ReqDnsimple.whoami(discovery)
+      client = ReqDnsimple.for_account(discovery, id)
+
+  For a user token, use `ReqDnsimple.Account.list/1` and explicitly select an
+  account. A user identity's ID is not an account ID.
+  """
+  @spec new_unscoped_client(binary() | token_callback(), keyword()) :: Req.Request.t()
+  def new_unscoped_client(token, opts \\ []) do
+    ReqDnsimple.Client.new_unscoped(token, opts)
+  end
+
+  @doc """
+  Returns a copy of a client scoped to the given account.
+
+  Accepts a positive integer or positive numeric string and raises
+  `ArgumentError` for invalid IDs. The original request, credentials, and
+  transport configuration remain unchanged. No HTTP request is made and token
+  callbacks are not evaluated. Selecting an account does not grant access;
+  DNSimple still verifies the token's permissions.
+
+  ## Examples
+
+      account_a = ReqDnsimple.for_account(discovery, 1010)
+      account_b = ReqDnsimple.for_account(discovery, "2020")
+      ReqDnsimple.Zone.list(account_a)
+      ReqDnsimple.Zone.list(account_b)
+  """
+  @spec for_account(Req.Request.t(), account_id_input()) :: Req.Request.t()
+  def for_account(req, account_id) do
+    ReqDnsimple.Client.for_account(req, account_id)
   end
 
   @spec token_type(Req.Request.t() | binary()) :: :user_token | :account_token | :unknown_token
@@ -89,6 +174,19 @@ defmodule ReqDnsimple do
     end
   end
 
+  @doc """
+  Lists all apex NS records using the client's configured account.
+
+  Returns a bare list of `ReqDnsimple.NsRecord` structs, preserving the legacy
+  success shape, or `{:error, reason}`. An unscoped client returns
+  `{:error, :missing_account_id}` without making a request.
+  """
+  @spec ns_records(Req.Request.t(), binary()) :: [ReqDnsimple.NsRecord.t()] | {:error, term()}
+  def ns_records(req, zone_id) do
+    ReqDnsimple.Client.with_account(req, &ns_records(req, &1, zone_id))
+  end
+
+  @doc "Lists all apex NS records using an explicit account for this call."
   @spec ns_records(Req.Request.t(), ReqDnsimple.account_id(), binary()) ::
           [ReqDnsimple.NsRecord.t()] | {:error, term()}
   def ns_records(req, account_id, zone_id) do
@@ -101,7 +199,33 @@ defmodule ReqDnsimple do
     end
   end
 
-  defdelegate list_zones(req, account_id), to: ReqDnsimple.Zone, as: :list
+  @doc "Lists one page of zones using the client's configured account."
+  @spec list_zones(Req.Request.t()) :: {:ok, [ReqDnsimple.Zone.t()]} | {:error, term()}
+  defdelegate list_zones(req), to: ReqDnsimple.Zone, as: :list
+
+  @doc """
+  Lists one page of zones with options, or with an explicit account and default options.
+
+  A keyword list supplies options for the configured account. An integer or
+  string selects an explicit account for this call. See `ReqDnsimple.Zone.list/3`.
+  """
+  @spec list_zones(Req.Request.t(), account_id() | binary() | keyword()) ::
+          {:ok, [ReqDnsimple.Zone.t()]} | {:error, term()}
+  defdelegate list_zones(req, account_or_opts), to: ReqDnsimple.Zone, as: :list
+
+  @doc "Lists one page of zones using an explicit account and options."
+  @spec list_zones(Req.Request.t(), account_id(), keyword()) ::
+          {:ok, [ReqDnsimple.Zone.t()]} | {:error, term()}
+  defdelegate list_zones(req, account_id, opts), to: ReqDnsimple.Zone, as: :list
+
+  @doc """
+  Lists one page of zones from the configured account and returns the list directly.
+
+  Raises `ReqDnsimple.Error` for API errors or missing account scope; existing
+  validation and transport exceptions are raised unchanged.
+  """
+  @spec list_zones!(Req.Request.t()) :: [ReqDnsimple.Zone.t()]
+  defdelegate list_zones!(req), to: ReqDnsimple.Zone, as: :list!
 
   @doc """
   Lists one page of zones and returns the zone list directly.
@@ -111,29 +235,106 @@ defmodule ReqDnsimple do
   raised unchanged. The original API error is available in the exception's
   `:reason` field.
 
-  Use `ReqDnsimple.Zone.list!/3` to supply filtering, sorting, or pagination options.
+  A keyword-list second argument supplies filtering, sorting, or pagination
+  options for the configured account. An integer or string selects an explicit
+  account with default options for this call.
   """
-  @spec list_zones!(Req.Request.t(), account_id()) :: [ReqDnsimple.Zone.t()]
-  defdelegate list_zones!(req, account_id), to: ReqDnsimple.Zone, as: :list!
+  @spec list_zones!(Req.Request.t(), account_id() | binary() | keyword()) ::
+          [ReqDnsimple.Zone.t()]
+  defdelegate list_zones!(req, account_or_opts), to: ReqDnsimple.Zone, as: :list!
 
-  defdelegate list_contacts(req, account_id), to: ReqDnsimple.Contact, as: :list
+  @doc "Lists zones directly using an explicit account and options. Raises on errors."
+  @spec list_zones!(Req.Request.t(), account_id(), keyword()) :: [ReqDnsimple.Zone.t()]
+  defdelegate list_zones!(req, account_id, opts), to: ReqDnsimple.Zone, as: :list!
 
-  defdelegate list_billing_charges(req, account_id), to: ReqDnsimple.BillingCharge, as: :list
+  @doc "Lists one page of contacts using the client's configured account."
+  @spec list_contacts(Req.Request.t()) :: {:ok, [ReqDnsimple.Contact.t()]} | {:error, term()}
+  defdelegate list_contacts(req), to: ReqDnsimple.Contact, as: :list
 
-  defdelegate list_zone_records(req, account_id, zone_id, opts \\ []),
+  @doc "Lists contacts with scoped options, or an explicit account with default options."
+  @spec list_contacts(Req.Request.t(), account_id() | binary() | keyword()) ::
+          {:ok, [ReqDnsimple.Contact.t()]} | {:error, term()}
+  defdelegate list_contacts(req, account_or_opts), to: ReqDnsimple.Contact, as: :list
+
+  @doc "Lists contacts using an explicit account and options."
+  @spec list_contacts(Req.Request.t(), account_id(), keyword()) ::
+          {:ok, [ReqDnsimple.Contact.t()]} | {:error, term()}
+  defdelegate list_contacts(req, account_id, opts), to: ReqDnsimple.Contact, as: :list
+
+  @doc "Lists one page of billing charges using the client's configured account."
+  @spec list_billing_charges(Req.Request.t()) ::
+          {:ok, [ReqDnsimple.BillingCharge.t()]} | {:error, term()}
+  defdelegate list_billing_charges(req), to: ReqDnsimple.BillingCharge, as: :list
+
+  @doc "Lists charges with scoped options, or an explicit account with default options."
+  @spec list_billing_charges(Req.Request.t(), account_id() | binary() | keyword()) ::
+          {:ok, [ReqDnsimple.BillingCharge.t()]} | {:error, term()}
+  defdelegate list_billing_charges(req, account_or_opts), to: ReqDnsimple.BillingCharge, as: :list
+
+  @doc "Lists billing charges using an explicit account and options."
+  @spec list_billing_charges(Req.Request.t(), account_id(), keyword()) ::
+          {:ok, [ReqDnsimple.BillingCharge.t()]} | {:error, term()}
+  defdelegate list_billing_charges(req, account_id, opts),
+    to: ReqDnsimple.BillingCharge,
+    as: :list
+
+  @doc "Lists one page of records and pagination using the client's configured account."
+  @spec list_zone_records(Req.Request.t(), zone_name()) ::
+          {:ok, {[ReqDnsimple.ZoneRecord.t()], map()}} | {:error, term()}
+  defdelegate list_zone_records(req, zone_id), to: ReqDnsimple.ZoneRecord, as: :list
+
+  @doc """
+  Lists records with scoped options, or an explicit account with default options.
+
+  See `ReqDnsimple.ZoneRecord.list/4` for filters, sorting, and pagination.
+  """
+  @spec list_zone_records(Req.Request.t(), zone_name(), keyword()) ::
+          {:ok, {[ReqDnsimple.ZoneRecord.t()], map()}} | {:error, term()}
+  @spec list_zone_records(Req.Request.t(), account_id(), zone_name()) ::
+          {:ok, {[ReqDnsimple.ZoneRecord.t()], map()}} | {:error, term()}
+  defdelegate list_zone_records(req, account_or_zone, zone_or_opts),
     to: ReqDnsimple.ZoneRecord,
     as: :list
 
+  @doc "Lists records and pagination using an explicit account and options."
+  @spec list_zone_records(Req.Request.t(), account_id(), zone_name(), keyword()) ::
+          {:ok, {[ReqDnsimple.ZoneRecord.t()], map()}} | {:error, term()}
+  defdelegate list_zone_records(req, account_id, zone_id, opts),
+    to: ReqDnsimple.ZoneRecord,
+    as: :list
+
+  @doc "Gets a zone record using the client's configured account."
+  @spec get_zone_record(Req.Request.t(), zone_name(), record_id()) ::
+          {:ok, ReqDnsimple.ZoneRecord.t()} | {:error, term()}
+  defdelegate get_zone_record(req, zone_name, record_id),
+    to: ReqDnsimple.ZoneRecord,
+    as: :get
+
+  @doc "Gets a zone record using an explicit account for this call."
+  @spec get_zone_record(Req.Request.t(), account_id(), zone_name(), record_id()) ::
+          {:ok, ReqDnsimple.ZoneRecord.t()} | {:error, term()}
   defdelegate get_zone_record(req, account_id, zone_name, record_id),
     to: ReqDnsimple.ZoneRecord,
     as: :get
 
+  @doc "Deletes a zone record using the client's configured account."
+  @spec delete_zone_record(Req.Request.t(), zone_name(), record_id()) :: :ok | {:error, term()}
+  defdelegate delete_zone_record(req, zone_id, record_id),
+    to: ReqDnsimple.ZoneRecord,
+    as: :delete
+
+  @doc "Deletes a zone record using an explicit account for this call."
+  @spec delete_zone_record(Req.Request.t(), account_id(), zone_name(), record_id()) ::
+          :ok | {:error, term()}
   defdelegate delete_zone_record(req, account_id, zone_id, record_id),
     to: ReqDnsimple.ZoneRecord,
     as: :delete
 
-  @doc """
+  @create_zone_record_doc """
   Creates a DNS record in the zone named by `zone_id`.
+
+  The three-argument form uses the client's configured account. The
+  four-argument form selects an explicit account for this call.
 
   `attrs` is a keyword list with three required attributes:
 
@@ -152,18 +353,43 @@ defmodule ReqDnsimple do
   Optional attributes are omitted from the request unless supplied. Returns
   `{:ok, %ReqDnsimple.ZoneRecord{}}` or `{:error, reason}`.
 
-  See `ReqDnsimple.ZoneRecord.create/4` for the complete option schema and an example.
+  See `ReqDnsimple.ZoneRecord.create/3` for the complete option schema and an example.
   """
+  @doc @create_zone_record_doc
+  @spec create_zone_record(Req.Request.t(), zone_name(), keyword()) ::
+          {:ok, ReqDnsimple.ZoneRecord.t()} | {:error, term()}
+  defdelegate create_zone_record(req, zone_id, attrs),
+    to: ReqDnsimple.ZoneRecord,
+    as: :create
+
+  @doc @create_zone_record_doc
   @spec create_zone_record(Req.Request.t(), account_id(), zone_name(), keyword()) ::
           {:ok, ReqDnsimple.ZoneRecord.t()} | {:error, term()}
   defdelegate create_zone_record(req, account_id, zone_id, attrs),
     to: ReqDnsimple.ZoneRecord,
     as: :create
 
+  @doc "Gets the zone file using the client's configured account."
+  @spec get_zone_file(Req.Request.t(), zone_name()) :: {:ok, binary()} | {:error, term()}
+  defdelegate get_zone_file(req, zone_name), to: ReqDnsimple.Zone, as: :get_zone_file
+
+  @doc "Gets the zone file using an explicit account for this call."
+  @spec get_zone_file(Req.Request.t(), account_id(), zone_name()) ::
+          {:ok, binary()} | {:error, term()}
   defdelegate get_zone_file(req, account_id, zone_name),
     to: ReqDnsimple.Zone,
     as: :get_zone_file
 
+  @doc "Checks zone distribution using the client's configured account."
+  @spec check_zone_distribution(Req.Request.t(), zone_name()) ::
+          {:ok, boolean()} | {:error, term()}
+  defdelegate check_zone_distribution(req, zone_name),
+    to: ReqDnsimple.Zone,
+    as: :check_zone_distribution
+
+  @doc "Checks zone distribution using an explicit account for this call."
+  @spec check_zone_distribution(Req.Request.t(), account_id(), zone_name()) ::
+          {:ok, boolean()} | {:error, term()}
   defdelegate check_zone_distribution(req, account_id, zone_name),
     to: ReqDnsimple.Zone,
     as: :check_zone_distribution

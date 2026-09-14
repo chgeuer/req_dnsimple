@@ -71,6 +71,20 @@ defmodule ReqDnsimple.DomainPush do
   ]
 
   @doc """
+  Uses the client's configured account. See `initiate/4` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec initiate(
+          Req.Request.t(),
+          String.t() | integer(),
+          keyword()
+        ) :: {:ok, t()} | {:error, term()}
+  def initiate(req, domain, attrs) do
+    ReqDnsimple.Client.with_account(req, &initiate(req, &1, domain, attrs))
+  end
+
+  @doc """
   Initiates a domain push from the source account to another account.
 
   Exactly one of `:new_account_identifier` or the deprecated
@@ -117,6 +131,38 @@ defmodule ReqDnsimple.DomainPush do
   end
 
   @doc """
+  Uses the client's configured account with default options.
+  See `list_page/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list_page(Req.Request.t()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req) do
+    list_page(req, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list_page/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list_page(Req.Request.t(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec list_page(Req.Request.t(), ReqDnsimple.account_id()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req, account_id)
+      when is_integer(account_id) or is_binary(account_id) do
+    list_page(req, account_id, [])
+  end
+
+  def list_page(req, opts) do
+    ReqDnsimple.Client.with_account(req, &list_page(req, &1, opts))
+  end
+
+  @doc """
   Lists one page of pending domain pushes for the target account.
 
   Supports `:page` and `:per_page`. Pagination metadata retains its string
@@ -124,7 +170,7 @@ defmodule ReqDnsimple.DomainPush do
   """
   @spec list_page(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
-  def list_page(req, account_id, opts \\ []) do
+  def list_page(req, account_id, opts) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate([account_id: account_id], @list_path_schema),
          {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_schema) do
@@ -158,6 +204,38 @@ defmodule ReqDnsimple.DomainPush do
   end
 
   @doc """
+  Uses the client's configured account with default options.
+  See `list/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list(Req.Request.t()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list(req) do
+    list(req, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list(Req.Request.t(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec list(Req.Request.t(), ReqDnsimple.account_id()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list(req, account_id)
+      when is_integer(account_id) or is_binary(account_id) do
+    list(req, account_id, [])
+  end
+
+  def list(req, opts) do
+    ReqDnsimple.Client.with_account(req, &list(req, &1, opts))
+  end
+
+  @doc """
   Lists one page of pending domain pushes for the target account.
 
   This convenience alias delegates to `list_page/3` and never enumerates
@@ -165,7 +243,39 @@ defmodule ReqDnsimple.DomainPush do
   """
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
-  def list(req, account_id, opts \\ []), do: list_page(req, account_id, opts)
+  def list(req, account_id, opts), do: list_page(req, account_id, opts)
+
+  @doc """
+  Uses the client's configured account with default options.
+  See `list_all/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list_all(Req.Request.t()) ::
+          {:ok, [t()]} | {:error, term()}
+  def list_all(req) do
+    list_all(req, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list_all/3` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list_all(Req.Request.t(), keyword()) ::
+          {:ok, [t()]} | {:error, term()}
+  @spec list_all(Req.Request.t(), ReqDnsimple.account_id()) ::
+          {:ok, [t()]} | {:error, term()}
+  def list_all(req, account_id)
+      when is_integer(account_id) or is_binary(account_id) do
+    list_all(req, account_id, [])
+  end
+
+  def list_all(req, opts) do
+    ReqDnsimple.Client.with_account(req, &list_all(req, &1, opts))
+  end
 
   @doc """
   Enumerates every pending domain push for the target account in server order.
@@ -175,8 +285,19 @@ defmodule ReqDnsimple.DomainPush do
   """
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, [t()]} | {:error, term()}
-  def list_all(req, account_id, opts \\ []) do
+  def list_all(req, account_id, opts) do
     ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, &1))
+  end
+
+  @doc """
+  Uses the client's configured account. See `accept/4` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec accept(Req.Request.t(), integer(), keyword()) ::
+          :ok | {:error, term()}
+  def accept(req, push_id, attrs) do
+    ReqDnsimple.Client.with_account(req, &accept(req, &1, push_id, attrs))
   end
 
   @doc """
@@ -214,6 +335,17 @@ defmodule ReqDnsimple.DomainPush do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `reject/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec reject(Req.Request.t(), integer()) ::
+          :ok | {:error, term()}
+  def reject(req, push_id) do
+    ReqDnsimple.Client.with_account(req, &reject(req, &1, push_id))
   end
 
   @doc """

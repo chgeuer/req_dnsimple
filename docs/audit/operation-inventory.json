@@ -71,12 +71,36 @@
           "module": "ReqDnsimple.DomainPush",
           "function": "accept",
           "arity": 4
+        },
+        {
+          "module": "ReqDnsimple.DomainPush",
+          "function": "accept",
+          "arity": 3
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/domain_push_test.exs",
           "describe": "accept/4"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.DomainPush",
+          "function": "accept",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "push_id",
+            "attrs"
+          ]
         }
       ]
     },
@@ -137,12 +161,35 @@
           "module": "ReqDnsimple.Zone",
           "function": "activate",
           "arity": 3
+        },
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "activate",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/zone_test.exs",
           "describe": "activate/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "activate",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "zone"
+          ]
         }
       ]
     },
@@ -219,10 +266,41 @@
             4,
             5
           ]
+        },
+        {
+          "module": "ReqDnsimple.Service",
+          "function": "apply",
+          "arity": 3
+        },
+        {
+          "module": "ReqDnsimple.Service",
+          "function": "apply",
+          "arity": 4
         }
       ],
       "contract_tests": [
-        "test/req_dnsimple/service_test.exs"
+        "test/req_dnsimple/service_test.exs",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Service",
+          "function": "apply",
+          "arity": 4,
+          "arities": [
+            3,
+            4
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "service",
+            "attrs"
+          ]
+        }
       ]
     },
     {
@@ -290,10 +368,34 @@
           "arities": [
             4
           ]
+        },
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "apply",
+          "arity": 3
         }
       ],
       "contract_tests": [
-        "test/req_dnsimple/template_test.exs"
+        "test/req_dnsimple/template_test.exs",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "apply",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "template"
+          ]
+        }
       ]
     },
     {
@@ -354,12 +456,35 @@
           "function": "authorize_transfer_out",
           "arity": 3,
           "signature": "ReqDnsimple.Registrar.authorize_transfer_out(req, account_id, domain_name)"
+        },
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "authorize_transfer_out",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/registrar_test.exs",
           "describe": "authorize_transfer_out/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "authorize_transfer_out",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "domain_name"
+          ]
         }
       ]
     },
@@ -426,12 +551,36 @@
           "function": "batch_change",
           "arity": 4,
           "signature": "ReqDnsimple.ZoneRecord.batch_change(req, account_id, zone, attrs)"
+        },
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "batch_change",
+          "arity": 3
         }
       ],
       "contract_tests": [
         {
           "file": "test/zone_record_test.exs",
           "describe": "batch_change/4"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "batch_change",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "zone_name",
+            "attrs"
+          ]
         }
       ]
     },
@@ -505,12 +654,36 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.Registrar.change_delegation/4"
+        "ReqDnsimple.Registrar.change_delegation/4",
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "change_delegation",
+          "arity": 3
+        }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/registrar_test.exs",
           "describe": "change_delegation/4"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "change_delegation",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "attrs"
+          ]
         }
       ]
     },
@@ -596,12 +769,35 @@
           "function": "check",
           "arity": 3,
           "signature": "ReqDnsimple.Registrar.check(req, account_id, domain_name)"
+        },
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "check",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/registrar_test.exs",
           "describe": "check/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "check",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "domain_name"
+          ]
         }
       ]
     },
@@ -627,12 +823,57 @@
       "br_issue_id": null,
       "proposed_interfaces": [],
       "implemented_interfaces": [
-        "ReqDnsimple.Zone.check_zone_distribution/3"
+        "ReqDnsimple.Zone.check_zone_distribution/3",
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "check_zone_distribution",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "check_zone_distribution",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "check_zone_distribution",
+          "arity": 3
+        }
       ],
       "contract_tests": [
         "test/http_error_test.exs: successful wrappers preserve return shapes and request contracts",
         "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
-        "test/http_error_test.exs: every existing wrapper returns transport errors"
+        "test/http_error_test.exs: every existing wrapper returns transport errors",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "check_zone_distribution",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "zone_name"
+          ]
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "check_zone_distribution",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "zone_name"
+          ]
+        }
       ]
     },
     {
@@ -693,10 +934,34 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.ZoneRecord.check_distribution/4"
+        "ReqDnsimple.ZoneRecord.check_distribution/4",
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "check_distribution",
+          "arity": 3
+        }
       ],
       "contract_tests": [
-        "test/zone_record_test.exs: check_distribution/4"
+        "test/zone_record_test.exs: check_distribution/4",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "check_distribution",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "zone_name",
+            "record_id"
+          ]
+        }
       ]
     },
     {
@@ -752,10 +1017,33 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.Contact.create/3"
+        "ReqDnsimple.Contact.create/3",
+        {
+          "module": "ReqDnsimple.Contact",
+          "function": "create",
+          "arity": 2
+        }
       ],
       "contract_tests": [
-        "test/contact_test.exs: create/3"
+        "test/contact_test.exs: create/3",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Contact",
+          "function": "create",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "attrs"
+          ]
+        }
       ]
     },
     {
@@ -811,10 +1099,33 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.Domain.create/3"
+        "ReqDnsimple.Domain.create/3",
+        {
+          "module": "ReqDnsimple.Domain",
+          "function": "create",
+          "arity": 2
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/domain_test.exs: create/3"
+        "test/req_dnsimple/domain_test.exs: create/3",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Domain",
+          "function": "create",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "attrs"
+          ]
+        }
       ]
     },
     {
@@ -879,12 +1190,36 @@
           "module": "ReqDnsimple.DelegationSignerRecord",
           "function": "create",
           "arity": 4
+        },
+        {
+          "module": "ReqDnsimple.DelegationSignerRecord",
+          "function": "create",
+          "arity": 3
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/delegation_signer_record_test.exs",
           "describe": "create/4"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.DelegationSignerRecord",
+          "function": "create",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "attrs"
+          ]
         }
       ]
     },
@@ -950,12 +1285,36 @@
           "module": "ReqDnsimple.EmailForward",
           "function": "create",
           "arity": 4
+        },
+        {
+          "module": "ReqDnsimple.EmailForward",
+          "function": "create",
+          "arity": 3
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/email_forward_test.exs",
           "describe": "create/4"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.EmailForward",
+          "function": "create",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "attrs"
+          ]
         }
       ]
     },
@@ -1017,12 +1376,35 @@
           "function": "create",
           "arity": 3,
           "signature": "ReqDnsimple.PrimaryServer.create(req, account_id, attrs)"
+        },
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "create",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/primary_server_test.exs",
           "describe": "create/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "create",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "attrs"
+          ]
         }
       ]
     },
@@ -1090,12 +1472,35 @@
           "function": "create",
           "arity": 3,
           "signature": "ReqDnsimple.RegistrantChange.create(req, account_id, attrs)"
+        },
+        {
+          "module": "ReqDnsimple.RegistrantChange",
+          "function": "create",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/registrant_change_test.exs",
           "describe": "create/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.RegistrantChange",
+          "function": "create",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "attrs"
+          ]
         }
       ]
     },
@@ -1152,10 +1557,33 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.SecondaryZone.create/3"
+        "ReqDnsimple.SecondaryZone.create/3",
+        {
+          "module": "ReqDnsimple.SecondaryZone",
+          "function": "create",
+          "arity": 2
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/secondary_zone_test.exs: create/3"
+        "test/req_dnsimple/secondary_zone_test.exs: create/3",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.SecondaryZone",
+          "function": "create",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "attrs"
+          ]
+        }
       ]
     },
     {
@@ -1216,12 +1644,35 @@
           "function": "create",
           "arity": 3,
           "signature": "ReqDnsimple.Template.create(req, account_id, attrs)"
+        },
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "create",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/template_test.exs",
           "describe": "create/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "create",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "attrs"
+          ]
         }
       ]
     },
@@ -1287,12 +1738,36 @@
           "module": "ReqDnsimple.TemplateRecord",
           "function": "create",
           "arity": 4
+        },
+        {
+          "module": "ReqDnsimple.TemplateRecord",
+          "function": "create",
+          "arity": 3
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/template_record_test.exs",
           "describe": "create/4"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.TemplateRecord",
+          "function": "create",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "template",
+            "attrs"
+          ]
         }
       ]
     },
@@ -1354,12 +1829,35 @@
           "function": "create",
           "arity": 3,
           "signature": "ReqDnsimple.Webhook.create(req, account_id, attrs)"
+        },
+        {
+          "module": "ReqDnsimple.Webhook",
+          "function": "create",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/webhook_test.exs",
           "describe": "create/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Webhook",
+          "function": "create",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "attrs"
+          ]
         }
       ]
     },
@@ -1373,12 +1871,59 @@
       "br_issue_id": null,
       "proposed_interfaces": [],
       "implemented_interfaces": [
-        "ReqDnsimple.ZoneRecord.create/4"
+        "ReqDnsimple.ZoneRecord.create/4",
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "create",
+          "arity": 3
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "create_zone_record",
+          "arity": 3
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "create_zone_record",
+          "arity": 4
+        }
       ],
       "contract_tests": [
         "test/zone_record_test.exs: create accepts and transmits explicit zero TTL and priority for apex records",
         "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
-        "test/http_error_test.exs: every existing wrapper returns transport errors"
+        "test/http_error_test.exs: every existing wrapper returns transport errors",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "create",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "zone_id",
+            "attrs"
+          ]
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "create_zone_record",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "zone_id",
+            "attrs"
+          ]
+        }
       ]
     },
     {
@@ -1438,12 +1983,35 @@
           "module": "ReqDnsimple.Zone",
           "function": "deactivate",
           "arity": 3
+        },
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "deactivate",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/zone_test.exs",
           "describe": "deactivate/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "deactivate",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "zone"
+          ]
         }
       ]
     },
@@ -1505,12 +2073,35 @@
           "function": "delete",
           "arity": 3,
           "signature": "ReqDnsimple.Contact.delete(req, account_id, contact_id)"
+        },
+        {
+          "module": "ReqDnsimple.Contact",
+          "function": "delete",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/contact_test.exs",
           "describe": "delete/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Contact",
+          "function": "delete",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "contact_id"
+          ]
         }
       ]
     },
@@ -1572,12 +2163,35 @@
           "function": "delete",
           "arity": 3,
           "signature": "ReqDnsimple.Domain.delete(req, account_id, domain)"
+        },
+        {
+          "module": "ReqDnsimple.Domain",
+          "function": "delete",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/domain_test.exs",
           "describe": "delete/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Domain",
+          "function": "delete",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "domain"
+          ]
         }
       ]
     },
@@ -1639,12 +2253,36 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.DelegationSignerRecord.delete/4"
+        "ReqDnsimple.DelegationSignerRecord.delete/4",
+        {
+          "module": "ReqDnsimple.DelegationSignerRecord",
+          "function": "delete",
+          "arity": 3
+        }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/delegation_signer_record_test.exs",
           "describe": "delete/4"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.DelegationSignerRecord",
+          "function": "delete",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "ds_record_id"
+          ]
         }
       ]
     },
@@ -1711,12 +2349,36 @@
           "function": "delete",
           "arity": 4,
           "signature": "ReqDnsimple.EmailForward.delete(req, account_id, domain, email_forward_id)"
+        },
+        {
+          "module": "ReqDnsimple.EmailForward",
+          "function": "delete",
+          "arity": 3
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/email_forward_test.exs",
           "describe": "delete/4"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.EmailForward",
+          "function": "delete",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "email_forward_id"
+          ]
         }
       ]
     },
@@ -1784,12 +2446,35 @@
           "function": "cancel",
           "arity": 3,
           "signature": "ReqDnsimple.RegistrantChange.cancel(req, account_id, registrant_change_id)"
+        },
+        {
+          "module": "ReqDnsimple.RegistrantChange",
+          "function": "cancel",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/registrant_change_test.exs",
           "describe": "cancel/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.RegistrantChange",
+          "function": "cancel",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "registrant_change_id"
+          ]
         }
       ]
     },
@@ -1846,10 +2531,33 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.Template.delete/3"
+        "ReqDnsimple.Template.delete/3",
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "delete",
+          "arity": 2
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/template_test.exs: delete/3"
+        "test/req_dnsimple/template_test.exs: delete/3",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "delete",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "template"
+          ]
+        }
       ]
     },
     {
@@ -1910,10 +2618,34 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.TemplateRecord.delete/4"
+        "ReqDnsimple.TemplateRecord.delete/4",
+        {
+          "module": "ReqDnsimple.TemplateRecord",
+          "function": "delete",
+          "arity": 3
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/template_record_test.exs: delete/4"
+        "test/req_dnsimple/template_record_test.exs: delete/4",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.TemplateRecord",
+          "function": "delete",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "template",
+            "record_id"
+          ]
+        }
       ]
     },
     {
@@ -1969,10 +2701,33 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.Webhook.delete/3"
+        "ReqDnsimple.Webhook.delete/3",
+        {
+          "module": "ReqDnsimple.Webhook",
+          "function": "delete",
+          "arity": 2
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/webhook_test.exs: delete/3"
+        "test/req_dnsimple/webhook_test.exs: delete/3",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Webhook",
+          "function": "delete",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "webhook_id"
+          ]
+        }
       ]
     },
     {
@@ -1985,12 +2740,59 @@
       "br_issue_id": null,
       "proposed_interfaces": [],
       "implemented_interfaces": [
-        "ReqDnsimple.ZoneRecord.delete/4"
+        "ReqDnsimple.ZoneRecord.delete/4",
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "delete",
+          "arity": 3
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "delete_zone_record",
+          "arity": 3
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "delete_zone_record",
+          "arity": 4
+        }
       ],
       "contract_tests": [
         "test/http_error_test.exs: successful wrappers preserve return shapes and request contracts",
         "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
-        "test/http_error_test.exs: every existing wrapper returns transport errors"
+        "test/http_error_test.exs: every existing wrapper returns transport errors",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "delete",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "zone_id",
+            "record_id"
+          ]
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "delete_zone_record",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "zone_id",
+            "record_id"
+          ]
+        }
       ]
     },
     {
@@ -2046,10 +2848,33 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.Registrar.disable_auto_renewal/3"
+        "ReqDnsimple.Registrar.disable_auto_renewal/3",
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "disable_auto_renewal",
+          "arity": 2
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/registrar_test.exs: disable_auto_renewal/3"
+        "test/req_dnsimple/registrar_test.exs: disable_auto_renewal/3",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "disable_auto_renewal",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "domain"
+          ]
+        }
       ]
     },
     {
@@ -2110,12 +2935,35 @@
           "function": "disable",
           "arity": 3,
           "signature": "ReqDnsimple.Dnssec.disable(req, account_id, domain)"
+        },
+        {
+          "module": "ReqDnsimple.Dnssec",
+          "function": "disable",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/dnssec_test.exs",
           "describe": "disable/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Dnssec",
+          "function": "disable",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "domain"
+          ]
         }
       ]
     },
@@ -2176,12 +3024,35 @@
           "module": "ReqDnsimple.Registrar",
           "function": "disable_transfer_lock",
           "arity": 3
+        },
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "disable_transfer_lock",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/registrar_test.exs",
           "describe": "disable_transfer_lock/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "disable_transfer_lock",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "domain"
+          ]
         }
       ]
     },
@@ -2242,12 +3113,35 @@
           "module": "ReqDnsimple.VanityNameServer",
           "function": "disable",
           "arity": 3
+        },
+        {
+          "module": "ReqDnsimple.VanityNameServer",
+          "function": "disable",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/vanity_name_server_test.exs",
           "describe": "disable/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.VanityNameServer",
+          "function": "disable",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "domain"
+          ]
         }
       ]
     },
@@ -2308,12 +3202,35 @@
           "module": "ReqDnsimple.Registrar",
           "function": "disable_whois_privacy",
           "arity": 3
+        },
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "disable_whois_privacy",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/registrar_test.exs",
           "describe": "disable_whois_privacy/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "disable_whois_privacy",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "domain"
+          ]
         }
       ]
     },
@@ -2384,11 +3301,36 @@
       ],
       "implemented_interfaces": [
         "ReqDnsimple.Registrar.renew/3",
-        "ReqDnsimple.Registrar.renew/4"
+        "ReqDnsimple.Registrar.renew/4",
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "renew",
+          "arity": 2
+        }
       ],
       "contract_tests": [
         "test/req_dnsimple/registrar_test.exs: domainRenew sends all supplied attributes once and returns the typed 201 payload",
-        "test/req_dnsimple/registrar_test.exs: domainRenew rejects malformed keyword containers before HTTP"
+        "test/req_dnsimple/registrar_test.exs: domainRenew rejects malformed keyword containers before HTTP",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "renew",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain_name",
+            "attrs"
+          ]
+        }
       ]
     },
     {
@@ -2458,11 +3400,36 @@
       ],
       "implemented_interfaces": [
         "ReqDnsimple.Registrar.restore/3",
-        "ReqDnsimple.Registrar.restore/4"
+        "ReqDnsimple.Registrar.restore/4",
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "restore",
+          "arity": 2
+        }
       ],
       "contract_tests": [
         "test/req_dnsimple/registrar_test.exs: domainRestore sends the premium price once and returns the typed 201 payload",
-        "test/req_dnsimple/registrar_test.exs: domainRestore rejects malformed keyword containers before HTTP"
+        "test/req_dnsimple/registrar_test.exs: domainRestore rejects malformed keyword containers before HTTP",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "restore",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain_name",
+            "attrs"
+          ]
+        }
       ]
     },
     {
@@ -2523,10 +3490,34 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.Certificate.download/4"
+        "ReqDnsimple.Certificate.download/4",
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "download",
+          "arity": 3
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/certificate_test.exs: downloadCertificate"
+        "test/req_dnsimple/certificate_test.exs: downloadCertificate",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "download",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "certificate_id"
+          ]
+        }
       ]
     },
     {
@@ -2582,10 +3573,33 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.Registrar.enable_auto_renewal/3"
+        "ReqDnsimple.Registrar.enable_auto_renewal/3",
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "enable_auto_renewal",
+          "arity": 2
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/registrar_test.exs: enable_auto_renewal/3"
+        "test/req_dnsimple/registrar_test.exs: enable_auto_renewal/3",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "enable_auto_renewal",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "domain"
+          ]
+        }
       ]
     },
     {
@@ -2641,10 +3655,33 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.Dnssec.enable/3"
+        "ReqDnsimple.Dnssec.enable/3",
+        {
+          "module": "ReqDnsimple.Dnssec",
+          "function": "enable",
+          "arity": 2
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/dnssec_test.exs: enable/3"
+        "test/req_dnsimple/dnssec_test.exs: enable/3",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Dnssec",
+          "function": "enable",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "domain"
+          ]
+        }
       ]
     },
     {
@@ -2700,10 +3737,33 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.Registrar.enable_transfer_lock/3"
+        "ReqDnsimple.Registrar.enable_transfer_lock/3",
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "enable_transfer_lock",
+          "arity": 2
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/registrar_test.exs: enable_transfer_lock/3"
+        "test/req_dnsimple/registrar_test.exs: enable_transfer_lock/3",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "enable_transfer_lock",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "domain"
+          ]
+        }
       ]
     },
     {
@@ -2763,12 +3823,35 @@
           "module": "ReqDnsimple.VanityNameServer",
           "function": "enable",
           "arity": 3
+        },
+        {
+          "module": "ReqDnsimple.VanityNameServer",
+          "function": "enable",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/vanity_name_server_test.exs",
           "describe": "enable/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.VanityNameServer",
+          "function": "enable",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "domain"
+          ]
         }
       ]
     },
@@ -2831,10 +3914,33 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.Registrar.enable_whois_privacy/3"
+        "ReqDnsimple.Registrar.enable_whois_privacy/3",
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "enable_whois_privacy",
+          "arity": 2
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/registrar_test.exs: enable_whois_privacy/3"
+        "test/req_dnsimple/registrar_test.exs: enable_whois_privacy/3",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "enable_whois_privacy",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "domain"
+          ]
+        }
       ]
     },
     {
@@ -2899,10 +4005,34 @@
           "module": "ReqDnsimple.Certificate",
           "function": "get",
           "arity": 4
+        },
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "get",
+          "arity": 3
         }
       ],
       "contract_tests": [
-        "test/req_dnsimple/certificate_test.exs"
+        "test/req_dnsimple/certificate_test.exs",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "get",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "certificate_id"
+          ]
+        }
       ]
     },
     {
@@ -2963,10 +4093,34 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.Certificate.get_private_key/4"
+        "ReqDnsimple.Certificate.get_private_key/4",
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "get_private_key",
+          "arity": 3
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/certificate_test.exs: getCertificatePrivateKey"
+        "test/req_dnsimple/certificate_test.exs: getCertificatePrivateKey",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "get_private_key",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "certificate_id"
+          ]
+        }
       ]
     },
     {
@@ -2979,12 +4133,35 @@
       "br_issue_id": null,
       "proposed_interfaces": [],
       "implemented_interfaces": [
-        "ReqDnsimple.Contact.get/3"
+        "ReqDnsimple.Contact.get/3",
+        {
+          "module": "ReqDnsimple.Contact",
+          "function": "get",
+          "arity": 2
+        }
       ],
       "contract_tests": [
         "test/http_error_test.exs: successful wrappers preserve return shapes and request contracts",
         "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
-        "test/http_error_test.exs: every existing wrapper returns transport errors"
+        "test/http_error_test.exs: every existing wrapper returns transport errors",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Contact",
+          "function": "get",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "contact_id"
+          ]
+        }
       ]
     },
     {
@@ -3045,12 +4222,35 @@
           "function": "get",
           "arity": 3,
           "signature": "ReqDnsimple.Domain.get(req, account_id, domain)"
+        },
+        {
+          "module": "ReqDnsimple.Domain",
+          "function": "get",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/domain_test.exs",
           "describe": "get/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Domain",
+          "function": "get",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "domain"
+          ]
         }
       ]
     },
@@ -3112,12 +4312,35 @@
           "function": "get_delegation",
           "arity": 3,
           "signature": "ReqDnsimple.Registrar.get_delegation(req, account_id, domain)"
+        },
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "get_delegation",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/registrar_test.exs",
           "describe": "get_delegation/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "get_delegation",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "domain"
+          ]
         }
       ]
     },
@@ -3184,12 +4407,36 @@
           "function": "get",
           "arity": 4,
           "signature": "ReqDnsimple.DelegationSignerRecord.get(req, account_id, domain, ds_record_id)"
+        },
+        {
+          "module": "ReqDnsimple.DelegationSignerRecord",
+          "function": "get",
+          "arity": 3
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/delegation_signer_record_test.exs",
           "describe": "get/4"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.DelegationSignerRecord",
+          "function": "get",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "ds_record_id"
+          ]
         }
       ]
     },
@@ -3251,12 +4498,35 @@
           "function": "get",
           "arity": 3,
           "signature": "ReqDnsimple.Dnssec.get(req, account_id, domain)"
+        },
+        {
+          "module": "ReqDnsimple.Dnssec",
+          "function": "get",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/dnssec_test.exs",
           "describe": "get/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Dnssec",
+          "function": "get",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "domain"
+          ]
         }
       ]
     },
@@ -3313,12 +4583,35 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.Registrar.get_prices/3"
+        "ReqDnsimple.Registrar.get_prices/3",
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "get_prices",
+          "arity": 2
+        }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/registrar_test.exs",
           "describe": "get_prices/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "get_prices",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "domain_name"
+          ]
         }
       ]
     },
@@ -3427,10 +4720,33 @@
           "module": "ReqDnsimple.Registrar",
           "function": "get_transfer_lock",
           "arity": 3
+        },
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "get_transfer_lock",
+          "arity": 2
         }
       ],
       "contract_tests": [
-        "test/req_dnsimple/registrar_test.exs"
+        "test/req_dnsimple/registrar_test.exs",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "get_transfer_lock",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "domain"
+          ]
+        }
       ]
     },
     {
@@ -3486,10 +4802,33 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.DomainResearch.get_status/3"
+        "ReqDnsimple.DomainResearch.get_status/3",
+        {
+          "module": "ReqDnsimple.DomainResearch",
+          "function": "get_status",
+          "arity": 2
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/domain_research_test.exs"
+        "test/req_dnsimple/domain_research_test.exs",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.DomainResearch",
+          "function": "get_status",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        }
       ]
     },
     {
@@ -3555,10 +4894,34 @@
           "function": "get",
           "arity": 4,
           "signature": "ReqDnsimple.EmailForward.get(req, account_id, domain, email_forward_id)"
+        },
+        {
+          "module": "ReqDnsimple.EmailForward",
+          "function": "get",
+          "arity": 3
         }
       ],
       "contract_tests": [
-        "test/req_dnsimple/email_forward_test.exs"
+        "test/req_dnsimple/email_forward_test.exs",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.EmailForward",
+          "function": "get",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "email_forward_id"
+          ]
+        }
       ]
     },
     {
@@ -3619,12 +4982,35 @@
           "function": "get",
           "arity": 3,
           "signature": "ReqDnsimple.PrimaryServer.get(req, account_id, primary_server_id)"
+        },
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "get",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/primary_server_test.exs",
           "describe": "get/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "get",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "primary_server_id"
+          ]
         }
       ]
     },
@@ -3686,12 +5072,35 @@
           "function": "get",
           "arity": 3,
           "signature": "ReqDnsimple.RegistrantChange.get(req, account_id, registrant_change_id)"
+        },
+        {
+          "module": "ReqDnsimple.RegistrantChange",
+          "function": "get",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/registrant_change_test.exs",
           "describe": "get/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.RegistrantChange",
+          "function": "get",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "registrant_change_id"
+          ]
         }
       ]
     },
@@ -3810,10 +5219,33 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.Template.get/3"
+        "ReqDnsimple.Template.get/3",
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "get",
+          "arity": 2
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/template_test.exs: get/3"
+        "test/req_dnsimple/template_test.exs: get/3",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "get",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "template"
+          ]
+        }
       ]
     },
     {
@@ -3874,10 +5306,34 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.TemplateRecord.get/4"
+        "ReqDnsimple.TemplateRecord.get/4",
+        {
+          "module": "ReqDnsimple.TemplateRecord",
+          "function": "get",
+          "arity": 3
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/template_record_test.exs: get/4"
+        "test/req_dnsimple/template_record_test.exs: get/4",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.TemplateRecord",
+          "function": "get",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "template",
+            "record_id"
+          ]
+        }
       ]
     },
     {
@@ -4046,10 +5502,33 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.Webhook.get/3"
+        "ReqDnsimple.Webhook.get/3",
+        {
+          "module": "ReqDnsimple.Webhook",
+          "function": "get",
+          "arity": 2
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/webhook_test.exs: get/3"
+        "test/req_dnsimple/webhook_test.exs: get/3",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Webhook",
+          "function": "get",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "webhook_id"
+          ]
+        }
       ]
     },
     {
@@ -4109,12 +5588,35 @@
           "module": "ReqDnsimple.Zone",
           "function": "get",
           "arity": 3
+        },
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "get",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/zone_test.exs",
           "describe": "get/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "get",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "zone"
+          ]
         }
       ]
     },
@@ -4128,12 +5630,57 @@
       "br_issue_id": null,
       "proposed_interfaces": [],
       "implemented_interfaces": [
-        "ReqDnsimple.Zone.get_zone_file/3"
+        "ReqDnsimple.Zone.get_zone_file/3",
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "get_zone_file",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "get_zone_file",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "get_zone_file",
+          "arity": 3
+        }
       ],
       "contract_tests": [
         "test/http_error_test.exs: successful wrappers preserve return shapes and request contracts",
         "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
-        "test/http_error_test.exs: every existing wrapper returns transport errors"
+        "test/http_error_test.exs: every existing wrapper returns transport errors",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "get_zone_file",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "zone_name"
+          ]
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "get_zone_file",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "zone_name"
+          ]
+        }
       ]
     },
     {
@@ -4146,12 +5693,59 @@
       "br_issue_id": null,
       "proposed_interfaces": [],
       "implemented_interfaces": [
-        "ReqDnsimple.ZoneRecord.get/4"
+        "ReqDnsimple.ZoneRecord.get/4",
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "get",
+          "arity": 3
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "get_zone_record",
+          "arity": 3
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "get_zone_record",
+          "arity": 4
+        }
       ],
       "contract_tests": [
         "test/http_error_test.exs: successful wrappers preserve return shapes and request contracts",
         "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
-        "test/http_error_test.exs: every existing wrapper returns transport errors"
+        "test/http_error_test.exs: every existing wrapper returns transport errors",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "get",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "zone_name",
+            "record_id"
+          ]
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "get_zone_record",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "zone_name",
+            "record_id"
+          ]
+        }
       ]
     },
     {
@@ -4216,12 +5810,36 @@
           "module": "ReqDnsimple.DomainPush",
           "function": "initiate",
           "arity": 4
+        },
+        {
+          "module": "ReqDnsimple.DomainPush",
+          "function": "initiate",
+          "arity": 3
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/domain_push_test.exs",
           "describe": "initiate/4"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.DomainPush",
+          "function": "initiate",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "attrs"
+          ]
         }
       ]
     },
@@ -4283,10 +5901,34 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.Certificate.issue_letsencrypt/4"
+        "ReqDnsimple.Certificate.issue_letsencrypt/4",
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "issue_letsencrypt",
+          "arity": 3
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/certificate_test.exs: issue_letsencrypt/4"
+        "test/req_dnsimple/certificate_test.exs: issue_letsencrypt/4",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "issue_letsencrypt",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "certificate_id"
+          ]
+        }
       ]
     },
     {
@@ -4352,10 +5994,35 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.Certificate.issue_letsencrypt_renewal/5"
+        "ReqDnsimple.Certificate.issue_letsencrypt_renewal/5",
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "issue_letsencrypt_renewal",
+          "arity": 4
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/certificate_test.exs: issue_letsencrypt_renewal/5"
+        "test/req_dnsimple/certificate_test.exs: issue_letsencrypt_renewal/5",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "issue_letsencrypt_renewal",
+          "arity": 4,
+          "arities": [
+            4
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "certificate_id",
+            "renewal_id"
+          ]
+        }
       ]
     },
     {
@@ -4420,12 +6087,36 @@
           "module": "ReqDnsimple.PrimaryServer",
           "function": "link",
           "arity": 4
+        },
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "link",
+          "arity": 3
         }
       ],
       "contract_tests": [
         {
           "file": "test/primary_server_test.exs",
           "describe": "link/4"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "link",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "primary_server_id",
+            "attrs"
+          ]
         }
       ]
     },
@@ -4613,7 +6304,22 @@
         "ReqDnsimple.Certificate.list/3",
         "ReqDnsimple.Certificate.list/4",
         "ReqDnsimple.Certificate.list_all/3",
-        "ReqDnsimple.Certificate.list_all/4"
+        "ReqDnsimple.Certificate.list_all/4",
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "list_page",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "list",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "list_all",
+          "arity": 2
+        }
       ],
       "contract_tests": [
         {
@@ -4623,6 +6329,54 @@
         {
           "file": "test/req_dnsimple/certificate_test.exs",
           "describe": "list_all/4"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "list_page",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "list",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "list_all",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "opts"
+          ]
         }
       ]
     },
@@ -4637,12 +6391,110 @@
       "proposed_interfaces": [],
       "implemented_interfaces": [
         "ReqDnsimple.BillingCharge.list/2",
-        "ReqDnsimple.BillingCharge.list/3"
+        "ReqDnsimple.BillingCharge.list/3",
+        {
+          "module": "ReqDnsimple.BillingCharge",
+          "function": "list",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.BillingCharge",
+          "function": "list_page",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.BillingCharge",
+          "function": "list_page",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.BillingCharge",
+          "function": "list_all",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.BillingCharge",
+          "function": "list_all",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "list_billing_charges",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "list_billing_charges",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "list_billing_charges",
+          "arity": 3
+        }
       ],
       "contract_tests": [
         "test/billing_charge_test.exs: list preserves exact monetary strings and nullable manual item references",
         "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
-        "test/http_error_test.exs: every existing wrapper returns transport errors"
+        "test/http_error_test.exs: every existing wrapper returns transport errors",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.BillingCharge",
+          "function": "list",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.BillingCharge",
+          "function": "list_page",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.BillingCharge",
+          "function": "list_all",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "list_billing_charges",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        }
       ]
     },
     {
@@ -4656,13 +6508,111 @@
       "proposed_interfaces": [],
       "implemented_interfaces": [
         "ReqDnsimple.Contact.list/2",
-        "ReqDnsimple.Contact.list/3"
+        "ReqDnsimple.Contact.list/3",
+        {
+          "module": "ReqDnsimple.Contact",
+          "function": "list",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.Contact",
+          "function": "list_page",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.Contact",
+          "function": "list_page",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.Contact",
+          "function": "list_all",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.Contact",
+          "function": "list_all",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "list_contacts",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "list_contacts",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "list_contacts",
+          "arity": 3
+        }
       ],
       "contract_tests": [
         "test/http_error_test.exs: successful wrappers preserve return shapes and request contracts",
         "test/pagination_test.exs: list_page returns typed items and pagination for every paginated resource",
         "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
-        "test/http_error_test.exs: every existing wrapper returns transport errors"
+        "test/http_error_test.exs: every existing wrapper returns transport errors",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Contact",
+          "function": "list",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.Contact",
+          "function": "list_page",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.Contact",
+          "function": "list_all",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "list_contacts",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        }
       ]
     },
     {
@@ -4831,7 +6781,22 @@
         "ReqDnsimple.Service.list_applied/3",
         "ReqDnsimple.Service.list_applied/4",
         "ReqDnsimple.Service.list_all_applied/3",
-        "ReqDnsimple.Service.list_all_applied/4"
+        "ReqDnsimple.Service.list_all_applied/4",
+        {
+          "module": "ReqDnsimple.Service",
+          "function": "list_page_applied",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.Service",
+          "function": "list_applied",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.Service",
+          "function": "list_all_applied",
+          "arity": 2
+        }
       ],
       "contract_tests": [
         {
@@ -4841,6 +6806,54 @@
         {
           "file": "test/req_dnsimple/service_test.exs",
           "describe": "list_all_applied/4"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Service",
+          "function": "list_page_applied",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.Service",
+          "function": "list_applied",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.Service",
+          "function": "list_all_applied",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "opts"
+          ]
         }
       ]
     },
@@ -5010,10 +7023,73 @@
         "ReqDnsimple.DelegationSignerRecord.list/3",
         "ReqDnsimple.DelegationSignerRecord.list/4",
         "ReqDnsimple.DelegationSignerRecord.list_all/3",
-        "ReqDnsimple.DelegationSignerRecord.list_all/4"
+        "ReqDnsimple.DelegationSignerRecord.list_all/4",
+        {
+          "module": "ReqDnsimple.DelegationSignerRecord",
+          "function": "list_page",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.DelegationSignerRecord",
+          "function": "list",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.DelegationSignerRecord",
+          "function": "list_all",
+          "arity": 2
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/delegation_signer_record_test.exs"
+        "test/req_dnsimple/delegation_signer_record_test.exs",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.DelegationSignerRecord",
+          "function": "list_page",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.DelegationSignerRecord",
+          "function": "list",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.DelegationSignerRecord",
+          "function": "list_all",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "opts"
+          ]
+        }
       ]
     },
     {
@@ -5188,6 +7264,36 @@
             2,
             3
           ]
+        },
+        {
+          "module": "ReqDnsimple.Domain",
+          "function": "list_page",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.Domain",
+          "function": "list_page",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.Domain",
+          "function": "list",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.Domain",
+          "function": "list",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.Domain",
+          "function": "list_all",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.Domain",
+          "function": "list_all",
+          "arity": 2
         }
       ],
       "contract_tests": [
@@ -5198,6 +7304,51 @@
         {
           "file": "test/req_dnsimple/domain_test.exs",
           "describe": "list_all/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Domain",
+          "function": "list_page",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.Domain",
+          "function": "list",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.Domain",
+          "function": "list_all",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
         }
       ]
     },
@@ -5388,6 +7539,36 @@
             3,
             4
           ]
+        },
+        {
+          "module": "ReqDnsimple.EmailForward",
+          "function": "list_page",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.EmailForward",
+          "function": "list_page",
+          "arity": 3
+        },
+        {
+          "module": "ReqDnsimple.EmailForward",
+          "function": "list",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.EmailForward",
+          "function": "list",
+          "arity": 3
+        },
+        {
+          "module": "ReqDnsimple.EmailForward",
+          "function": "list_all",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.EmailForward",
+          "function": "list_all",
+          "arity": 3
         }
       ],
       "contract_tests": [
@@ -5398,6 +7579,54 @@
         {
           "file": "test/req_dnsimple/email_forward_test.exs",
           "describe": "list_all/4"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.EmailForward",
+          "function": "list_page",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.EmailForward",
+          "function": "list",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.EmailForward",
+          "function": "list_all",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "opts"
+          ]
         }
       ]
     },
@@ -5573,6 +7802,36 @@
             2,
             3
           ]
+        },
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "list_page",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "list_page",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "list",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "list",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "list_all",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "list_all",
+          "arity": 2
         }
       ],
       "contract_tests": [
@@ -5583,6 +7842,51 @@
         {
           "file": "test/primary_server_test.exs",
           "describe": "list_all/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "list_page",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "list",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "list_all",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
         }
       ]
     },
@@ -5746,6 +8050,36 @@
           "module": "ReqDnsimple.DomainPush",
           "function": "list_all",
           "arity": 3
+        },
+        {
+          "module": "ReqDnsimple.DomainPush",
+          "function": "list_page",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.DomainPush",
+          "function": "list_page",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.DomainPush",
+          "function": "list",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.DomainPush",
+          "function": "list",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.DomainPush",
+          "function": "list_all",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.DomainPush",
+          "function": "list_all",
+          "arity": 2
         }
       ],
       "contract_tests": [
@@ -5756,6 +8090,51 @@
         {
           "file": "test/req_dnsimple/domain_push_test.exs",
           "describe": "list_all/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.DomainPush",
+          "function": "list_page",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.DomainPush",
+          "function": "list",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.DomainPush",
+          "function": "list_all",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
         }
       ]
     },
@@ -5931,6 +8310,36 @@
             2,
             3
           ]
+        },
+        {
+          "module": "ReqDnsimple.RegistrantChange",
+          "function": "list_page",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.RegistrantChange",
+          "function": "list_page",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.RegistrantChange",
+          "function": "list",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.RegistrantChange",
+          "function": "list",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.RegistrantChange",
+          "function": "list_all",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.RegistrantChange",
+          "function": "list_all",
+          "arity": 2
         }
       ],
       "contract_tests": [
@@ -5941,6 +8350,51 @@
         {
           "file": "test/req_dnsimple/registrant_change_test.exs",
           "describe": "list_all/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.RegistrantChange",
+          "function": "list_page",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.RegistrantChange",
+          "function": "list",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.RegistrantChange",
+          "function": "list_all",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
         }
       ]
     },
@@ -6280,6 +8734,36 @@
             3,
             4
           ]
+        },
+        {
+          "module": "ReqDnsimple.TemplateRecord",
+          "function": "list_page",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.TemplateRecord",
+          "function": "list_page",
+          "arity": 3
+        },
+        {
+          "module": "ReqDnsimple.TemplateRecord",
+          "function": "list",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.TemplateRecord",
+          "function": "list",
+          "arity": 3
+        },
+        {
+          "module": "ReqDnsimple.TemplateRecord",
+          "function": "list_all",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.TemplateRecord",
+          "function": "list_all",
+          "arity": 3
         }
       ],
       "contract_tests": [
@@ -6290,6 +8774,54 @@
         {
           "file": "test/req_dnsimple/template_record_test.exs",
           "describe": "list_all/4"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.TemplateRecord",
+          "function": "list_page",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "template",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.TemplateRecord",
+          "function": "list",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "template",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.TemplateRecord",
+          "function": "list_all",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "template",
+            "opts"
+          ]
         }
       ]
     },
@@ -6465,6 +8997,36 @@
             2,
             3
           ]
+        },
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "list_page",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "list_page",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "list",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "list",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "list_all",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "list_all",
+          "arity": 2
         }
       ],
       "contract_tests": [
@@ -6475,6 +9037,51 @@
         {
           "file": "test/req_dnsimple/template_test.exs",
           "describe": "list_all/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "list_page",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "list",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "list_all",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
         }
       ]
     },
@@ -6704,12 +9311,36 @@
       ],
       "implemented_interfaces": [
         "ReqDnsimple.Webhook.list/2",
-        "ReqDnsimple.Webhook.list/3"
+        "ReqDnsimple.Webhook.list/3",
+        {
+          "module": "ReqDnsimple.Webhook",
+          "function": "list",
+          "arity": 1
+        }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/webhook_test.exs",
           "describe": "list/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Webhook",
+          "function": "list",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
         }
       ]
     },
@@ -6724,13 +9355,137 @@
       "proposed_interfaces": [],
       "implemented_interfaces": [
         "ReqDnsimple.ZoneRecord.list/3",
-        "ReqDnsimple.ZoneRecord.list/4"
+        "ReqDnsimple.ZoneRecord.list/4",
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "list",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "list_page",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "list_page",
+          "arity": 3
+        },
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "list_all",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "list_all",
+          "arity": 3
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "ns_records",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "ns_records",
+          "arity": 3
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "list_zone_records",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "list_zone_records",
+          "arity": 3
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "list_zone_records",
+          "arity": 4
+        }
       ],
       "contract_tests": [
         "test/http_error_test.exs: successful wrappers preserve return shapes and request contracts",
         "test/pagination_test.exs: list_page returns typed items and pagination for every paginated resource",
         "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
-        "test/http_error_test.exs: every existing wrapper returns transport errors"
+        "test/http_error_test.exs: every existing wrapper returns transport errors",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "list",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "zone_id",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "list_page",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "zone_id",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "list_all",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "zone_id",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "ns_records",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "zone_id"
+          ]
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "list_zone_records",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "zone_id",
+            "opts"
+          ]
+        }
       ]
     },
     {
@@ -6748,14 +9503,148 @@
         "ReqDnsimple.Zone.list!/2",
         "ReqDnsimple.Zone.list!/3",
         "ReqDnsimple.list_zones/2",
-        "ReqDnsimple.list_zones!/2"
+        "ReqDnsimple.list_zones!/2",
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "list",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "list!",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "list_page",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "list_page",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "list_all",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "list_all",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "list_zones",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "list_zones",
+          "arity": 3
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "list_zones!",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "list_zones!",
+          "arity": 3
+        }
       ],
       "contract_tests": [
         "test/http_error_test.exs: successful wrappers preserve return shapes and request contracts",
         "test/pagination_test.exs: list_page returns typed items and pagination for every paginated resource",
         "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
         "test/http_error_test.exs: every existing wrapper returns transport errors",
-        "test/bang_test.exs: zone-listing bang functions"
+        "test/bang_test.exs: zone-listing bang functions",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "list",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "list!",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "list_page",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "list_all",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "list_zones",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple",
+          "function": "list_zones!",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        }
       ]
     },
     {
@@ -6887,10 +9776,40 @@
             3,
             4
           ]
+        },
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "purchase_letsencrypt",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "purchase_letsencrypt",
+          "arity": 3
         }
       ],
       "contract_tests": [
-        "test/req_dnsimple/certificate_test.exs"
+        "test/req_dnsimple/certificate_test.exs",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "purchase_letsencrypt",
+          "arity": 3,
+          "arities": [
+            2,
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "attrs"
+          ]
+        }
       ]
     },
     {
@@ -6966,10 +9885,41 @@
             4,
             5
           ]
+        },
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "purchase_letsencrypt_renewal",
+          "arity": 3
+        },
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "purchase_letsencrypt_renewal",
+          "arity": 4
         }
       ],
       "contract_tests": [
-        "test/req_dnsimple/certificate_test.exs"
+        "test/req_dnsimple/certificate_test.exs",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Certificate",
+          "function": "purchase_letsencrypt_renewal",
+          "arity": 4,
+          "arities": [
+            3,
+            4
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "certificate_id",
+            "attrs"
+          ]
+        }
       ]
     },
     {
@@ -7146,6 +10096,36 @@
             2,
             3
           ]
+        },
+        {
+          "module": "ReqDnsimple.DnsAnalytics",
+          "function": "list_page",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.DnsAnalytics",
+          "function": "list_page",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.DnsAnalytics",
+          "function": "query",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.DnsAnalytics",
+          "function": "query",
+          "arity": 2
+        },
+        {
+          "module": "ReqDnsimple.DnsAnalytics",
+          "function": "list_all",
+          "arity": 1
+        },
+        {
+          "module": "ReqDnsimple.DnsAnalytics",
+          "function": "list_all",
+          "arity": 2
         }
       ],
       "contract_tests": [
@@ -7156,6 +10136,51 @@
         {
           "file": "test/req_dnsimple/dns_analytics_test.exs",
           "describe": "list_all/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.DnsAnalytics",
+          "function": "list_page",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.DnsAnalytics",
+          "function": "query",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
+        },
+        {
+          "module": "ReqDnsimple.DnsAnalytics",
+          "function": "list_all",
+          "arity": 2,
+          "arities": [
+            1,
+            2
+          ],
+          "arguments": [
+            "req",
+            "opts"
+          ]
         }
       ]
     },
@@ -7228,12 +10253,36 @@
           "function": "register",
           "arity": 4,
           "signature": "ReqDnsimple.Registrar.register(req, account_id, domain_name, attrs)"
+        },
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "register",
+          "arity": 3
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/registrar_test.exs",
           "describe": "register/4"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "register",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain_name",
+            "attrs"
+          ]
         }
       ]
     },
@@ -7295,12 +10344,35 @@
           "function": "reject",
           "arity": 3,
           "signature": "ReqDnsimple.DomainPush.reject(req, account_id, push_id)"
+        },
+        {
+          "module": "ReqDnsimple.DomainPush",
+          "function": "reject",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/domain_push_test.exs",
           "describe": "reject/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.DomainPush",
+          "function": "reject",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "push_id"
+          ]
         }
       ]
     },
@@ -7362,12 +10434,35 @@
           "function": "delete",
           "arity": 3,
           "signature": "ReqDnsimple.PrimaryServer.delete(req, account_id, primary_server_id)"
+        },
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "delete",
+          "arity": 2
         }
       ],
       "contract_tests": [
         {
           "file": "test/primary_server_test.exs",
           "describe": "delete/3"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "delete",
+          "arity": 2,
+          "arities": [
+            2
+          ],
+          "arguments": [
+            "req",
+            "primary_server_id"
+          ]
         }
       ]
     },
@@ -7440,12 +10535,36 @@
           "function": "transfer",
           "arity": 4,
           "signature": "ReqDnsimple.Registrar.transfer(req, account_id, domain_name, attrs)"
+        },
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "transfer",
+          "arity": 3
         }
       ],
       "contract_tests": [
         {
           "file": "test/req_dnsimple/registrar_test.exs",
           "describe": "transfer/4"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Registrar",
+          "function": "transfer",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain_name",
+            "attrs"
+          ]
         }
       ]
     },
@@ -7514,10 +10633,34 @@
           "arities": [
             4
           ]
+        },
+        {
+          "module": "ReqDnsimple.Service",
+          "function": "unapply",
+          "arity": 3
         }
       ],
       "contract_tests": [
-        "test/req_dnsimple/service_test.exs"
+        "test/req_dnsimple/service_test.exs",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Service",
+          "function": "unapply",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "domain",
+            "service"
+          ]
+        }
       ]
     },
     {
@@ -7583,12 +10726,36 @@
           "function": "unlink",
           "arity": 4,
           "signature": "ReqDnsimple.PrimaryServer.unlink(req, account_id, primary_server_id, attrs)"
+        },
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "unlink",
+          "arity": 3
         }
       ],
       "contract_tests": [
         {
           "file": "test/primary_server_test.exs",
           "describe": "unlink/4"
+        },
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.PrimaryServer",
+          "function": "unlink",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "primary_server_id",
+            "attrs"
+          ]
         }
       ]
     },
@@ -7650,10 +10817,34 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.Contact.update/4"
+        "ReqDnsimple.Contact.update/4",
+        {
+          "module": "ReqDnsimple.Contact",
+          "function": "update",
+          "arity": 3
+        }
       ],
       "contract_tests": [
-        "test/contact_test.exs: update/4"
+        "test/contact_test.exs: update/4",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Contact",
+          "function": "update",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "contact_id",
+            "attrs"
+          ]
+        }
       ]
     },
     {
@@ -7714,10 +10905,34 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.Template.update/4"
+        "ReqDnsimple.Template.update/4",
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "update",
+          "arity": 3
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/template_test.exs: update/4"
+        "test/req_dnsimple/template_test.exs: update/4",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Template",
+          "function": "update",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "template",
+            "attrs"
+          ]
+        }
       ]
     },
     {
@@ -7778,10 +10993,34 @@
         }
       ],
       "implemented_interfaces": [
-        "ReqDnsimple.Zone.update_ns_records/4"
+        "ReqDnsimple.Zone.update_ns_records/4",
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "update_ns_records",
+          "arity": 3
+        }
       ],
       "contract_tests": [
-        "test/req_dnsimple/zone_test.exs: update_ns_records/4"
+        "test/req_dnsimple/zone_test.exs: update_ns_records/4",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.Zone",
+          "function": "update_ns_records",
+          "arity": 3,
+          "arities": [
+            3
+          ],
+          "arguments": [
+            "req",
+            "zone",
+            "attrs"
+          ]
+        }
       ]
     },
     {
@@ -7794,12 +11033,37 @@
       "br_issue_id": null,
       "proposed_interfaces": [],
       "implemented_interfaces": [
-        "ReqDnsimple.ZoneRecord.update/5"
+        "ReqDnsimple.ZoneRecord.update/5",
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "update",
+          "arity": 4
+        }
       ],
       "contract_tests": [
         "test/zone_record_test.exs: update transmits explicit zero without adding omitted fields",
         "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
-        "test/http_error_test.exs: every existing wrapper returns transport errors"
+        "test/http_error_test.exs: every existing wrapper returns transport errors",
+        {
+          "file": "test/account_scope_operations_test.exs",
+          "describe": "account-scoped operation parity"
+        }
+      ],
+      "scoped_interfaces": [
+        {
+          "module": "ReqDnsimple.ZoneRecord",
+          "function": "update",
+          "arity": 4,
+          "arities": [
+            4
+          ],
+          "arguments": [
+            "req",
+            "zone_id",
+            "record_id",
+            "attrs"
+          ]
+        }
       ]
     },
     {
@@ -7820,5 +11084,13 @@
         "test/http_error_test.exs: every existing wrapper returns transport errors"
       ]
     }
-  ]
+  ],
+  "client_scope": {
+    "note": "scoped_interfaces omit the owning account path argument and use the configured client account. Existing explicit-account signatures and return shapes remain supported.",
+    "constructor": "ReqDnsimple.new_client/2",
+    "discovery_constructor": "ReqDnsimple.new_unscoped_client/1,2",
+    "account_selection": "ReqDnsimple.for_account/2",
+    "missing_scope_error": "{:error, :missing_account_id}",
+    "account_scoped_operation_count": 95
+  }
 }

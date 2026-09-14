@@ -33,6 +33,17 @@ defmodule ReqDnsimple.DomainResearch do
   ]
 
   @doc """
+  Uses the client's configured account. See `get_status/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec get_status(Req.Request.t(), keyword()) ::
+          {:ok, t()} | {:error, term()}
+  def get_status(req, opts) do
+    ReqDnsimple.Client.with_account(req, &get_status(req, &1, opts))
+  end
+
+  @doc """
   Researches the availability status of the supplied domain.
 
   This calls the dedicated paid Domain Research endpoint and does not fall back

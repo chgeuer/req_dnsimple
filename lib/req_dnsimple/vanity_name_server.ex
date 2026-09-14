@@ -30,6 +30,17 @@ defmodule ReqDnsimple.VanityNameServer do
   ]
 
   @doc """
+  Uses the client's configured account. See `enable/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec enable(Req.Request.t(), binary() | integer()) ::
+          {:ok, [t()]} | {:error, term()}
+  def enable(req, domain) do
+    ReqDnsimple.Client.with_account(req, &enable(req, &1, domain))
+  end
+
+  @doc """
   Enables vanity name-server records for a domain by name or ID.
 
   This creates the domain's vanity A and AAAA records in one bodyless request
@@ -67,6 +78,17 @@ defmodule ReqDnsimple.VanityNameServer do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `disable/3` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec disable(Req.Request.t(), binary() | integer()) ::
+          :ok | {:error, term()}
+  def disable(req, domain) do
+    ReqDnsimple.Client.with_account(req, &disable(req, &1, domain))
   end
 
   @doc """

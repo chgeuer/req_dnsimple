@@ -1,4 +1,6 @@
 defmodule ReqDnsimple.Service do
+  import Kernel, except: [apply: 3]
+
   @moduledoc """
   One-click service catalog and domain operations.
 
@@ -219,6 +221,49 @@ defmodule ReqDnsimple.Service do
   end
 
   @doc """
+  Uses the client's configured account with default options.
+  See `list_page_applied/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list_page_applied(
+          Req.Request.t(),
+          binary() | integer()
+        ) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page_applied(req, domain) do
+    list_page_applied(req, domain, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list_page_applied/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list_page_applied(
+          Req.Request.t(),
+          binary() | integer(),
+          keyword()
+        ) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec list_page_applied(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer()
+        ) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page_applied(req, account_id, domain)
+      when is_integer(domain) or is_binary(domain) do
+    list_page_applied(req, account_id, domain, [])
+  end
+
+  def list_page_applied(req, domain, opts) do
+    ReqDnsimple.Client.with_account(req, &list_page_applied(req, &1, domain, opts))
+  end
+
+  @doc """
   Lists one page of one-click services applied to a domain.
 
   Supports `:page` and `:per_page`. Omitted options remain omitted so DNSimple
@@ -243,7 +288,7 @@ defmodule ReqDnsimple.Service do
           keyword()
         ) ::
           {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
-  def list_page_applied(req, account_id, domain, opts \\ []) do
+  def list_page_applied(req, account_id, domain, opts) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
              [account_id: account_id, domain: domain],
@@ -272,6 +317,49 @@ defmodule ReqDnsimple.Service do
   end
 
   @doc """
+  Uses the client's configured account with default options.
+  See `list_applied/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list_applied(
+          Req.Request.t(),
+          binary() | integer()
+        ) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_applied(req, domain) do
+    list_applied(req, domain, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list_applied/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list_applied(
+          Req.Request.t(),
+          binary() | integer(),
+          keyword()
+        ) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec list_applied(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer()
+        ) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_applied(req, account_id, domain)
+      when is_integer(domain) or is_binary(domain) do
+    list_applied(req, account_id, domain, [])
+  end
+
+  def list_applied(req, domain, opts) do
+    ReqDnsimple.Client.with_account(req, &list_applied(req, &1, domain, opts))
+  end
+
+  @doc """
   Lists one page of one-click services applied to a domain.
 
   This convenience alias delegates to `list_page_applied/4` and never
@@ -284,8 +372,48 @@ defmodule ReqDnsimple.Service do
           keyword()
         ) ::
           {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
-  def list_applied(req, account_id, domain, opts \\ []),
+  def list_applied(req, account_id, domain, opts),
     do: list_page_applied(req, account_id, domain, opts)
+
+  @doc """
+  Uses the client's configured account with default options.
+  See `list_all_applied/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list_all_applied(
+          Req.Request.t(),
+          binary() | integer()
+        ) :: {:ok, [t()]} | {:error, term()}
+  def list_all_applied(req, domain) do
+    list_all_applied(req, domain, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list_all_applied/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list_all_applied(
+          Req.Request.t(),
+          binary() | integer(),
+          keyword()
+        ) :: {:ok, [t()]} | {:error, term()}
+  @spec list_all_applied(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer()
+        ) :: {:ok, [t()]} | {:error, term()}
+  def list_all_applied(req, account_id, domain)
+      when is_integer(domain) or is_binary(domain) do
+    list_all_applied(req, account_id, domain, [])
+  end
+
+  def list_all_applied(req, domain, opts) do
+    ReqDnsimple.Client.with_account(req, &list_all_applied(req, &1, domain, opts))
+  end
 
   @doc """
   Enumerates every page of one-click services applied to a domain.
@@ -299,8 +427,51 @@ defmodule ReqDnsimple.Service do
           binary() | integer(),
           keyword()
         ) :: {:ok, [t()]} | {:error, term()}
-  def list_all_applied(req, account_id, domain, opts \\ []) do
+  def list_all_applied(req, account_id, domain, opts) do
     ReqDnsimple.Pagination.all(opts, &list_page_applied(req, account_id, domain, &1))
+  end
+
+  @doc """
+  Uses the client's configured account with default options.
+  See `apply/5` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec apply(
+          Req.Request.t(),
+          binary() | integer(),
+          binary() | integer()
+        ) :: :ok | {:error, term()}
+  def apply(req, domain, service) do
+    apply(req, domain, service, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `apply/5` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec apply(
+          Req.Request.t(),
+          binary() | integer(),
+          binary() | integer(),
+          keyword()
+        ) :: :ok | {:error, term()}
+  @spec apply(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer(),
+          binary() | integer()
+        ) :: :ok | {:error, term()}
+  def apply(req, account_id, domain, service)
+      when is_integer(service) or is_binary(service) do
+    apply(req, account_id, domain, service, [])
+  end
+
+  def apply(req, domain, service, attrs) do
+    ReqDnsimple.Client.with_account(req, &apply(req, &1, domain, service, attrs))
   end
 
   @doc """
@@ -317,7 +488,7 @@ defmodule ReqDnsimple.Service do
           binary() | integer(),
           keyword()
         ) :: :ok | {:error, term()}
-  def apply(req, account_id, domain, service, attrs \\ []) do
+  def apply(req, account_id, domain, service, attrs) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
              [account_id: account_id, domain: domain, service: service],
@@ -352,6 +523,20 @@ defmodule ReqDnsimple.Service do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `unapply/4` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec unapply(
+          Req.Request.t(),
+          binary() | integer(),
+          binary() | integer()
+        ) :: :ok | {:error, term()}
+  def unapply(req, domain, service) do
+    ReqDnsimple.Client.with_account(req, &unapply(req, &1, domain, service))
   end
 
   @doc """

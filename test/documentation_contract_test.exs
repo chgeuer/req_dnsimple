@@ -24,11 +24,17 @@ defmodule ReqDnsimple.DocumentationContractTest do
   )
   @collection_interfaces %{
     "ReqDnsimple.BillingCharge" =>
-      ~w(list/2 list/3 list_page/2 list_page/3 list_all/2 list_all/3),
-    "ReqDnsimple.Contact" => ~w(list/2 list/3 list_page/2 list_page/3 list_all/2 list_all/3),
-    "ReqDnsimple.EmailForward" => ~w(list/3 list/4 list_page/3 list_page/4 list_all/3 list_all/4),
-    "ReqDnsimple.Zone" => ~w(list/2 list/3 list_page/2 list_page/3 list_all/2 list_all/3),
-    "ReqDnsimple.ZoneRecord" => ~w(list/3 list/4 list_page/3 list_page/4 list_all/3 list_all/4)
+      ~w(list/1 list/2 list/3 list_page/1 list_page/2 list_page/3 list_all/1 list_all/2 list_all/3),
+    "ReqDnsimple.Contact" =>
+      ~w(list/1 list/2 list/3 list_page/1 list_page/2 list_page/3 list_all/1 list_all/2 list_all/3),
+    "ReqDnsimple.EmailForward" =>
+      ~w(list/2 list/3 list/4 list_page/2 list_page/3 list_page/4 list_all/2 list_all/3 list_all/4),
+    "ReqDnsimple.Service" =>
+      ~w(list_applied/2 list_applied/3 list_applied/4 list_page_applied/2 list_page_applied/3 list_page_applied/4 list_all_applied/2 list_all_applied/3 list_all_applied/4),
+    "ReqDnsimple.Zone" =>
+      ~w(list/1 list/2 list/3 list_page/1 list_page/2 list_page/3 list_all/1 list_all/2 list_all/3),
+    "ReqDnsimple.ZoneRecord" =>
+      ~w(list/2 list/3 list/4 list_page/2 list_page/3 list_page/4 list_all/2 list_all/3 list_all/4)
   }
 
   test "public guides describe bounded coverage and the versioned inventory states" do
@@ -54,14 +60,14 @@ defmodule ReqDnsimple.DocumentationContractTest do
     assert_inventory_states(inventory)
   end
 
-  test "inventory accepts completed scoped coverage with no pending operations" do
+  test "inventory accepts completed supported coverage with no pending operations" do
     inventory = inventory_with_replaced_state("pending", "implemented")
 
     refute Enum.any?(Jason.decode!(inventory)["operations"], &(&1["implementation"] == "pending"))
     assert_inventory_states(inventory)
   end
 
-  test "inventory reconciles every scoped operation with implementation and contract evidence" do
+  test "inventory reconciles every supported operation with implementation and contract evidence" do
     inventory =
       @root
       |> Path.join("docs/audit/operation-inventory.json")
@@ -101,6 +107,69 @@ defmodule ReqDnsimple.DocumentationContractTest do
     end
   end
 
+  test "scope inventory preserves every account-free and explicit-account interface family" do
+    inventory =
+      @root
+      |> Path.join("docs/audit/operation-inventory.json")
+      |> File.read!()
+      |> Jason.decode!()
+
+    assert %{
+             "constructor" => "ReqDnsimple.new_client/2",
+             "discovery_constructor" => "ReqDnsimple.new_unscoped_client/1,2",
+             "account_selection" => "ReqDnsimple.for_account/2",
+             "missing_scope_error" => "{:error, :missing_account_id}",
+             "account_scoped_operation_count" => 95
+           } = inventory["client_scope"]
+
+    {account_operations, other_operations} =
+      Enum.split_with(inventory["operations"], fn operation ->
+        operation["in_scope"] and String.starts_with?(operation["path"], "/{account}/")
+      end)
+
+    assert length(account_operations) == 95
+    assert Enum.sum(Enum.map(account_operations, &length(&1["scoped_interfaces"]))) == 137
+
+    for operation <- account_operations do
+      assert operation["scoped_interfaces"] != []
+
+      assert %{
+               "file" => "test/account_scope_operations_test.exs",
+               "describe" => "account-scoped operation parity"
+             } in operation["contract_tests"]
+
+      for interface <- operation["scoped_interfaces"] do
+        arities = interface["arities"]
+        arguments = interface["arguments"]
+
+        assert is_list(arities) and arities != []
+        assert Enum.all?(arities, &(is_integer(&1) and &1 > 0))
+        assert arities == Enum.sort(Enum.uniq(arities))
+        assert Enum.max(arities) == interface["arity"]
+        assert is_list(arguments)
+        assert length(arguments) == interface["arity"]
+        assert ["req" | _] = arguments
+        refute "account_id" in arguments
+
+        for arity <- arities do
+          assert_exported_interface(
+            Map.put(interface, "arity", arity),
+            operation["operation_id"]
+          )
+
+          assert_exported_interface(
+            Map.put(interface, "arity", arity + 1),
+            operation["operation_id"]
+          )
+        end
+      end
+    end
+
+    for operation <- other_operations do
+      assert Map.get(operation, "scoped_interfaces", []) == []
+    end
+  end
+
   test "public guides catalog supported modules and collection interfaces" do
     readme = File.read!(Path.join(@root, "README.md"))
     usage_rules = File.read!(Path.join(@root, "usage-rules.md"))
@@ -120,6 +189,44 @@ defmodule ReqDnsimple.DocumentationContractTest do
         assert interface_documented?(usage_rules, short_module, interface),
                "usage rules omit #{module}.#{interface}"
       end
+    end
+  end
+
+  test "public guides prefer scoped clients without abandoning legacy or discovery workflows" do
+    for file <- ["README.md", "usage-rules.md"] do
+      guide = File.read!(Path.join(@root, file))
+
+      for contract <- [
+            "new_client/2",
+            "new_client/1",
+            "new_unscoped_client/1,2",
+            "for_account/2",
+            "Req.Request",
+            "Req.merge/2",
+            "dnsimple_a_",
+            "dnsimple_u_",
+            "ArgumentError",
+            ":missing_account_id",
+            "NimbleOptions.ValidationError",
+            "scoped_interfaces",
+            "client_scope",
+            "95 account-path operations",
+            "137 interface families",
+            "samples/README.md"
+          ] do
+        assert guide =~ contract, "#{file} omits the #{contract} client contract"
+      end
+
+      assert guide =~ "legacy unscoped behavior"
+      assert guide =~ "including accepting account tokens"
+      refute guide =~ "[account | _]"
+    end
+  end
+
+  test "Elixir snippets in the public guides are syntactically valid" do
+    for file <- ["README.md", "usage-rules.md"],
+        [_, snippet] <- Regex.scan(~r/```elixir\n(.*?)```/s, File.read!(Path.join(@root, file))) do
+      assert {:ok, _ast} = Code.string_to_quoted(snippet, file: file)
     end
   end
 
@@ -152,36 +259,53 @@ defmodule ReqDnsimple.DocumentationContractTest do
     end
   end
 
-  test "functions used by the public examples are exported" do
+  test "scoped and legacy functions used by the public examples are exported" do
     exports = [
-      {ReqDnsimple, :new_client, 1},
-      {ReqDnsimple, :whoami, 1},
-      {ReqDnsimple, :ns_records, 3},
-      {ReqDnsimple.Zone, :list, 3},
-      {ReqDnsimple.Zone, :list_page, 3},
-      {ReqDnsimple.Zone, :list_all, 3},
-      {ReqDnsimple.ZoneRecord, :list, 4},
-      {ReqDnsimple.ZoneRecord, :list_page, 4},
-      {ReqDnsimple.ZoneRecord, :list_all, 4},
-      {ReqDnsimple.ZoneRecord, :create, 4},
-      {ReqDnsimple.ZoneRecord, :update, 5},
-      {ReqDnsimple.ZoneRecord, :delete, 4},
-      {ReqDnsimple.ZoneRecord, :batch_change, 4},
-      {ReqDnsimple.BillingCharge, :list, 3},
-      {ReqDnsimple.Contact, :list, 3},
-      {ReqDnsimple.Contact, :get, 3},
-      {ReqDnsimple.Contact, :delete, 3},
-      {ReqDnsimple.Registrar, :disable_auto_renewal, 3},
-      {ReqDnsimple.PrimaryServer, :get, 3},
-      {ReqDnsimple.PrimaryServer, :list, 3},
-      {ReqDnsimple.PrimaryServer, :list_page, 3},
-      {ReqDnsimple.PrimaryServer, :list_all, 3},
-      {ReqDnsimple.PrimaryServer, :unlink, 4},
-      {ReqDnsimple.PrimaryServer, :delete, 3},
-      {ReqDnsimple.SecondaryZone, :create, 3}
+      {ReqDnsimple, :new_client, [1, 2]},
+      {ReqDnsimple, :new_unscoped_client, [1, 2]},
+      {ReqDnsimple, :for_account, [2]},
+      {ReqDnsimple, :whoami, [1]},
+      {ReqDnsimple, :ns_records, [2, 3]},
+      {ReqDnsimple, :list_zones, [1, 2, 3]},
+      {ReqDnsimple, :list_zones!, [1, 2, 3]},
+      {ReqDnsimple, :list_contacts, [1, 2, 3]},
+      {ReqDnsimple, :list_billing_charges, [1, 2, 3]},
+      {ReqDnsimple, :create_zone_record, [3, 4]},
+      {ReqDnsimple, :unwrap!, [1]},
+      {ReqDnsimple.Account, :list, [1]},
+      {ReqDnsimple.Zone, :list, [1, 2, 3]},
+      {ReqDnsimple.Zone, :list!, [1, 2, 3]},
+      {ReqDnsimple.Zone, :get, [2, 3]},
+      {ReqDnsimple.Zone, :list_page, [1, 2, 3]},
+      {ReqDnsimple.Zone, :list_all, [1, 2, 3]},
+      {ReqDnsimple.ZoneRecord, :list, [2, 3, 4]},
+      {ReqDnsimple.ZoneRecord, :list_page, [2, 3, 4]},
+      {ReqDnsimple.ZoneRecord, :list_all, [2, 3, 4]},
+      {ReqDnsimple.ZoneRecord, :create, [3, 4]},
+      {ReqDnsimple.ZoneRecord, :update, [4, 5]},
+      {ReqDnsimple.ZoneRecord, :delete, [3, 4]},
+      {ReqDnsimple.ZoneRecord, :batch_change, [3, 4]},
+      {ReqDnsimple.BillingCharge, :list, [1, 2, 3]},
+      {ReqDnsimple.Contact, :list, [1, 2, 3]},
+      {ReqDnsimple.Contact, :get, [2, 3]},
+      {ReqDnsimple.Contact, :delete, [2, 3]},
+      {ReqDnsimple.Registrar, :disable_auto_renewal, [2, 3]},
+      {ReqDnsimple.PrimaryServer, :get, [2, 3]},
+      {ReqDnsimple.PrimaryServer, :list, [1, 2, 3]},
+      {ReqDnsimple.PrimaryServer, :list_page, [1, 2, 3]},
+      {ReqDnsimple.PrimaryServer, :list_all, [1, 2, 3]},
+      {ReqDnsimple.PrimaryServer, :unlink, [3, 4]},
+      {ReqDnsimple.PrimaryServer, :delete, [2, 3]},
+      {ReqDnsimple.SecondaryZone, :create, [2, 3]},
+      {ReqDnsimple.Service, :list_page, [1, 2]},
+      {ReqDnsimple.Service, :list_all, [1, 2]},
+      {ReqDnsimple.Service, :list_page_applied, [2, 3, 4]},
+      {ReqDnsimple.Service, :list_all_applied, [2, 3, 4]},
+      {ReqDnsimple.Service, :apply, [3, 4, 5]},
+      {ReqDnsimple.Service, :unapply, [3, 4]}
     ]
 
-    for {module, function, arity} <- exports do
+    for {module, function, arities} <- exports, arity <- arities do
       assert Code.ensure_loaded?(module), "expected #{inspect(module)} to load"
 
       assert function_exported?(module, function, arity),
@@ -199,22 +323,24 @@ defmodule ReqDnsimple.DocumentationContractTest do
 
   defp assert_creation_documentation(module, function) do
     assert {:docs_v1, _, :elixir, _, _, _, entries} = Code.fetch_docs(module)
-
-    entry =
-      Enum.find(entries, fn {identifier, _, _, _, _} ->
-        identifier == {:function, function, 4}
-      end)
-
-    assert {{:function, ^function, 4}, _, _, %{"en" => documentation}, _} = entry
-    assert documentation =~ "keyword list"
-    assert documentation =~ "required"
-
-    for attribute <- ~w(name type content ttl priority regions integrated_zones) do
-      assert documentation =~ "`:#{attribute}`"
-    end
-
     assert {:ok, specs} = Code.Typespec.fetch_specs(module)
-    assert Enum.any?(specs, fn {identifier, _} -> identifier == {function, 4} end)
+
+    for arity <- [3, 4] do
+      entry =
+        Enum.find(entries, fn {identifier, _, _, _, _} ->
+          identifier == {:function, function, arity}
+        end)
+
+      assert {{:function, ^function, ^arity}, _, _, %{"en" => documentation}, _} = entry
+      assert documentation =~ "keyword list"
+      assert documentation =~ "required"
+
+      for attribute <- ~w(name type content ttl priority regions integrated_zones) do
+        assert documentation =~ "`:#{attribute}`"
+      end
+
+      assert Enum.any?(specs, fn {identifier, _} -> identifier == {function, arity} end)
+    end
   end
 
   defp inventory_with_replaced_state(from, to) do

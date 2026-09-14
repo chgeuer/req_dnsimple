@@ -187,6 +187,49 @@ defmodule ReqDnsimple.Certificate do
   ]
 
   @doc """
+  Uses the client's configured account with default options.
+  See `list_page/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list_page(
+          Req.Request.t(),
+          binary() | integer()
+        ) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req, domain) do
+    list_page(req, domain, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list_page/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list_page(
+          Req.Request.t(),
+          binary() | integer(),
+          keyword()
+        ) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec list_page(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer()
+        ) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req, account_id, domain)
+      when is_integer(domain) or is_binary(domain) do
+    list_page(req, account_id, domain, [])
+  end
+
+  def list_page(req, domain, opts) do
+    ReqDnsimple.Client.with_account(req, &list_page(req, &1, domain, opts))
+  end
+
+  @doc """
   Lists one page of certificates for a domain.
 
   Supports ordered `:sort` terms for `:id`, `:common_name`, and `:expiration`,
@@ -212,7 +255,7 @@ defmodule ReqDnsimple.Certificate do
           keyword()
         ) ::
           {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
-  def list_page(req, account_id, domain, opts \\ []) do
+  def list_page(req, account_id, domain, opts) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
              [account_id: account_id, domain: domain],
@@ -240,6 +283,38 @@ defmodule ReqDnsimple.Certificate do
   end
 
   @doc """
+  Uses the client's configured account with default options.
+  See `list/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list(Req.Request.t(), binary() | integer()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list(req, domain) do
+    list(req, domain, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list(Req.Request.t(), binary() | integer(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec list(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list(req, account_id, domain)
+      when is_integer(domain) or is_binary(domain) do
+    list(req, account_id, domain, [])
+  end
+
+  def list(req, domain, opts) do
+    ReqDnsimple.Client.with_account(req, &list(req, &1, domain, opts))
+  end
+
+  @doc """
   Lists one page of certificates for a domain.
 
   This is a convenience alias for `list_page/4`; it never enumerates additional
@@ -247,7 +322,39 @@ defmodule ReqDnsimple.Certificate do
   """
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer(), keyword()) ::
           {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
-  def list(req, account_id, domain, opts \\ []), do: list_page(req, account_id, domain, opts)
+  def list(req, account_id, domain, opts), do: list_page(req, account_id, domain, opts)
+
+  @doc """
+  Uses the client's configured account with default options.
+  See `list_all/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list_all(Req.Request.t(), binary() | integer()) ::
+          {:ok, [t()]} | {:error, term()}
+  def list_all(req, domain) do
+    list_all(req, domain, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list_all/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list_all(Req.Request.t(), binary() | integer(), keyword()) ::
+          {:ok, [t()]} | {:error, term()}
+  @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer()) ::
+          {:ok, [t()]} | {:error, term()}
+  def list_all(req, account_id, domain)
+      when is_integer(domain) or is_binary(domain) do
+    list_all(req, account_id, domain, [])
+  end
+
+  def list_all(req, domain, opts) do
+    ReqDnsimple.Client.with_account(req, &list_all(req, &1, domain, opts))
+  end
 
   @doc """
   Enumerates every page of certificates for a domain in server order.
@@ -257,8 +364,51 @@ defmodule ReqDnsimple.Certificate do
   """
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer(), keyword()) ::
           {:ok, [t()]} | {:error, term()}
-  def list_all(req, account_id, domain, opts \\ []) do
+  def list_all(req, account_id, domain, opts) do
     ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, domain, &1))
+  end
+
+  @doc """
+  Uses the client's configured account with default options.
+  See `purchase_letsencrypt/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec purchase_letsencrypt(
+          Req.Request.t(),
+          binary() | integer()
+        ) ::
+          {:ok, Purchase.t()} | {:error, term()}
+  def purchase_letsencrypt(req, domain) do
+    purchase_letsencrypt(req, domain, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `purchase_letsencrypt/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec purchase_letsencrypt(
+          Req.Request.t(),
+          binary() | integer(),
+          keyword()
+        ) ::
+          {:ok, Purchase.t()} | {:error, term()}
+  @spec purchase_letsencrypt(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer()
+        ) ::
+          {:ok, Purchase.t()} | {:error, term()}
+  def purchase_letsencrypt(req, account_id, domain)
+      when is_integer(domain) or is_binary(domain) do
+    purchase_letsencrypt(req, account_id, domain, [])
+  end
+
+  def purchase_letsencrypt(req, domain, attrs) do
+    ReqDnsimple.Client.with_account(req, &purchase_letsencrypt(req, &1, domain, attrs))
   end
 
   @doc """
@@ -281,7 +431,7 @@ defmodule ReqDnsimple.Certificate do
           keyword()
         ) ::
           {:ok, Purchase.t()} | {:error, term()}
-  def purchase_letsencrypt(req, account_id, domain, attrs \\ []) do
+  def purchase_letsencrypt(req, account_id, domain, attrs) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
              [account_id: account_id, domain: domain],
@@ -320,6 +470,55 @@ defmodule ReqDnsimple.Certificate do
   end
 
   @doc """
+  Uses the client's configured account with default options.
+  See `purchase_letsencrypt_renewal/5` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec purchase_letsencrypt_renewal(
+          Req.Request.t(),
+          binary() | integer(),
+          integer()
+        ) ::
+          {:ok, Renewal.t()} | {:error, term()}
+  def purchase_letsencrypt_renewal(req, domain, certificate_id) do
+    purchase_letsencrypt_renewal(req, domain, certificate_id, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `purchase_letsencrypt_renewal/5` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec purchase_letsencrypt_renewal(
+          Req.Request.t(),
+          binary() | integer(),
+          integer(),
+          keyword()
+        ) ::
+          {:ok, Renewal.t()} | {:error, term()}
+  @spec purchase_letsencrypt_renewal(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer(),
+          integer()
+        ) ::
+          {:ok, Renewal.t()} | {:error, term()}
+  def purchase_letsencrypt_renewal(req, account_id, domain, certificate_id)
+      when is_integer(certificate_id) or is_binary(certificate_id) do
+    purchase_letsencrypt_renewal(req, account_id, domain, certificate_id, [])
+  end
+
+  def purchase_letsencrypt_renewal(req, domain, certificate_id, attrs) do
+    ReqDnsimple.Client.with_account(
+      req,
+      &purchase_letsencrypt_renewal(req, &1, domain, certificate_id, attrs)
+    )
+  end
+
+  @doc """
   Orders a Let's Encrypt renewal without issuing or deploying it.
 
   Optional settings are `:auto_renew` and `:signature_algorithm` (`"ECDSA"` or
@@ -338,7 +537,7 @@ defmodule ReqDnsimple.Certificate do
           keyword()
         ) ::
           {:ok, Renewal.t()} | {:error, term()}
-  def purchase_letsencrypt_renewal(req, account_id, domain, certificate_id, attrs \\ []) do
+  def purchase_letsencrypt_renewal(req, account_id, domain, certificate_id, attrs) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
              [
@@ -382,6 +581,21 @@ defmodule ReqDnsimple.Certificate do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `issue_letsencrypt/4` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec issue_letsencrypt(
+          Req.Request.t(),
+          binary() | integer(),
+          integer()
+        ) ::
+          {:ok, t()} | {:error, term()}
+  def issue_letsencrypt(req, domain, certificate_id) do
+    ReqDnsimple.Client.with_account(req, &issue_letsencrypt(req, &1, domain, certificate_id))
   end
 
   @doc """
@@ -435,6 +649,25 @@ defmodule ReqDnsimple.Certificate do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `issue_letsencrypt_renewal/5` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec issue_letsencrypt_renewal(
+          Req.Request.t(),
+          binary() | integer(),
+          integer(),
+          integer()
+        ) ::
+          {:ok, t()} | {:error, term()}
+  def issue_letsencrypt_renewal(req, domain, certificate_id, renewal_id) do
+    ReqDnsimple.Client.with_account(
+      req,
+      &issue_letsencrypt_renewal(req, &1, domain, certificate_id, renewal_id)
+    )
   end
 
   @doc """
@@ -496,6 +729,21 @@ defmodule ReqDnsimple.Certificate do
   end
 
   @doc """
+  Uses the client's configured account. See `get/4` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec get(
+          Req.Request.t(),
+          binary() | integer(),
+          integer()
+        ) ::
+          {:ok, t()} | {:error, term()}
+  def get(req, domain, certificate_id) do
+    ReqDnsimple.Client.with_account(req, &get(req, &1, domain, certificate_id))
+  end
+
+  @doc """
   Retrieves certificate metadata by account, domain name or ID, and certificate ID.
 
   Pending certificates preserve nullable CSR and expiry fields. Issued
@@ -547,6 +795,21 @@ defmodule ReqDnsimple.Certificate do
   end
 
   @doc """
+  Uses the client's configured account. See `download/4` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec download(
+          Req.Request.t(),
+          binary() | integer(),
+          integer()
+        ) ::
+          {:ok, Download.t()} | {:error, term()}
+  def download(req, domain, certificate_id) do
+    ReqDnsimple.Client.with_account(req, &download(req, &1, domain, certificate_id))
+  end
+
+  @doc """
   Downloads a certificate's PEM bundle without writing it to the filesystem.
 
   The PEM strings are returned byte-for-byte as supplied by DNSimple. A
@@ -595,6 +858,21 @@ defmodule ReqDnsimple.Certificate do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `get_private_key/4` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec get_private_key(
+          Req.Request.t(),
+          binary() | integer(),
+          integer()
+        ) ::
+          {:ok, PrivateKey.t()} | {:error, term()}
+  def get_private_key(req, domain, certificate_id) do
+    ReqDnsimple.Client.with_account(req, &get_private_key(req, &1, domain, certificate_id))
   end
 
   @doc """

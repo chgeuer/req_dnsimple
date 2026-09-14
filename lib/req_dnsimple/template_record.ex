@@ -106,6 +106,20 @@ defmodule ReqDnsimple.TemplateRecord do
   ]
 
   @doc """
+  Uses the client's configured account. See `create/4` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec create(
+          Req.Request.t(),
+          binary() | integer(),
+          keyword()
+        ) :: {:ok, t()} | {:error, term()}
+  def create(req, template, attrs) do
+    ReqDnsimple.Client.with_account(req, &create(req, &1, template, attrs))
+  end
+
+  @doc """
   Creates one record in a DNS template.
 
   The template may be a short name or integer ID. Attributes are sent as a
@@ -153,6 +167,49 @@ defmodule ReqDnsimple.TemplateRecord do
   end
 
   @doc """
+  Uses the client's configured account with default options.
+  See `list_page/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list_page(
+          Req.Request.t(),
+          binary() | integer()
+        ) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req, template) do
+    list_page(req, template, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list_page/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list_page(
+          Req.Request.t(),
+          binary() | integer(),
+          keyword()
+        ) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec list_page(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer()
+        ) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list_page(req, account_id, template)
+      when is_integer(template) or is_binary(template) do
+    list_page(req, account_id, template, [])
+  end
+
+  def list_page(req, template, opts) do
+    ReqDnsimple.Client.with_account(req, &list_page(req, &1, template, opts))
+  end
+
+  @doc """
   Lists one page of records in a DNS template.
 
   The template may be a short name or integer ID. Supports ordered `:sort`
@@ -166,7 +223,7 @@ defmodule ReqDnsimple.TemplateRecord do
           keyword()
         ) ::
           {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
-  def list_page(req, account_id, template, opts \\ []) do
+  def list_page(req, account_id, template, opts) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
              [account_id: account_id, template: template],
@@ -194,6 +251,38 @@ defmodule ReqDnsimple.TemplateRecord do
   end
 
   @doc """
+  Uses the client's configured account with default options.
+  See `list/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list(Req.Request.t(), binary() | integer()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list(req, template) do
+    list(req, template, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list(Req.Request.t(), binary() | integer(), keyword()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec list(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer()) ::
+          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  def list(req, account_id, template)
+      when is_integer(template) or is_binary(template) do
+    list(req, account_id, template, [])
+  end
+
+  def list(req, template, opts) do
+    ReqDnsimple.Client.with_account(req, &list(req, &1, template, opts))
+  end
+
+  @doc """
   Lists one page of records in a DNS template.
 
   This is a convenience alias for `list_page/4`; it never enumerates additional
@@ -201,8 +290,40 @@ defmodule ReqDnsimple.TemplateRecord do
   """
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer(), keyword()) ::
           {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
-  def list(req, account_id, template, opts \\ []),
+  def list(req, account_id, template, opts),
     do: list_page(req, account_id, template, opts)
+
+  @doc """
+  Uses the client's configured account with default options.
+  See `list_all/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  """
+  @spec list_all(Req.Request.t(), binary() | integer()) ::
+          {:ok, [t()]} | {:error, term()}
+  def list_all(req, template) do
+    list_all(req, template, [])
+  end
+
+  @doc """
+  Uses the client's configured account and the supplied options.
+  See `list_all/4` for operation options and return values.
+  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+
+  An integer or string final argument selects the legacy explicit-account
+  form with default options instead; it overrides the scope for that call only.
+  """
+  @spec list_all(Req.Request.t(), binary() | integer(), keyword()) ::
+          {:ok, [t()]} | {:error, term()}
+  @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer()) ::
+          {:ok, [t()]} | {:error, term()}
+  def list_all(req, account_id, template)
+      when is_integer(template) or is_binary(template) do
+    list_all(req, account_id, template, [])
+  end
+
+  def list_all(req, template, opts) do
+    ReqDnsimple.Client.with_account(req, &list_all(req, &1, template, opts))
+  end
 
   @doc """
   Enumerates every page of records in a DNS template in server order.
@@ -212,8 +333,22 @@ defmodule ReqDnsimple.TemplateRecord do
   """
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer(), keyword()) ::
           {:ok, [t()]} | {:error, term()}
-  def list_all(req, account_id, template, opts \\ []) do
+  def list_all(req, account_id, template, opts) do
     ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, template, &1))
+  end
+
+  @doc """
+  Uses the client's configured account. See `get/4` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec get(
+          Req.Request.t(),
+          binary() | integer(),
+          integer()
+        ) :: {:ok, t()} | {:error, term()}
+  def get(req, template, record_id) do
+    ReqDnsimple.Client.with_account(req, &get(req, &1, template, record_id))
   end
 
   @doc """
@@ -262,6 +397,20 @@ defmodule ReqDnsimple.TemplateRecord do
           {:error, error}
       end
     end
+  end
+
+  @doc """
+  Uses the client's configured account. See `delete/4` for
+  operation options and return values. Returns `{:error, :missing_account_id}`
+  without making a request when the client is unscoped.
+  """
+  @spec delete(
+          Req.Request.t(),
+          binary() | integer(),
+          integer()
+        ) :: :ok | {:error, term()}
+  def delete(req, template, record_id) do
+    ReqDnsimple.Client.with_account(req, &delete(req, &1, template, record_id))
   end
 
   @doc """
