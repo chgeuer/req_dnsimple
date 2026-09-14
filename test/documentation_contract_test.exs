@@ -189,6 +189,34 @@ defmodule ReqDnsimple.DocumentationContractTest do
     end
   end
 
+  test "the top-level record creation helper documents its accepted attributes" do
+    assert_creation_documentation(ReqDnsimple, :create_zone_record)
+  end
+
+  test "record creation documents its accepted attributes" do
+    assert_creation_documentation(ReqDnsimple.ZoneRecord, :create)
+  end
+
+  defp assert_creation_documentation(module, function) do
+    assert {:docs_v1, _, :elixir, _, _, _, entries} = Code.fetch_docs(module)
+
+    entry =
+      Enum.find(entries, fn {identifier, _, _, _, _} ->
+        identifier == {:function, function, 4}
+      end)
+
+    assert {{:function, ^function, 4}, _, _, %{"en" => documentation}, _} = entry
+    assert documentation =~ "keyword list"
+    assert documentation =~ "required"
+
+    for attribute <- ~w(name type content ttl priority regions integrated_zones) do
+      assert documentation =~ "`:#{attribute}`"
+    end
+
+    assert {:ok, specs} = Code.Typespec.fetch_specs(module)
+    assert Enum.any?(specs, fn {identifier, _} -> identifier == {function, 4} end)
+  end
+
   defp inventory_with_replaced_state(from, to) do
     inventory =
       @root

@@ -206,6 +206,27 @@ defmodule ReqDnsimple.Zone do
     end
   end
 
+  @doc """
+  Lists one page of zones and returns the zone list directly.
+
+  Accepts the same keyword options as `list/3`, without changing its request,
+  retry behavior, or pagination. It does not enumerate subsequent pages.
+
+  Raises `ReqDnsimple.Error` for API error results; existing validation and
+  transport exceptions are raised unchanged. The original API error is retained
+  in the exception's `:reason` field.
+
+  ## Options
+
+  #{NimbleOptions.docs(@list_zones_schema)}
+  """
+  @spec list!(Req.Request.t(), ReqDnsimple.account_id(), keyword()) :: [t()]
+  def list!(req, account_id, opts \\ []) do
+    req
+    |> list(account_id, opts)
+    |> ReqDnsimple.unwrap!()
+  end
+
   @spec list_page(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
           {:ok, {[__MODULE__.t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
   def list_page(req, account_id, opts \\ []) do

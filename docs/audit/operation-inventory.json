@@ -6744,13 +6744,18 @@
       "proposed_interfaces": [],
       "implemented_interfaces": [
         "ReqDnsimple.Zone.list/2",
-        "ReqDnsimple.Zone.list/3"
+        "ReqDnsimple.Zone.list/3",
+        "ReqDnsimple.Zone.list!/2",
+        "ReqDnsimple.Zone.list!/3",
+        "ReqDnsimple.list_zones/2",
+        "ReqDnsimple.list_zones!/2"
       ],
       "contract_tests": [
         "test/http_error_test.exs: successful wrappers preserve return shapes and request contracts",
         "test/pagination_test.exs: list_page returns typed items and pagination for every paginated resource",
         "test/http_error_test.exs: every existing wrapper returns explicit generic HTTP errors",
-        "test/http_error_test.exs: every existing wrapper returns transport errors"
+        "test/http_error_test.exs: every existing wrapper returns transport errors",
+        "test/bang_test.exs: zone-listing bang functions"
       ]
     },
     {

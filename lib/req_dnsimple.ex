@@ -103,6 +103,19 @@ defmodule ReqDnsimple do
 
   defdelegate list_zones(req, account_id), to: ReqDnsimple.Zone, as: :list
 
+  @doc """
+  Lists one page of zones and returns the zone list directly.
+
+  This is the raising counterpart of `list_zones/2`. Raises `ReqDnsimple.Error`
+  for API error results; existing validation and transport exceptions are
+  raised unchanged. The original API error is available in the exception's
+  `:reason` field.
+
+  Use `ReqDnsimple.Zone.list!/3` to supply filtering, sorting, or pagination options.
+  """
+  @spec list_zones!(Req.Request.t(), account_id()) :: [ReqDnsimple.Zone.t()]
+  defdelegate list_zones!(req, account_id), to: ReqDnsimple.Zone, as: :list!
+
   defdelegate list_contacts(req, account_id), to: ReqDnsimple.Contact, as: :list
 
   defdelegate list_billing_charges(req, account_id), to: ReqDnsimple.BillingCharge, as: :list
@@ -119,6 +132,30 @@ defmodule ReqDnsimple do
     to: ReqDnsimple.ZoneRecord,
     as: :delete
 
+  @doc """
+  Creates a DNS record in the zone named by `zone_id`.
+
+  `attrs` is a keyword list with three required attributes:
+
+    * `:name` - String containing the name relative to the zone; use `""` for
+      the zone apex.
+    * `:type` - String containing the record type, such as `"A"`, `"TXT"`, or `"MX"`.
+    * `:content` - String containing the record value.
+
+  Optional attributes are:
+
+    * `:ttl` - Non-negative integer time-to-live in seconds.
+    * `:priority` - Non-negative integer record priority.
+    * `:regions` - List of region strings, such as `["global"]`.
+    * `:integrated_zones` - List of integer integrated-zone IDs and/or `"dnsimple"`.
+
+  Optional attributes are omitted from the request unless supplied. Returns
+  `{:ok, %ReqDnsimple.ZoneRecord{}}` or `{:error, reason}`.
+
+  See `ReqDnsimple.ZoneRecord.create/4` for the complete option schema and an example.
+  """
+  @spec create_zone_record(Req.Request.t(), account_id(), zone_name(), keyword()) ::
+          {:ok, ReqDnsimple.ZoneRecord.t()} | {:error, term()}
   defdelegate create_zone_record(req, account_id, zone_id, attrs),
     to: ReqDnsimple.ZoneRecord,
     as: :create
@@ -130,6 +167,28 @@ defmodule ReqDnsimple do
   defdelegate check_zone_distribution(req, account_id, zone_name),
     to: ReqDnsimple.Zone,
     as: :check_zone_distribution
+
+  @doc """
+  Unwraps a successful result or raises its error.
+
+  Returns the value inside `{:ok, value}` unchanged, including pagination tuples,
+  `nil`, and `false`. A bodyless `:ok` result remains `:ok`.
+
+  Raises an existing exception from `{:error, exception}` unchanged. Other
+  `{:error, reason}` results raise `ReqDnsimple.Error`, preserving the original
+  reason in its `:reason` field.
+
+  Raises `ArgumentError` for unsupported result shapes. Bare lists and the
+  tagged identity results from `whoami/1` are not accepted.
+  """
+  @spec unwrap!({:ok, value} | :ok | {:error, term()}) :: value | :ok when value: term()
+  def unwrap!({:ok, value}), do: value
+  def unwrap!(:ok), do: :ok
+  def unwrap!({:error, error}) when is_exception(error), do: raise(error)
+  def unwrap!({:error, reason}), do: raise(ReqDnsimple.Error, reason: reason)
+
+  def unwrap!(_result),
+    do: raise(ArgumentError, "expected {:ok, value}, :ok, or {:error, reason}")
 
   @doc false
   @spec response_error(Req.Response.t()) :: {:error, http_error()}

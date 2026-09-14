@@ -53,6 +53,7 @@ Different modules use slightly different return conventions:
 | `OAuth.exchange_code/2` | `{:ok, %OAuth.Token{}}` | `{:error, reason}` |
 | `Account.list/1` | `[%Account{}, ...]` | `{:error, reason}` |
 | `Zone.list/2,3` | `{:ok, [%Zone{}, ...]}` | `{:error, reason}` |
+| `ReqDnsimple.list_zones!/2` and `Zone.list!/2,3` | `[%Zone{}, ...]` | Raises |
 | `Zone.list_page/2,3` | `{:ok, {[%Zone{}, ...], pagination}}` | `{:error, reason}` |
 | `Zone.list_all/2,3` | `{:ok, [%Zone{}, ...]}` | `{:error, reason}` |
 | `Zone.get/3` | `{:ok, %Zone{}}` | `{:error, reason}` |
@@ -168,6 +169,20 @@ Ordinary HTTP failures return
 endpoint-specific mappings such as `:not_found`, `:unauthorized`, and `:timeout`
 take precedence. If a response includes `Retry-After`, the generic error map
 also includes `retry_after: value`.
+
+### Bang Functions
+
+`ReqDnsimple.list_zones!/2` and `Zone.list!/2,3` return the zone list directly,
+without changing the existing one-page request behavior. No other endpoint
+has a named bang counterpart yet.
+
+`ReqDnsimple.unwrap!/1` supports `{:ok, value}`, `:ok`, and `{:error, reason}`.
+It returns successful values unchanged, preserving pagination tuples, and
+returns `:ok` for bodyless success. Existing exception structs are raised
+unchanged; other errors raise `ReqDnsimple.Error` with the original error
+available in `exception.reason`. Unsupported shapes raise `ArgumentError`,
+so do not pass the bare lists from `Account.list/1` or `ns_records/3`, or the
+tagged identity results from `whoami/1`.
 
 ## Common Patterns
 

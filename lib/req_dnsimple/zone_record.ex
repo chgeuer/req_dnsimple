@@ -225,19 +225,46 @@ defmodule ReqDnsimple.ZoneRecord do
 
   @integrated_zones_schema [
     type: {:list, {:or, [:integer, {:in, ["dnsimple"]}]}},
-    doc: ~s(Zone IDs and the "dnsimple" target)
+    doc: ~s(Target integrated-zone IDs and/or "dnsimple" for the DNSimple zone)
   ]
 
   @zone_record_schema [
-    name: [type: :string, required: true, doc: "Record name without domain"],
+    name: [type: :string, required: true, doc: ~s(Name relative to the zone; use "" for the apex)],
     type: [type: :string, required: true, doc: "Record type (A, AAAA, CNAME, MX, etc.)"],
-    content: [type: :string, required: true, doc: "Record content"],
+    content: [
+      type: :string,
+      required: true,
+      doc: "Record value in the format expected by its type"
+    ],
     ttl: [type: :non_neg_integer, doc: "Time-to-live in seconds"],
-    priority: [type: :non_neg_integer, doc: "Priority (for MX records)"],
-    regions: [type: {:list, :string}, doc: "Geographical regions"],
+    priority: [type: :non_neg_integer, doc: "Record priority, for example for MX or SRV records"],
+    regions: [type: {:list, :string}, doc: ~s(Geographical regions, such as ["global"])],
     integrated_zones: @integrated_zones_schema
   ]
 
+  @doc """
+  Creates a DNS record in the zone named by `zone_id`.
+
+  `attrs` must be a keyword list. The `:name`, `:type`, and `:content` attributes
+  are required. Optional attributes are omitted from the request unless supplied;
+  explicit zero values for `:ttl` and `:priority` are preserved.
+
+  Returns `{:ok, %ReqDnsimple.ZoneRecord{}}` or `{:error, reason}`.
+  `ReqDnsimple.create_zone_record/4` is the equivalent top-level helper.
+
+  ## Options
+
+  #{NimbleOptions.docs(@zone_record_schema)}
+
+  ## Example
+
+      ReqDnsimple.ZoneRecord.create(client, account_id, "example.com",
+        name: "www",
+        type: "A",
+        content: "192.0.2.1",
+        ttl: 300
+      )
+  """
   @spec create(Req.Request.t(), ReqDnsimple.account_id(), binary(), keyword()) ::
           {:ok, ReqDnsimple.ZoneRecord.t()} | {:error, term()}
   def create(req, account_id, zone_id, attrs) do

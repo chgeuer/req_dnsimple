@@ -1,0 +1,68 @@
+# ReqDnsimple with proxy
+
+```elixir
+Mix.install([
+  {:req, "~> 0.7.4"},
+  {:req_dnsimple, path: "/home/chgeuer/github/chgeuer/req_dnsimple"}
+])
+```
+
+## Section
+
+Add a Livebook secret named `DNSIMPLE_TOKEN` before evaluating the cells below.
+
+```elixir
+account_id = "116316"
+
+req_dnsimple =
+  ReqDnsimple.new_client(System.fetch_env!("LB_DNSIMPLE_TOKEN"))
+  |> Req.merge(base_url: "https://dnsimple.geuer-pollmann.de/v2")
+```
+
+```elixir
+req_dnsimple
+|> ReqDnsimple.list_zones!(account_id)
+```
+
+```elixir
+zones = 
+  req_dnsimple
+  |> ReqDnsimple.list_zones!(account_id)
+
+zone_names =
+  zones
+  |> Enum.map(fn %ReqDnsimple.Zone{name: name} -> name end)
+```
+
+```elixir
+zone_names
+|> Enum.map(fn zone_id -> 
+  req_dnsimple
+  |> ReqDnsimple.list_zone_records(account_id, zone_id)
+end)
+
+```
+
+```elixir
+req_dnsimple
+|> ReqDnsimple.create_zone_record(account_id, "geuer-pollmann.de", foo: "f")
+```
+
+```elixir
+req_dnsimple
+|> ReqDnsimple.create_zone_record(account_id, "geuer-pollmann.de", 
+  name: "agent", type: "A", content: "127.0.0.1", ttl: 10)
+```
+
+```elixir
+{:ok, {records, _paging}} =
+  req_dnsimple
+  |> ReqDnsimple.list_zone_records(account_id, "geuer-pollmann.de")
+
+%ReqDnsimple.ZoneRecord{id: record_id, name: "agent"} = records |> hd
+```
+
+```elixir
+req_dnsimple
+|> ReqDnsimple.delete_zone_record(account_id, "geuer-pollmann.de", record_id)
+```

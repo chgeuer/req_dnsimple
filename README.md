@@ -199,6 +199,19 @@ follow-up request, or additional mutation.
 )
 ```
 
+The equivalent `ReqDnsimple.create_zone_record/4` helper and
+`ReqDnsimple.ZoneRecord.create/4` both expose function documentation for Livebook
+code help. You can also display the accepted attributes without making a request:
+
+```elixir
+require IEx.Helpers
+IEx.Helpers.h(ReqDnsimple.create_zone_record/4)
+```
+
+After changing a local path dependency, restart the Livebook runtime and
+re-evaluate the setup with `Mix.install(..., force: true)` once to refresh its
+compiled documentation.
+
 **Update a record:**
 
 ```elixir
@@ -1134,10 +1147,10 @@ a claim that every published DNSimple endpoint is wrapped.
 
 | Module | DNSimple API | Operations |
 |--------|-------------|------------|
-| `ReqDnsimple` | Client, `/whoami`, apex NS record enumeration | `new_client/1`, `whoami/1`, `token_type/1`, `ns_records/3` |
+| `ReqDnsimple` | Client, `/whoami`, apex NS record enumeration, result handling | `new_client/1`, `whoami/1`, `token_type/1`, `ns_records/3`, `list_zones!/2`, `unwrap!/1` |
 | `ReqDnsimple.OAuth` | `/oauth/access_token` | `exchange_code/2` |
 | `ReqDnsimple.Account` | `/accounts` | `list/1` |
-| `ReqDnsimple.Zone` | `/zones` | `list/2`, `list/3`, `list_page/2`, `list_page/3`, `list_all/2`, `list_all/3`, `get/3`, `activate/3`, `deactivate/3`, `update_ns_records/4`, `get_zone_file/3`, `check_zone_distribution/3` |
+| `ReqDnsimple.Zone` | `/zones` | `list/2`, `list/3`, `list!/2`, `list!/3`, `list_page/2`, `list_page/3`, `list_all/2`, `list_all/3`, `get/3`, `activate/3`, `deactivate/3`, `update_ns_records/4`, `get_zone_file/3`, `check_zone_distribution/3` |
 | `ReqDnsimple.ZoneRecord` | `/zones/:zone/records`, `/zones/:zone/batch` | `list/3`, `list/4`, `list_page/3`, `list_page/4`, `list_all/3`, `list_all/4`, `get/4`, `create/4`, `update/5`, `delete/4`, `check_distribution/4`, `batch_change/4` |
 | `ReqDnsimple.BillingCharge` | `/billing/charges` | `list/2`, `list/3`, `list_page/2`, `list_page/3`, `list_all/2`, `list_all/3` |
 | `ReqDnsimple.Contact` | `/contacts` | `create/3`, `update/4`, `list/2`, `list/3`, `list_page/2`, `list_page/3`, `list_all/2`, `list_all/3`, `get/3`, `delete/3` |
@@ -1176,6 +1189,37 @@ a claim that every published DNSimple endpoint is wrapped.
   `{:error, %{status: status, response: response_body}}`; responses with a
   `Retry-After` header also include `retry_after: value`. Endpoint-specific
   errors such as `:not_found`, `:unauthorized`, and `:timeout` remain atoms
+
+## Bang Functions
+
+Zone listing has opt-in raising variants:
+
+```elixir
+zones = ReqDnsimple.list_zones!(client, account_id)
+zones = ReqDnsimple.Zone.list!(client, account_id, name_like: "example", per_page: 100)
+```
+
+Both return a list directly and fetch only one page, matching their non-bang
+counterparts. Existing tuple-returning functions are unchanged.
+
+For other functions returning `{:ok, value}`, `:ok`, or `{:error, reason}`,
+use the shared `ReqDnsimple.unwrap!/1` helper:
+
+```elixir
+{records, pagination} =
+  ReqDnsimple.ZoneRecord.list_page(client, account_id, "example.com")
+  |> ReqDnsimple.unwrap!()
+```
+
+Existing validation and transport exceptions are raised unchanged. Other API
+errors raise `ReqDnsimple.Error`, with the original error in `exception.reason`,
+including any HTTP status, response body, and retry information.
+
+Only zone listing currently has named bang counterparts; other endpoint `!`
+functions are not defined. `unwrap!/1` preserves the inner success value,
+including pagination tuples, and leaves `:ok` unchanged. It rejects unsupported
+shapes, including the bare lists from `Account.list/1` and `ns_records/3` and the
+tagged identity tuples from `whoami/1`.
 
 ## Sorting and Filtering
 
