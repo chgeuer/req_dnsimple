@@ -2,13 +2,18 @@ defmodule ReqDnsimple.VanityNameServer do
   @moduledoc """
   DNSimple vanity name-server API functionality.
 
+  Successful HTTP operations return `{:ok, {data, %ReqDnsimple.Metadata{}}}`.
+  Failures return `{:error, %ReqDnsimple.Error{}}`, with metadata when an
+  HTTP response was received.
+  Bodyless HTTP 204 responses use `nil` data.
+
   ## Example
 
       ReqDnsimple.VanityNameServer.enable(req, 1010, "example.test")
-      #=> {:ok, [%ReqDnsimple.VanityNameServer{}]}
+      #=> {:ok, {[%ReqDnsimple.VanityNameServer{}], %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.VanityNameServer.disable(req, 1010, "example.test")
-      #=> :ok
+      #=> {:ok, {nil, %ReqDnsimple.Metadata{}}}
   """
 
   # https://developer.dnsimple.com/v2/vanity/
@@ -31,11 +36,11 @@ defmodule ReqDnsimple.VanityNameServer do
 
   @doc """
   Uses the client's configured account. See `enable/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
-  @spec enable(Req.Request.t(), binary() | integer()) ::
-          {:ok, [t()]} | {:error, term()}
+  @spec enable(Req.Request.t(), binary() | integer()) :: ReqDnsimple.Response.result([t()])
   def enable(req, domain) do
     ReqDnsimple.Client.with_account(req, &enable(req, &1, domain))
   end
@@ -48,7 +53,7 @@ defmodule ReqDnsimple.VanityNameServer do
   DNSimple may return plan or payment errors when the feature is unavailable.
   """
   @spec enable(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def enable(req, account_id, domain) do
     with {:ok, _validated_params} <-
            NimbleOptions.validate(
@@ -67,7 +72,7 @@ defmodule ReqDnsimple.VanityNameServer do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response}
         when is_list(data) ->
           case decode_list(data) do
-            {:ok, name_servers} -> {:ok, name_servers}
+            {:ok, name_servers} -> ReqDnsimple.Response.ok(name_servers, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -75,18 +80,19 @@ defmodule ReqDnsimple.VanityNameServer do
           ReqDnsimple.response_error(response)
 
         {:error, error} ->
-          {:error, error}
+          ReqDnsimple.Response.error(error)
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `disable/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
-  @spec disable(Req.Request.t(), binary() | integer()) ::
-          :ok | {:error, term()}
+  @spec disable(Req.Request.t(), binary() | integer()) :: ReqDnsimple.Response.result(nil)
   def disable(req, domain) do
     ReqDnsimple.Client.with_account(req, &disable(req, &1, domain))
   end
@@ -98,7 +104,7 @@ defmodule ReqDnsimple.VanityNameServer do
   change the domain's registrar delegation or delete records individually.
   """
   @spec disable(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer()) ::
-          :ok | {:error, term()}
+          ReqDnsimple.Response.result(nil)
   def disable(req, account_id, domain) do
     with {:ok, _validated_params} <-
            NimbleOptions.validate(
@@ -114,16 +120,17 @@ defmodule ReqDnsimple.VanityNameServer do
         )
 
       case Req.request(req) do
-        {:ok, %Req.Response{status: 204}} ->
-          :ok
+        {:ok, %Req.Response{status: 204} = response} ->
+          ReqDnsimple.Response.ok(nil, response)
 
         {:ok, response} ->
           ReqDnsimple.response_error(response)
 
         {:error, error} ->
-          {:error, error}
+          ReqDnsimple.Response.error(error)
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   defp decode_list(data) do

@@ -3,6 +3,63 @@ defmodule ReqDnsimple.ServiceTest do
 
   import ReqDnsimple.TestSupport
 
+  test "service data, bodyless successes, and HTTP errors retain response headers" do
+    headers = [
+      {"x-ratelimit-remaining", "0"},
+      {"x-request-id", "service-response"},
+      {"retry-after", "120"}
+    ]
+
+    assert {:ok,
+            {%ReqDnsimple.Service{id: 1},
+             %ReqDnsimple.Metadata{
+               status: 200,
+               rate_limit_remaining: 0,
+               request_id: "service-response"
+             }}} =
+             ReqDnsimple.Service.get(
+               client(200, service_body(), self(), headers),
+               "offline-service"
+             )
+
+    assert_request(:get, "/v2/services/offline-service")
+
+    for {operation, method} <- [
+          {&ReqDnsimple.Service.apply(&1, 1010, "example.test", "offline-service"), :post},
+          {&ReqDnsimple.Service.unapply(&1, 1010, "example.test", "offline-service"), :delete}
+        ] do
+      assert {:ok,
+              {nil,
+               %ReqDnsimple.Metadata{
+                 status: 204,
+                 rate_limit_remaining: 0,
+                 request_id: "service-response"
+               }}} = operation.(client(204, nil, self(), headers))
+
+      assert_request(method, "/v2/1010/domains/example.test/services/offline-service")
+    end
+
+    assert {:error,
+            %ReqDnsimple.Error{
+              reason: reason,
+              metadata: %ReqDnsimple.Metadata{
+                status: 429,
+                rate_limit_remaining: 0,
+                request_id: "service-response",
+                retry_after: "120"
+              }
+            }} =
+             ReqDnsimple.Service.get(
+               client(429, %{"message" => "rate limited"}, self(), headers),
+               "offline-service"
+             )
+
+    assert reason.status == 429
+    refute Map.has_key?(reason, :retry_after)
+    assert_request(:get, "/v2/services/offline-service")
+    refute_received {:request, _request}
+  end
+
   describe "get/2" do
     test "getService retrieves one typed service with nullable nested fields" do
       body = %{
@@ -30,27 +87,28 @@ defmodule ReqDnsimple.ServiceTest do
       }
 
       assert {:ok,
-              %ReqDnsimple.Service{
-                id: 1,
-                name: "Offline service",
-                sid: "offline-service",
-                description: "Offline example",
-                setup_description: nil,
-                requires_setup: true,
-                default_subdomain: nil,
-                created_at: ~U[2026-09-01 08:00:00Z],
-                updated_at: ~U[2026-09-01 08:30:00Z],
-                settings: [
-                  %ReqDnsimple.Service.Setting{
-                    name: "example.test",
-                    label: "Offline example",
-                    append: nil,
-                    description: "Offline example",
-                    example: nil,
-                    password: true
-                  }
-                ]
-              }} = ReqDnsimple.Service.get(client(200, body), "offline-service")
+              {%ReqDnsimple.Service{
+                 id: 1,
+                 name: "Offline service",
+                 sid: "offline-service",
+                 description: "Offline example",
+                 setup_description: nil,
+                 requires_setup: true,
+                 default_subdomain: nil,
+                 created_at: ~U[2026-09-01 08:00:00Z],
+                 updated_at: ~U[2026-09-01 08:30:00Z],
+                 settings: [
+                   %ReqDnsimple.Service.Setting{
+                     name: "example.test",
+                     label: "Offline example",
+                     append: nil,
+                     description: "Offline example",
+                     example: nil,
+                     password: true
+                   }
+                 ]
+               }, %ReqDnsimple.Metadata{}}} =
+               ReqDnsimple.Service.get(client(200, body), "offline-service")
 
       assert_request(:get, "/v2/services/offline-service", %{}, nil)
       refute_received {:request, _request}
@@ -60,7 +118,7 @@ defmodule ReqDnsimple.ServiceTest do
       body = service_body()
 
       for service <- [12, 0, ""] do
-        assert {:ok, %ReqDnsimple.Service{}} =
+        assert {:ok, {%ReqDnsimple.Service{}, %ReqDnsimple.Metadata{}}} =
                  ReqDnsimple.Service.get(client(200, body), service)
 
         assert_request(:get, "/v2/services/#{service}", %{}, nil)
@@ -72,7 +130,8 @@ defmodule ReqDnsimple.ServiceTest do
       request = client(200, service_body())
 
       for service <- [nil, 1.5, [], %{}] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.Service.get(request, service)
       end
 
@@ -90,7 +149,11 @@ defmodule ReqDnsimple.ServiceTest do
       ]
 
       for body <- malformed_bodies do
-        assert {:error, %{status: 200, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: 200, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: 200}
+                }} =
                  ReqDnsimple.Service.get(client(200, body), "offline-service")
 
         assert_request(:get, "/v2/services/offline-service", %{}, nil)
@@ -105,7 +168,11 @@ defmodule ReqDnsimple.ServiceTest do
           "errors" => %{"service" => ["was not found"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.Service.get(client(status, body), "offline-service")
 
         assert_request(:get, "/v2/services/offline-service", %{}, nil)
@@ -114,7 +181,8 @@ defmodule ReqDnsimple.ServiceTest do
     end
 
     test "getService preserves transport failures" do
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.Service.get(transport_error_client(:timeout), "offline-service")
     end
   end
@@ -161,7 +229,7 @@ defmodule ReqDnsimple.ServiceTest do
                      }
                    ]
                  }
-               ], ^pagination}} =
+               ], %ReqDnsimple.Metadata{status: 200, pagination: ^pagination}}} =
                ReqDnsimple.Service.list_page(
                  client(200, %{"data" => [data], "pagination" => pagination}),
                  sort: [id: :asc, sid: :desc],
@@ -187,7 +255,7 @@ defmodule ReqDnsimple.ServiceTest do
         "total_pages" => 0
       }
 
-      assert {:ok, {[], ^pagination}} =
+      assert {:ok, {[], %ReqDnsimple.Metadata{status: 200, pagination: ^pagination}}} =
                ReqDnsimple.Service.list(client(200, %{"data" => [], "pagination" => pagination}))
 
       assert_request(:get, "/v2/services", %{}, nil)
@@ -210,7 +278,8 @@ defmodule ReqDnsimple.ServiceTest do
       ]
 
       for opts <- invalid_options do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.Service.list_page(request, opts)
       end
 
@@ -224,14 +293,19 @@ defmodule ReqDnsimple.ServiceTest do
           "errors" => %{"service" => ["was not found"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.Service.list_page(client(status, body))
 
         assert_request(:get, "/v2/services", %{}, nil)
         refute_received {:request, _request}
       end
 
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.Service.list_page(transport_error_client(:timeout))
     end
 
@@ -247,23 +321,56 @@ defmodule ReqDnsimple.ServiceTest do
         %{},
         %{"data" => nil, "pagination" => pagination},
         %{"data" => %{}, "pagination" => pagination},
-        %{"data" => [Map.delete(service_data(), "settings")], "pagination" => pagination},
-        %{"data" => [service_data()]},
-        %{"data" => [service_data()], "pagination" => nil},
-        %{
-          "data" => [service_data()],
-          "pagination" => Map.delete(pagination, "total_entries")
-        },
-        %{"data" => [service_data()], "pagination" => %{pagination | "per_page" => 0}}
+        %{"data" => [Map.delete(service_data(), "settings")], "pagination" => pagination}
       ]
 
       for body <- malformed_bodies do
-        assert {:error, %{status: 200, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: 200, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: 200}
+                }} =
                  ReqDnsimple.Service.list_page(client(200, body))
 
         assert_request(:get, "/v2/services", %{}, nil)
         refute_received {:request, _request}
       end
+    end
+  end
+
+  test "service collections preserve business data when pagination metadata is absent or malformed" do
+    pagination = %{
+      "current_page" => 1,
+      "per_page" => 30,
+      "total_entries" => 1,
+      "total_pages" => 1
+    }
+
+    incomplete = Map.delete(pagination, "total_entries")
+    zero_page_size = %{pagination | "per_page" => 0}
+
+    for {operation, path} <- [
+          {&ReqDnsimple.Service.list_page/1, "/v2/services"},
+          {&ReqDnsimple.Service.list_page_applied(&1, 1010, "example.test"),
+           "/v2/1010/domains/example.test/services"}
+        ],
+        {body, expected_pagination, expected_errors} <- [
+          {%{"data" => [service_data()]}, nil, %{}},
+          {%{"data" => [service_data()], "pagination" => nil}, nil, %{}},
+          {%{"data" => [service_data()], "pagination" => incomplete}, nil,
+           %{pagination: {:invalid_pagination, incomplete}}},
+          {%{"data" => [service_data()], "pagination" => zero_page_size}, zero_page_size, %{}}
+        ] do
+      assert {:ok,
+              {[%ReqDnsimple.Service{id: 1}],
+               %ReqDnsimple.Metadata{
+                 status: 200,
+                 pagination: ^expected_pagination,
+                 parse_errors: ^expected_errors
+               }}} = operation.(client(200, body))
+
+      assert_request(:get, path, %{}, nil)
+      refute_received {:request, _request}
     end
   end
 
@@ -290,12 +397,66 @@ defmodule ReqDnsimple.ServiceTest do
            }}
       }
 
-      assert {:ok, [%ReqDnsimple.Service{id: 1}, %ReqDnsimple.Service{id: 2}]} =
+      first_pagination = elem(pages[1], 1)
+      second_pagination = elem(pages[2], 1)
+
+      headers =
+        Map.new(1..2, fn page ->
+          {page,
+           [
+             {"x-ratelimit-limit", Integer.to_string(4000 + page)},
+             {"x-ratelimit-remaining", Integer.to_string(4000 - page)},
+             {"x-ratelimit-reset", Integer.to_string(1_800_000_000 + page)},
+             {"x-request-id", "page-#{page}"},
+             {"etag", ~s("page-#{page}")},
+             {"retry-after", Integer.to_string(30 - page)}
+           ]}
+        end)
+
+      assert {:ok,
+              {[%ReqDnsimple.Service{id: 1}, %ReqDnsimple.Service{id: 2}],
+               %ReqDnsimple.Metadata{
+                 status: nil,
+                 pagination: nil,
+                 rate_limit: 4002,
+                 rate_limit_remaining: 3998,
+                 rate_limit_reset: 1_800_000_002,
+                 request_id: nil,
+                 etag: nil,
+                 retry_after: "28",
+                 pages: [
+                   %ReqDnsimple.Metadata{
+                     status: 200,
+                     pagination: ^first_pagination,
+                     rate_limit: 4001,
+                     rate_limit_remaining: 3999,
+                     rate_limit_reset: 1_800_000_001,
+                     request_id: "page-1",
+                     etag: ~s("page-1"),
+                     retry_after: "29",
+                     pages: []
+                   },
+                   %ReqDnsimple.Metadata{
+                     status: 200,
+                     pagination: ^second_pagination,
+                     rate_limit: 4002,
+                     rate_limit_remaining: 3998,
+                     rate_limit_reset: 1_800_000_002,
+                     request_id: "page-2",
+                     etag: ~s("page-2"),
+                     retry_after: "28",
+                     pages: []
+                   }
+                 ]
+               } = metadata}} =
                ReqDnsimple.Service.list_all(
-                 service_page_client(pages),
+                 service_page_client(pages, headers),
                  sort: [:id, sid: :desc],
                  per_page: 1
                )
+
+      assert metadata.parse_errors == %{}
+      assert Enum.all?(metadata.pages, &(&1.parse_errors == %{}))
 
       assert_request(
         :get,
@@ -315,11 +476,12 @@ defmodule ReqDnsimple.ServiceTest do
     test "rejects explicit pages and malformed option containers before HTTP" do
       request = client(200, %{})
 
-      assert {:error, {:invalid_option, :page}} =
+      assert {:error, %ReqDnsimple.Error{reason: {:invalid_option, :page}, metadata: nil}} =
                ReqDnsimple.Service.list_all(request, page: 2)
 
       for opts <- [[:invalid], [{:name}]] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.Service.list_all(request, opts)
       end
 
@@ -340,13 +502,33 @@ defmodule ReqDnsimple.ServiceTest do
           2 -> {503, %{"message" => "unavailable"}}
         end)
 
-      assert {:error, %{status: 503, response: %{"message" => "unavailable"}}} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: %{status: 503, response: %{"message" => "unavailable"}},
+                metadata: %ReqDnsimple.Metadata{
+                  status: 503,
+                  pages: [
+                    %ReqDnsimple.Metadata{status: 200, pagination: ^first_page, pages: []},
+                    %ReqDnsimple.Metadata{status: 503, pagination: nil, pages: []}
+                  ]
+                }
+              }} =
                ReqDnsimple.Service.list_all(http_client)
 
       assert_request(:get, "/v2/services", %{"page" => 1})
       assert_request(:get, "/v2/services", %{"page" => 2})
 
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: %Req.TransportError{reason: :timeout},
+                metadata: %ReqDnsimple.Metadata{
+                  status: nil,
+                  pagination: nil,
+                  request_id: nil,
+                  etag: nil,
+                  pages: [%ReqDnsimple.Metadata{status: 200, pagination: ^first_page, pages: []}]
+                }
+              }} =
                ReqDnsimple.Service.list_all(
                  service_response_client(fn
                    1 -> {200, %{"data" => [service_data()], "pagination" => first_page}}
@@ -356,7 +538,18 @@ defmodule ReqDnsimple.ServiceTest do
 
       repeated = %{first_page | "current_page" => 1}
 
-      assert {:error, {:invalid_pagination, ^repeated}} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: {:invalid_pagination, ^repeated},
+                metadata: %ReqDnsimple.Metadata{
+                  status: 200,
+                  pagination: ^repeated,
+                  pages: [
+                    %ReqDnsimple.Metadata{status: 200, pagination: ^repeated, pages: []},
+                    %ReqDnsimple.Metadata{status: 200, pagination: ^repeated, pages: []}
+                  ]
+                }
+              }} =
                ReqDnsimple.Service.list_all(
                  service_response_client(fn _page ->
                    {200, %{"data" => [service_data()], "pagination" => repeated}}
@@ -407,7 +600,7 @@ defmodule ReqDnsimple.ServiceTest do
                      }
                    ]
                  }
-               ], ^pagination}} =
+               ], %ReqDnsimple.Metadata{status: 200, pagination: ^pagination}}} =
                ReqDnsimple.Service.list_page_applied(
                  client(200, %{"data" => [data], "pagination" => pagination}),
                  1010,
@@ -434,7 +627,7 @@ defmodule ReqDnsimple.ServiceTest do
         "total_pages" => 0
       }
 
-      assert {:ok, {[], ^pagination}} =
+      assert {:ok, {[], %ReqDnsimple.Metadata{status: 200, pagination: ^pagination}}} =
                ReqDnsimple.Service.list_applied(
                  client(200, %{"data" => [], "pagination" => pagination}),
                  0,
@@ -453,7 +646,9 @@ defmodule ReqDnsimple.ServiceTest do
         "total_pages" => 1
       }
 
-      assert {:ok, {[%ReqDnsimple.Service{}], ^pagination}} =
+      assert {:ok,
+              {[%ReqDnsimple.Service{}],
+               %ReqDnsimple.Metadata{status: 200, pagination: ^pagination}}} =
                ReqDnsimple.Service.list_page_applied(
                  client(200, %{"data" => [service_data()], "pagination" => pagination}),
                  1010,
@@ -482,7 +677,8 @@ defmodule ReqDnsimple.ServiceTest do
       ]
 
       for {account_id, domain, opts} <- invalid_calls do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.Service.list_page_applied(request, account_id, domain, opts)
       end
 
@@ -496,7 +692,11 @@ defmodule ReqDnsimple.ServiceTest do
           "errors" => %{"domain" => ["was not found"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.Service.list_page_applied(
                    client(status, body),
                    1010,
@@ -507,7 +707,8 @@ defmodule ReqDnsimple.ServiceTest do
         refute_received {:request, _request}
       end
 
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.Service.list_page_applied(
                  transport_error_client(:timeout),
                  1010,
@@ -527,18 +728,15 @@ defmodule ReqDnsimple.ServiceTest do
         %{},
         %{"data" => nil, "pagination" => pagination},
         %{"data" => %{}, "pagination" => pagination},
-        %{"data" => [Map.delete(service_data(), "settings")], "pagination" => pagination},
-        %{"data" => [service_data()]},
-        %{"data" => [service_data()], "pagination" => nil},
-        %{
-          "data" => [service_data()],
-          "pagination" => Map.delete(pagination, "total_entries")
-        },
-        %{"data" => [service_data()], "pagination" => %{pagination | "per_page" => 0}}
+        %{"data" => [Map.delete(service_data(), "settings")], "pagination" => pagination}
       ]
 
       for body <- malformed_bodies do
-        assert {:error, %{status: 200, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: 200, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: 200}
+                }} =
                  ReqDnsimple.Service.list_page_applied(
                    client(200, body),
                    1010,
@@ -574,13 +772,67 @@ defmodule ReqDnsimple.ServiceTest do
            }}
       }
 
-      assert {:ok, [%ReqDnsimple.Service{id: 1}, %ReqDnsimple.Service{id: 2}]} =
+      first_pagination = elem(pages[1], 1)
+      second_pagination = elem(pages[2], 1)
+
+      headers =
+        Map.new(1..2, fn page ->
+          {page,
+           [
+             {"x-ratelimit-limit", Integer.to_string(4000 + page)},
+             {"x-ratelimit-remaining", Integer.to_string(4000 - page)},
+             {"x-ratelimit-reset", Integer.to_string(1_800_000_000 + page)},
+             {"x-request-id", "page-#{page}"},
+             {"etag", ~s("page-#{page}")},
+             {"retry-after", Integer.to_string(30 - page)}
+           ]}
+        end)
+
+      assert {:ok,
+              {[%ReqDnsimple.Service{id: 1}, %ReqDnsimple.Service{id: 2}],
+               %ReqDnsimple.Metadata{
+                 status: nil,
+                 pagination: nil,
+                 rate_limit: 4002,
+                 rate_limit_remaining: 3998,
+                 rate_limit_reset: 1_800_000_002,
+                 request_id: nil,
+                 etag: nil,
+                 retry_after: "28",
+                 pages: [
+                   %ReqDnsimple.Metadata{
+                     status: 200,
+                     pagination: ^first_pagination,
+                     rate_limit: 4001,
+                     rate_limit_remaining: 3999,
+                     rate_limit_reset: 1_800_000_001,
+                     request_id: "page-1",
+                     etag: ~s("page-1"),
+                     retry_after: "29",
+                     pages: []
+                   },
+                   %ReqDnsimple.Metadata{
+                     status: 200,
+                     pagination: ^second_pagination,
+                     rate_limit: 4002,
+                     rate_limit_remaining: 3998,
+                     rate_limit_reset: 1_800_000_002,
+                     request_id: "page-2",
+                     etag: ~s("page-2"),
+                     retry_after: "28",
+                     pages: []
+                   }
+                 ]
+               } = metadata}} =
                ReqDnsimple.Service.list_all_applied(
-                 service_page_client(pages),
+                 service_page_client(pages, headers),
                  1010,
                  "example.test",
                  per_page: 1
                )
+
+      assert metadata.parse_errors == %{}
+      assert Enum.all?(metadata.pages, &(&1.parse_errors == %{}))
 
       assert_request(
         :get,
@@ -600,7 +852,7 @@ defmodule ReqDnsimple.ServiceTest do
     test "rejects explicit pages and malformed option containers before HTTP" do
       request = client(200, %{})
 
-      assert {:error, {:invalid_option, :page}} =
+      assert {:error, %ReqDnsimple.Error{reason: {:invalid_option, :page}, metadata: nil}} =
                ReqDnsimple.Service.list_all_applied(
                  request,
                  1010,
@@ -609,7 +861,8 @@ defmodule ReqDnsimple.ServiceTest do
                )
 
       for opts <- [[:invalid], [{:name}]] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.Service.list_all_applied(
                    request,
                    1010,
@@ -635,13 +888,33 @@ defmodule ReqDnsimple.ServiceTest do
           2 -> {503, %{"message" => "unavailable"}}
         end)
 
-      assert {:error, %{status: 503, response: %{"message" => "unavailable"}}} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: %{status: 503, response: %{"message" => "unavailable"}},
+                metadata: %ReqDnsimple.Metadata{
+                  status: 503,
+                  pages: [
+                    %ReqDnsimple.Metadata{status: 200, pagination: ^first_page, pages: []},
+                    %ReqDnsimple.Metadata{status: 503, pagination: nil, pages: []}
+                  ]
+                }
+              }} =
                ReqDnsimple.Service.list_all_applied(http_client, 1010, "example.test")
 
       assert_request(:get, "/v2/1010/domains/example.test/services", %{"page" => 1})
       assert_request(:get, "/v2/1010/domains/example.test/services", %{"page" => 2})
 
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: %Req.TransportError{reason: :timeout},
+                metadata: %ReqDnsimple.Metadata{
+                  status: nil,
+                  pagination: nil,
+                  request_id: nil,
+                  etag: nil,
+                  pages: [%ReqDnsimple.Metadata{status: 200, pagination: ^first_page, pages: []}]
+                }
+              }} =
                ReqDnsimple.Service.list_all_applied(
                  service_response_client(fn
                    1 -> {200, %{"data" => [service_data()], "pagination" => first_page}}
@@ -653,7 +926,18 @@ defmodule ReqDnsimple.ServiceTest do
 
       repeated = %{first_page | "current_page" => 1}
 
-      assert {:error, {:invalid_pagination, ^repeated}} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: {:invalid_pagination, ^repeated},
+                metadata: %ReqDnsimple.Metadata{
+                  status: 200,
+                  pagination: ^repeated,
+                  pages: [
+                    %ReqDnsimple.Metadata{status: 200, pagination: ^repeated, pages: []},
+                    %ReqDnsimple.Metadata{status: 200, pagination: ^repeated, pages: []}
+                  ]
+                }
+              }} =
                ReqDnsimple.Service.list_all_applied(
                  service_response_client(fn _page ->
                    {200, %{"data" => [service_data()], "pagination" => repeated}}
@@ -665,8 +949,8 @@ defmodule ReqDnsimple.ServiceTest do
   end
 
   describe "apply/4 and apply/5" do
-    test "applyServiceToDomain sends one request with string-keyed settings and returns :ok" do
-      assert :ok =
+    test "applyServiceToDomain sends one request with string-keyed settings and returns nil data with metadata" do
+      assert {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}} =
                ReqDnsimple.Service.apply(
                  client(204, ""),
                  1010,
@@ -702,7 +986,7 @@ defmodule ReqDnsimple.ServiceTest do
     end
 
     test "applyServiceToDomain distinguishes omitted settings from an explicit empty object" do
-      assert :ok =
+      assert {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}} =
                ReqDnsimple.Service.apply(
                  client(204, nil),
                  1010,
@@ -719,7 +1003,7 @@ defmodule ReqDnsimple.ServiceTest do
 
       refute_received {:request, _request}
 
-      assert :ok =
+      assert {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}} =
                ReqDnsimple.Service.apply(
                  client(204, nil),
                  1010,
@@ -740,7 +1024,7 @@ defmodule ReqDnsimple.ServiceTest do
 
     test "applyServiceToDomain accepts integer, zero, and empty identifiers" do
       for {account_id, domain, service} <- [{0, 0, 0}, {1010, "", ""}] do
-        assert :ok =
+        assert {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}} =
                  ReqDnsimple.Service.apply(
                    client(204, nil),
                    account_id,
@@ -779,7 +1063,8 @@ defmodule ReqDnsimple.ServiceTest do
       ]
 
       for {account_id, domain, service, attrs} <- invalid_calls do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.Service.apply(request, account_id, domain, service, attrs)
       end
 
@@ -793,7 +1078,11 @@ defmodule ReqDnsimple.ServiceTest do
           "errors" => %{"settings" => ["are invalid"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.Service.apply(
                    client(status, body),
                    1010,
@@ -814,7 +1103,11 @@ defmodule ReqDnsimple.ServiceTest do
 
     test "applyServiceToDomain rejects non-204 successful responses" do
       for {status, body} <- [{200, %{}}, {200, nil}, {201, %{"data" => %{}}}] do
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.Service.apply(
                    client(status, body),
                    1010,
@@ -834,7 +1127,8 @@ defmodule ReqDnsimple.ServiceTest do
     end
 
     test "applyServiceToDomain preserves transport failures" do
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.Service.apply(
                  transport_error_client(:timeout),
                  1010,
@@ -845,8 +1139,8 @@ defmodule ReqDnsimple.ServiceTest do
   end
 
   describe "unapply/4" do
-    test "unapplyServiceFromDomain sends one bodyless request and returns :ok" do
-      assert :ok =
+    test "unapplyServiceFromDomain sends one bodyless request and returns nil data with metadata" do
+      assert {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}} =
                ReqDnsimple.Service.unapply(
                  client(204, ""),
                  1010,
@@ -866,7 +1160,7 @@ defmodule ReqDnsimple.ServiceTest do
 
     test "unapplyServiceFromDomain accepts integer, zero, and empty identifiers" do
       for {account_id, domain, service} <- [{0, 0, 0}, {1010, "", ""}] do
-        assert :ok =
+        assert {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}} =
                  ReqDnsimple.Service.unapply(
                    client(204, nil),
                    account_id,
@@ -896,7 +1190,8 @@ defmodule ReqDnsimple.ServiceTest do
             {1010, "example.test", nil},
             {1010, "example.test", 1.5}
           ] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.Service.unapply(request, account_id, domain, service)
       end
 
@@ -910,7 +1205,11 @@ defmodule ReqDnsimple.ServiceTest do
           "errors" => %{"service" => ["is unavailable"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.Service.unapply(
                    client(status, body),
                    1010,
@@ -931,7 +1230,11 @@ defmodule ReqDnsimple.ServiceTest do
 
     test "unapplyServiceFromDomain rejects non-204 successful responses" do
       for {status, body} <- [{200, %{}}, {200, nil}, {201, %{"data" => %{}}}] do
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.Service.unapply(
                    client(status, body),
                    1010,
@@ -951,7 +1254,8 @@ defmodule ReqDnsimple.ServiceTest do
     end
 
     test "unapplyServiceFromDomain preserves transport failures" do
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.Service.unapply(
                  transport_error_client(:timeout),
                  1010,
@@ -980,10 +1284,10 @@ defmodule ReqDnsimple.ServiceTest do
     }
   end
 
-  defp service_page_client(pages) do
+  defp service_page_client(pages, headers) do
     service_response_client(fn page ->
       {data, pagination} = Map.fetch!(pages, page)
-      {200, %{"data" => data, "pagination" => pagination}}
+      {200, %{"data" => data, "pagination" => pagination}, Map.get(headers, page, [])}
     end)
   end
 
@@ -1002,6 +1306,9 @@ defmodule ReqDnsimple.ServiceTest do
       case response_for_page.(page) do
         {:error, reason} ->
           {request, %Req.TransportError{reason: reason}}
+
+        {status, body, headers} ->
+          {request, Req.Response.new(status: status, body: body, headers: headers)}
 
         {status, body} ->
           {request, %Req.Response{status: status, body: body}}

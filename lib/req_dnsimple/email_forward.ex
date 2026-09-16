@@ -2,9 +2,19 @@ defmodule ReqDnsimple.EmailForward do
   @moduledoc """
   Operations for domain email forwards.
 
+  Successful HTTP operations return `{:ok, {data, %ReqDnsimple.Metadata{}}}`.
+  Failures return `{:error, %ReqDnsimple.Error{}}`, with metadata when an
+  HTTP response was received.
+  Bodyless HTTP 204 responses use `nil` data.
+
+  Page pagination is nested under `metadata.pagination`. `list_all` retains
+  ordered page metadata in `metadata.pages` and the latest rate-limit budget.
+  Missing or malformed metadata does not invalidate resource data; diagnostics
+  are in `metadata.parse_errors`. Enumeration requires usable pagination.
+
   Create one email forward:
 
-      {:ok, email_forward} =
+      {:ok, {email_forward, %ReqDnsimple.Metadata{}}} =
         ReqDnsimple.EmailForward.create(
           client,
           1010,
@@ -15,7 +25,7 @@ defmodule ReqDnsimple.EmailForward do
 
   Retrieve one email forward:
 
-      {:ok, email_forward} =
+      {:ok, {email_forward, %ReqDnsimple.Metadata{}}} =
         ReqDnsimple.EmailForward.get(
           client,
           1010,
@@ -25,7 +35,7 @@ defmodule ReqDnsimple.EmailForward do
 
   List one page or explicitly enumerate every email forward:
 
-      {:ok, {email_forwards, pagination}} =
+      {:ok, {email_forwards, %ReqDnsimple.Metadata{pagination: pagination}}} =
         ReqDnsimple.EmailForward.list_page(
           client,
           1010,
@@ -35,7 +45,7 @@ defmodule ReqDnsimple.EmailForward do
           per_page: 30
         )
 
-      {:ok, all_email_forwards} =
+      {:ok, {all_email_forwards, %ReqDnsimple.Metadata{}}} =
         ReqDnsimple.EmailForward.list_all(
           client,
           1010,
@@ -45,7 +55,7 @@ defmodule ReqDnsimple.EmailForward do
 
   Delete one email forward:
 
-      :ok =
+      {:ok, {nil, %ReqDnsimple.Metadata{}}} =
         ReqDnsimple.EmailForward.delete(
           client,
           1010,
@@ -96,11 +106,12 @@ defmodule ReqDnsimple.EmailForward do
 
   @doc """
   Uses the client's configured account. See `create/4` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
   @spec create(Req.Request.t(), binary() | integer(), keyword()) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def create(req, domain, attrs) do
     ReqDnsimple.Client.with_account(req, &create(req, &1, domain, attrs))
   end
@@ -121,10 +132,10 @@ defmodule ReqDnsimple.EmailForward do
         alias_name: "support",
         destination_email: "recipient@example.test"
       )
-      #=> {:ok, %ReqDnsimple.EmailForward{}}
+      #=> {:ok, {%ReqDnsimple.EmailForward{}, %ReqDnsimple.Metadata{}}}
   """
   @spec create(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer(), keyword()) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def create(req, account_id, domain, attrs) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -144,7 +155,7 @@ defmodule ReqDnsimple.EmailForward do
       case Req.request(req) do
         {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
           case decode(data) do
-            {:ok, email_forward} -> {:ok, email_forward}
+            {:ok, email_forward} -> ReqDnsimple.Response.ok(email_forward, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -152,21 +163,23 @@ defmodule ReqDnsimple.EmailForward do
           ReqDnsimple.response_error(response)
 
         {:error, error} ->
-          {:error, error}
+          ReqDnsimple.Response.error(error)
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account with default options.
   See `list_page/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
   @spec list_page(
           Req.Request.t(),
           binary() | integer()
-        ) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+        ) :: ReqDnsimple.Response.result([t()])
   def list_page(req, domain) do
     list_page(req, domain, [])
   end
@@ -174,7 +187,9 @@ defmodule ReqDnsimple.EmailForward do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list_page/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
@@ -183,14 +198,12 @@ defmodule ReqDnsimple.EmailForward do
           Req.Request.t(),
           binary() | integer(),
           keyword()
-        ) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+        ) :: ReqDnsimple.Response.result([t()])
   @spec list_page(
           Req.Request.t(),
           ReqDnsimple.account_id(),
           binary() | integer()
-        ) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+        ) :: ReqDnsimple.Response.result([t()])
   def list_page(req, account_id, domain)
       when is_integer(domain) or is_binary(domain) do
     list_page(req, account_id, domain, [])
@@ -204,8 +217,8 @@ defmodule ReqDnsimple.EmailForward do
   Lists one page of email forwards for a domain.
 
   Supports ordered `:sort` terms for `:id`, `:alias_email`, and
-  `:destination_email`, plus `:page` and `:per_page`. The returned pagination
-  metadata retains its string keys.
+  `:destination_email`, plus `:page` and `:per_page`. Pagination in
+  `metadata.pagination` retains its string keys.
 
   ## Example
 
@@ -217,15 +230,14 @@ defmodule ReqDnsimple.EmailForward do
         page: 2,
         per_page: 30
       )
-      #=> {:ok, {[%ReqDnsimple.EmailForward{}], %{"current_page" => 2}}}
+      #=> {:ok, {[%ReqDnsimple.EmailForward{}], %ReqDnsimple.Metadata{pagination: %{"current_page" => 2}}}}
   """
   @spec list_page(
           Req.Request.t(),
           ReqDnsimple.account_id(),
           binary() | integer(),
           keyword()
-        ) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+        ) :: ReqDnsimple.Response.result([t()])
   def list_page(req, account_id, domain, opts) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -237,10 +249,11 @@ defmodule ReqDnsimple.EmailForward do
         {:ok,
          %Req.Response{
            status: 200,
-           body: %{"data" => data, "pagination" => pagination}
-         } = response} ->
-          case decode_page(data, pagination) do
-            {:ok, result} -> {:ok, result}
+           body: %{"data" => data}
+         } = response}
+        when is_list(data) ->
+          case decode_many(data) do
+            {:ok, result} -> ReqDnsimple.Response.ok(result, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -248,18 +261,20 @@ defmodule ReqDnsimple.EmailForward do
           ReqDnsimple.response_error(response)
 
         {:error, error} ->
-          {:error, error}
+          ReqDnsimple.Response.error(error)
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account with default options.
   See `list/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
-  @spec list(Req.Request.t(), binary() | integer()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec list(Req.Request.t(), binary() | integer()) :: ReqDnsimple.Response.result([t()])
   def list(req, domain) do
     list(req, domain, [])
   end
@@ -267,15 +282,17 @@ defmodule ReqDnsimple.EmailForward do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
   @spec list(Req.Request.t(), binary() | integer(), keyword()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list(req, account_id, domain)
       when is_integer(domain) or is_binary(domain) do
     list(req, account_id, domain, [])
@@ -292,16 +309,17 @@ defmodule ReqDnsimple.EmailForward do
   pages implicitly.
   """
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer(), keyword()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list(req, account_id, domain, opts), do: list_page(req, account_id, domain, opts)
 
   @doc """
   Uses the client's configured account with default options.
   See `list_all/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
-  @spec list_all(Req.Request.t(), binary() | integer()) ::
-          {:ok, [t()]} | {:error, term()}
+  @spec list_all(Req.Request.t(), binary() | integer()) :: ReqDnsimple.Response.result([t()])
   def list_all(req, domain) do
     list_all(req, domain, [])
   end
@@ -309,15 +327,17 @@ defmodule ReqDnsimple.EmailForward do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list_all/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
   @spec list_all(Req.Request.t(), binary() | integer(), keyword()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_all(req, account_id, domain)
       when is_integer(domain) or is_binary(domain) do
     list_all(req, account_id, domain, [])
@@ -334,18 +354,18 @@ defmodule ReqDnsimple.EmailForward do
   rejected. Sorting and `:per_page` are retained for every request.
   """
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer(), keyword()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_all(req, account_id, domain, opts) do
     ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, domain, &1))
   end
 
   @doc """
   Uses the client's configured account. See `get/4` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
-  @spec get(Req.Request.t(), binary() | integer(), integer()) ::
-          {:ok, t()} | {:error, term()}
+  @spec get(Req.Request.t(), binary() | integer(), integer()) :: ReqDnsimple.Response.result(t())
   def get(req, domain, email_forward_id) do
     ReqDnsimple.Client.with_account(req, &get(req, &1, domain, email_forward_id))
   end
@@ -357,7 +377,7 @@ defmodule ReqDnsimple.EmailForward do
   `alias_name` accepted by email-forward creation.
   """
   @spec get(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer(), integer()) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def get(req, account_id, domain, email_forward_id) do
     with {:ok, _validated_params} <-
            validate_path(account_id, domain, email_forward_id) do
@@ -376,7 +396,7 @@ defmodule ReqDnsimple.EmailForward do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode(data) do
-            {:ok, email_forward} -> {:ok, email_forward}
+            {:ok, email_forward} -> ReqDnsimple.Response.ok(email_forward, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -384,18 +404,20 @@ defmodule ReqDnsimple.EmailForward do
           ReqDnsimple.response_error(response)
 
         {:error, error} ->
-          {:error, error}
+          ReqDnsimple.Response.error(error)
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `delete/4` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
   @spec delete(Req.Request.t(), binary() | integer(), integer()) ::
-          :ok | {:error, term()}
+          ReqDnsimple.Response.result(nil)
   def delete(req, domain, email_forward_id) do
     ReqDnsimple.Client.with_account(req, &delete(req, &1, domain, email_forward_id))
   end
@@ -403,12 +425,12 @@ defmodule ReqDnsimple.EmailForward do
   @doc """
   Deletes one email forward from a domain.
 
-  Returns `:ok` for the API's empty HTTP 204 response. Deletion refusals,
+  Returns `{:ok, {nil, %ReqDnsimple.Metadata{}}}` for the API's empty HTTP 204 response. Deletion refusals,
   missing forwards, other HTTP responses, and transport failures are returned
   as explicit error tuples.
   """
   @spec delete(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer(), integer()) ::
-          :ok | {:error, term()}
+          ReqDnsimple.Response.result(nil)
   def delete(req, account_id, domain, email_forward_id) do
     with {:ok, _validated_params} <-
            validate_path(account_id, domain, email_forward_id) do
@@ -425,16 +447,17 @@ defmodule ReqDnsimple.EmailForward do
         )
 
       case Req.request(req) do
-        {:ok, %Req.Response{status: 204}} ->
-          :ok
+        {:ok, %Req.Response{status: 204} = response} ->
+          ReqDnsimple.Response.ok(nil, response)
 
         {:ok, response} ->
           ReqDnsimple.response_error(response)
 
         {:error, error} ->
-          {:error, error}
+          ReqDnsimple.Response.error(error)
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   defp validate_path(account_id, domain, email_forward_id) do
@@ -478,17 +501,6 @@ defmodule ReqDnsimple.EmailForward do
 
   defp decode(_data), do: :error
 
-  defp decode_page(data, pagination) when is_list(data) do
-    with {:ok, email_forwards} <- decode_many(data),
-         true <- valid_pagination?(pagination) do
-      {:ok, {email_forwards, pagination}}
-    else
-      _error -> :error
-    end
-  end
-
-  defp decode_page(_data, _pagination), do: :error
-
   defp decode_many(data) do
     Enum.reduce_while(data, {:ok, []}, fn item, {:ok, email_forwards} ->
       case decode(item) do
@@ -505,19 +517,6 @@ defmodule ReqDnsimple.EmailForward do
     end
   end
 
-  defp valid_pagination?(%{
-         "current_page" => current_page,
-         "per_page" => per_page,
-         "total_entries" => total_entries,
-         "total_pages" => total_pages
-       })
-       when is_integer(current_page) and current_page >= 0 and is_integer(per_page) and
-              per_page > 0 and is_integer(total_entries) and total_entries >= 0 and
-              is_integer(total_pages) and total_pages >= 0,
-       do: true
-
-  defp valid_pagination?(_pagination), do: false
-
   defp request_list(req, account_id, domain, opts) do
     params =
       opts
@@ -525,7 +524,7 @@ defmodule ReqDnsimple.EmailForward do
       |> Map.new()
 
     req
-    |> Req.merge(
+    |> ReqDnsimple.Helper.merge(
       method: :get,
       url: "/:account_id/domains/:domain/email_forwards",
       path_params_style: :colon,

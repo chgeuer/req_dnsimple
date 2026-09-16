@@ -2,6 +2,16 @@ defmodule ReqDnsimple.Certificate do
   @moduledoc """
   DNSimple certificate API functionality.
 
+  HTTP operations return `{:ok, {data, %ReqDnsimple.Metadata{}}}`. List data
+  contains only certificates; the original string-key pagination map is
+  nested in `metadata.pagination`. Response header or pagination parse failures
+  are recorded in `metadata.parse_errors` without discarding valid certificate
+  data.
+
+  Failures return `{:error, %ReqDnsimple.Error{}}`, with HTTP response metadata
+  when available and `nil` metadata for direct local or transport failures.
+  `list_all` retains metadata from completed pages when enumeration fails.
+
   ## Example
 
       ReqDnsimple.Certificate.list_page(req, 1010, "example.test",
@@ -9,16 +19,16 @@ defmodule ReqDnsimple.Certificate do
         page: 2,
         per_page: 30
       )
-      #=> {:ok, {[%ReqDnsimple.Certificate{}], %{"current_page" => 2}}}
+      #=> {:ok, {[%ReqDnsimple.Certificate{}], %ReqDnsimple.Metadata{pagination: %{"current_page" => 2}}}}
 
       ReqDnsimple.Certificate.list_all(req, 1010, "example.test",
         sort: [expiration: :asc],
         per_page: 100
       )
-      #=> {:ok, [%ReqDnsimple.Certificate{}]}
+      #=> {:ok, {[%ReqDnsimple.Certificate{}], %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Certificate.get(req, 1010, "example.test", 202)
-      #=> {:ok, %ReqDnsimple.Certificate{}}
+      #=> {:ok, {%ReqDnsimple.Certificate{}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Certificate.purchase_letsencrypt(req, 1010, "example.test",
         auto_renew: false,
@@ -26,7 +36,7 @@ defmodule ReqDnsimple.Certificate do
         alternate_names: ["docs.example.test"],
         signature_algorithm: "RSA"
       )
-      #=> {:ok, %ReqDnsimple.Certificate.Purchase{}}
+      #=> {:ok, {%ReqDnsimple.Certificate.Purchase{}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Certificate.purchase_letsencrypt_renewal(
         req,
@@ -36,10 +46,10 @@ defmodule ReqDnsimple.Certificate do
         auto_renew: false,
         signature_algorithm: "RSA"
       )
-      #=> {:ok, %ReqDnsimple.Certificate.Renewal{}}
+      #=> {:ok, {%ReqDnsimple.Certificate.Renewal{}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Certificate.issue_letsencrypt(req, 1010, "example.test", 202)
-      #=> {:ok, %ReqDnsimple.Certificate{state: "requesting"}}
+      #=> {:ok, {%ReqDnsimple.Certificate{state: "requesting"}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Certificate.issue_letsencrypt_renewal(
         req,
@@ -48,13 +58,13 @@ defmodule ReqDnsimple.Certificate do
         202,
         505
       )
-      #=> {:ok, %ReqDnsimple.Certificate{state: "requesting"}}
+      #=> {:ok, {%ReqDnsimple.Certificate{state: "requesting"}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Certificate.download(req, 1010, "example.test", 202)
-      #=> {:ok, %ReqDnsimple.Certificate.Download{}}
+      #=> {:ok, {%ReqDnsimple.Certificate.Download{}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Certificate.get_private_key(req, 1010, "example.test", 202)
-      #=> {:ok, %ReqDnsimple.Certificate.PrivateKey{}}
+      #=> {:ok, {%ReqDnsimple.Certificate.PrivateKey{}, %ReqDnsimple.Metadata{}}}
   """
 
   # https://developer.dnsimple.com/v2/certificates/
@@ -189,13 +199,13 @@ defmodule ReqDnsimple.Certificate do
   @doc """
   Uses the client's configured account with default options.
   See `list_page/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` without making a request when the client is unscoped.
   """
   @spec list_page(
           Req.Request.t(),
           binary() | integer()
         ) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_page(req, domain) do
     list_page(req, domain, [])
   end
@@ -203,7 +213,7 @@ defmodule ReqDnsimple.Certificate do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list_page/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` without making a request when the client is unscoped.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
@@ -213,13 +223,13 @@ defmodule ReqDnsimple.Certificate do
           binary() | integer(),
           keyword()
         ) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   @spec list_page(
           Req.Request.t(),
           ReqDnsimple.account_id(),
           binary() | integer()
         ) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_page(req, account_id, domain)
       when is_integer(domain) or is_binary(domain) do
     list_page(req, account_id, domain, [])
@@ -234,7 +244,9 @@ defmodule ReqDnsimple.Certificate do
 
   Supports ordered `:sort` terms for `:id`, `:common_name`, and `:expiration`,
   plus `:page` and `:per_page`. Omitting `:sort` preserves the API's default
-  descending-ID order. The returned pagination metadata retains its string keys.
+  descending-ID order. The pagination map retains its string keys inside
+  `metadata.pagination`; missing or malformed pagination does not discard the
+  returned certificates.
 
   ## Example
 
@@ -246,7 +258,7 @@ defmodule ReqDnsimple.Certificate do
         page: 2,
         per_page: 30
       )
-      #=> {:ok, {[%ReqDnsimple.Certificate{}], %{"current_page" => 2}}}
+      #=> {:ok, {[%ReqDnsimple.Certificate{}], %ReqDnsimple.Metadata{pagination: %{"current_page" => 2}}}}
   """
   @spec list_page(
           Req.Request.t(),
@@ -254,7 +266,7 @@ defmodule ReqDnsimple.Certificate do
           binary() | integer(),
           keyword()
         ) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_page(req, account_id, domain, opts) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -266,10 +278,11 @@ defmodule ReqDnsimple.Certificate do
         {:ok,
          %Req.Response{
            status: 200,
-           body: %{"data" => data, "pagination" => pagination}
-         } = response} ->
-          case decode_page(data, pagination) do
-            {:ok, result} -> {:ok, result}
+           body: %{"data" => data}
+         } = response}
+        when is_list(data) ->
+          case decode_many(data) do
+            {:ok, result} -> ReqDnsimple.Response.ok(result, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -280,15 +293,16 @@ defmodule ReqDnsimple.Certificate do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account with default options.
   See `list/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` without making a request when the client is unscoped.
   """
   @spec list(Req.Request.t(), binary() | integer()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list(req, domain) do
     list(req, domain, [])
   end
@@ -296,15 +310,15 @@ defmodule ReqDnsimple.Certificate do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` without making a request when the client is unscoped.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
   @spec list(Req.Request.t(), binary() | integer(), keyword()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list(req, account_id, domain)
       when is_integer(domain) or is_binary(domain) do
     list(req, account_id, domain, [])
@@ -321,16 +335,16 @@ defmodule ReqDnsimple.Certificate do
   pages implicitly.
   """
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer(), keyword()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list(req, account_id, domain, opts), do: list_page(req, account_id, domain, opts)
 
   @doc """
   Uses the client's configured account with default options.
   See `list_all/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` without making a request when the client is unscoped.
   """
   @spec list_all(Req.Request.t(), binary() | integer()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_all(req, domain) do
     list_all(req, domain, [])
   end
@@ -338,15 +352,15 @@ defmodule ReqDnsimple.Certificate do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list_all/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` without making a request when the client is unscoped.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
   @spec list_all(Req.Request.t(), binary() | integer(), keyword()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_all(req, account_id, domain)
       when is_integer(domain) or is_binary(domain) do
     list_all(req, account_id, domain, [])
@@ -361,9 +375,13 @@ defmodule ReqDnsimple.Certificate do
 
   Enumeration always begins at page one, so an explicit `:page` option is
   rejected. Sorting and `:per_page` are retained for every request.
+  Returns all certificates with aggregate metadata whose `pages` retain each
+  response's metadata. Aggregate status, pagination, request ID, and ETag are
+  `nil`; rate-limit and Retry-After fields reflect the latest page. Enumeration
+  errors retain the metadata collected before the failure.
   """
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer(), keyword()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_all(req, account_id, domain, opts) do
     ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, domain, &1))
   end
@@ -371,13 +389,13 @@ defmodule ReqDnsimple.Certificate do
   @doc """
   Uses the client's configured account with default options.
   See `purchase_letsencrypt/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` without making a request when the client is unscoped.
   """
   @spec purchase_letsencrypt(
           Req.Request.t(),
           binary() | integer()
         ) ::
-          {:ok, Purchase.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Purchase.t())
   def purchase_letsencrypt(req, domain) do
     purchase_letsencrypt(req, domain, [])
   end
@@ -385,7 +403,7 @@ defmodule ReqDnsimple.Certificate do
   @doc """
   Uses the client's configured account and the supplied options.
   See `purchase_letsencrypt/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` without making a request when the client is unscoped.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
@@ -395,13 +413,13 @@ defmodule ReqDnsimple.Certificate do
           binary() | integer(),
           keyword()
         ) ::
-          {:ok, Purchase.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Purchase.t())
   @spec purchase_letsencrypt(
           Req.Request.t(),
           ReqDnsimple.account_id(),
           binary() | integer()
         ) ::
-          {:ok, Purchase.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Purchase.t())
   def purchase_letsencrypt(req, account_id, domain)
       when is_integer(domain) or is_binary(domain) do
     purchase_letsencrypt(req, account_id, domain, [])
@@ -430,7 +448,7 @@ defmodule ReqDnsimple.Certificate do
           binary() | integer(),
           keyword()
         ) ::
-          {:ok, Purchase.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Purchase.t())
   def purchase_letsencrypt(req, account_id, domain, attrs) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -456,7 +474,7 @@ defmodule ReqDnsimple.Certificate do
       case Req.request(Req.merge(req, request_options)) do
         {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
           case decode_purchase(data) do
-            {:ok, purchase} -> {:ok, purchase}
+            {:ok, purchase} -> ReqDnsimple.Response.ok(purchase, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -467,19 +485,20 @@ defmodule ReqDnsimple.Certificate do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account with default options.
   See `purchase_letsencrypt_renewal/5` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` without making a request when the client is unscoped.
   """
   @spec purchase_letsencrypt_renewal(
           Req.Request.t(),
           binary() | integer(),
           integer()
         ) ::
-          {:ok, Renewal.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Renewal.t())
   def purchase_letsencrypt_renewal(req, domain, certificate_id) do
     purchase_letsencrypt_renewal(req, domain, certificate_id, [])
   end
@@ -487,7 +506,7 @@ defmodule ReqDnsimple.Certificate do
   @doc """
   Uses the client's configured account and the supplied options.
   See `purchase_letsencrypt_renewal/5` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` without making a request when the client is unscoped.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
@@ -498,14 +517,14 @@ defmodule ReqDnsimple.Certificate do
           integer(),
           keyword()
         ) ::
-          {:ok, Renewal.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Renewal.t())
   @spec purchase_letsencrypt_renewal(
           Req.Request.t(),
           ReqDnsimple.account_id(),
           binary() | integer(),
           integer()
         ) ::
-          {:ok, Renewal.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Renewal.t())
   def purchase_letsencrypt_renewal(req, account_id, domain, certificate_id)
       when is_integer(certificate_id) or is_binary(certificate_id) do
     purchase_letsencrypt_renewal(req, account_id, domain, certificate_id, [])
@@ -536,7 +555,7 @@ defmodule ReqDnsimple.Certificate do
           integer(),
           keyword()
         ) ::
-          {:ok, Renewal.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Renewal.t())
   def purchase_letsencrypt_renewal(req, account_id, domain, certificate_id, attrs) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -570,7 +589,7 @@ defmodule ReqDnsimple.Certificate do
       case Req.request(Req.merge(req, request_options)) do
         {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
           case decode_renewal(data) do
-            {:ok, renewal} -> {:ok, renewal}
+            {:ok, renewal} -> ReqDnsimple.Response.ok(renewal, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -581,11 +600,12 @@ defmodule ReqDnsimple.Certificate do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `issue_letsencrypt/4` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec issue_letsencrypt(
@@ -593,7 +613,7 @@ defmodule ReqDnsimple.Certificate do
           binary() | integer(),
           integer()
         ) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def issue_letsencrypt(req, domain, certificate_id) do
     ReqDnsimple.Client.with_account(req, &issue_letsencrypt(req, &1, domain, certificate_id))
   end
@@ -611,7 +631,7 @@ defmodule ReqDnsimple.Certificate do
           binary() | integer(),
           integer()
         ) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def issue_letsencrypt(req, account_id, domain, certificate_id) do
     with {:ok, _validated_params} <-
            NimbleOptions.validate(
@@ -638,7 +658,7 @@ defmodule ReqDnsimple.Certificate do
       case Req.request(req) do
         {:ok, %Req.Response{status: 202, body: %{"data" => data}} = response} ->
           case decode(data) do
-            {:ok, certificate} -> {:ok, certificate}
+            {:ok, certificate} -> ReqDnsimple.Response.ok(certificate, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -649,11 +669,12 @@ defmodule ReqDnsimple.Certificate do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `issue_letsencrypt_renewal/5` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec issue_letsencrypt_renewal(
@@ -662,7 +683,7 @@ defmodule ReqDnsimple.Certificate do
           integer(),
           integer()
         ) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def issue_letsencrypt_renewal(req, domain, certificate_id, renewal_id) do
     ReqDnsimple.Client.with_account(
       req,
@@ -685,7 +706,7 @@ defmodule ReqDnsimple.Certificate do
           integer(),
           integer()
         ) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def issue_letsencrypt_renewal(req, account_id, domain, certificate_id, renewal_id) do
     with {:ok, _validated_params} <-
            NimbleOptions.validate(
@@ -715,7 +736,7 @@ defmodule ReqDnsimple.Certificate do
       case Req.request(req) do
         {:ok, %Req.Response{status: 202, body: %{"data" => data}} = response} ->
           case decode(data) do
-            {:ok, certificate} -> {:ok, certificate}
+            {:ok, certificate} -> ReqDnsimple.Response.ok(certificate, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -726,11 +747,12 @@ defmodule ReqDnsimple.Certificate do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `get/4` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec get(
@@ -738,7 +760,7 @@ defmodule ReqDnsimple.Certificate do
           binary() | integer(),
           integer()
         ) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def get(req, domain, certificate_id) do
     ReqDnsimple.Client.with_account(req, &get(req, &1, domain, certificate_id))
   end
@@ -755,7 +777,7 @@ defmodule ReqDnsimple.Certificate do
           binary() | integer(),
           integer()
         ) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def get(req, account_id, domain, certificate_id) do
     with {:ok, _validated_params} <-
            NimbleOptions.validate(
@@ -781,7 +803,7 @@ defmodule ReqDnsimple.Certificate do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode(data) do
-            {:ok, certificate} -> {:ok, certificate}
+            {:ok, certificate} -> ReqDnsimple.Response.ok(certificate, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -792,11 +814,12 @@ defmodule ReqDnsimple.Certificate do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `download/4` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec download(
@@ -804,7 +827,7 @@ defmodule ReqDnsimple.Certificate do
           binary() | integer(),
           integer()
         ) ::
-          {:ok, Download.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Download.t())
   def download(req, domain, certificate_id) do
     ReqDnsimple.Client.with_account(req, &download(req, &1, domain, certificate_id))
   end
@@ -821,7 +844,7 @@ defmodule ReqDnsimple.Certificate do
           binary() | integer(),
           integer()
         ) ::
-          {:ok, Download.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Download.t())
   def download(req, account_id, domain, certificate_id) do
     with {:ok, _validated_params} <-
            NimbleOptions.validate(
@@ -847,7 +870,7 @@ defmodule ReqDnsimple.Certificate do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode_download(data) do
-            {:ok, download} -> {:ok, download}
+            {:ok, download} -> ReqDnsimple.Response.ok(download, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -858,11 +881,12 @@ defmodule ReqDnsimple.Certificate do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `get_private_key/4` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec get_private_key(
@@ -870,7 +894,7 @@ defmodule ReqDnsimple.Certificate do
           binary() | integer(),
           integer()
         ) ::
-          {:ok, PrivateKey.t()} | {:error, term()}
+          ReqDnsimple.Response.result(PrivateKey.t())
   def get_private_key(req, domain, certificate_id) do
     ReqDnsimple.Client.with_account(req, &get_private_key(req, &1, domain, certificate_id))
   end
@@ -887,7 +911,7 @@ defmodule ReqDnsimple.Certificate do
           binary() | integer(),
           integer()
         ) ::
-          {:ok, PrivateKey.t()} | {:error, term()}
+          ReqDnsimple.Response.result(PrivateKey.t())
   def get_private_key(req, account_id, domain, certificate_id) do
     with {:ok, _validated_params} <-
            NimbleOptions.validate(
@@ -913,7 +937,7 @@ defmodule ReqDnsimple.Certificate do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode_private_key(data) do
-            {:ok, private_key} -> {:ok, private_key}
+            {:ok, private_key} -> ReqDnsimple.Response.ok(private_key, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -924,6 +948,7 @@ defmodule ReqDnsimple.Certificate do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   defp validate_purchase_attrs(attrs),
@@ -1028,17 +1053,6 @@ defmodule ReqDnsimple.Certificate do
 
   defp decode_download(_data), do: :error
 
-  defp decode_page(data, pagination) when is_list(data) do
-    with {:ok, certificates} <- decode_many(data),
-         true <- valid_pagination?(pagination) do
-      {:ok, {certificates, pagination}}
-    else
-      _error -> :error
-    end
-  end
-
-  defp decode_page(_data, _pagination), do: :error
-
   defp decode_many(data) do
     Enum.reduce_while(data, {:ok, []}, fn item, {:ok, certificates} ->
       case decode(item) do
@@ -1055,19 +1069,6 @@ defmodule ReqDnsimple.Certificate do
     end
   end
 
-  defp valid_pagination?(%{
-         "current_page" => current_page,
-         "per_page" => per_page,
-         "total_entries" => total_entries,
-         "total_pages" => total_pages
-       })
-       when is_integer(current_page) and current_page >= 0 and is_integer(per_page) and
-              per_page > 0 and is_integer(total_entries) and total_entries >= 0 and
-              is_integer(total_pages) and total_pages >= 0,
-       do: true
-
-  defp valid_pagination?(_pagination), do: false
-
   defp request_list(req, account_id, domain, opts) do
     params =
       opts
@@ -1075,7 +1076,7 @@ defmodule ReqDnsimple.Certificate do
       |> Map.new()
 
     req
-    |> Req.merge(
+    |> ReqDnsimple.Helper.merge(
       method: :get,
       url: "/:account_id/domains/:domain/certificates",
       path_params_style: :colon,

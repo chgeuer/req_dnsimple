@@ -2,44 +2,53 @@ defmodule ReqDnsimple.Registrar do
   @moduledoc """
   DNSimple registrar API functionality.
 
+  HTTP operations return `{:ok, {data, %ReqDnsimple.Metadata{}}}`; HTTP 204
+  responses use `nil` data. Metadata contains the HTTP status and response
+  headers, including rate limits and Retry-After. Header parse failures are
+  recorded in `metadata.parse_errors` without discarding valid resource data.
+
+  Failures return `{:error, %ReqDnsimple.Error{}}`. HTTP failures retain response
+  metadata; validation, missing-account, and transport failures have `nil`
+  metadata. Scoped overloads use the same result contract.
+
   ## Example
 
       ReqDnsimple.Registrar.check(req, 1010, "example.test")
-      #=> {:ok, %ReqDnsimple.Registrar.CheckResult{}}
+      #=> {:ok, {%ReqDnsimple.Registrar.CheckResult{}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Registrar.get_prices(req, 1010, "example.test")
-      #=> {:ok, %ReqDnsimple.Registrar.Prices{}}
+      #=> {:ok, {%ReqDnsimple.Registrar.Prices{}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Registrar.get_transfer_lock(req, 1010, "example.test")
-      #=> {:ok, %ReqDnsimple.Registrar.TransferLock{enabled: true}}
+      #=> {:ok, {%ReqDnsimple.Registrar.TransferLock{enabled: true}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Registrar.enable_transfer_lock(req, 1010, "example.test")
-      #=> {:ok, %ReqDnsimple.Registrar.TransferLock{enabled: true}}
+      #=> {:ok, {%ReqDnsimple.Registrar.TransferLock{enabled: true}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Registrar.disable_transfer_lock(req, 1010, "example.test")
-      #=> {:ok, %ReqDnsimple.Registrar.TransferLock{enabled: false}}
+      #=> {:ok, {%ReqDnsimple.Registrar.TransferLock{enabled: false}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Registrar.authorize_transfer_out(req, 1010, "example.test")
-      #=> :ok
+      #=> {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}}
 
       ReqDnsimple.Registrar.disable_auto_renewal(req, 1010, "example.test")
-      #=> :ok
+      #=> {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}}
 
       ReqDnsimple.Registrar.enable_auto_renewal(req, 1010, "example.test")
-      #=> :ok
+      #=> {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}}
 
       ReqDnsimple.Registrar.enable_whois_privacy(req, 1010, "example.test")
-      #=> {:ok, %ReqDnsimple.Registrar.WhoisPrivacy{}}
+      #=> {:ok, {%ReqDnsimple.Registrar.WhoisPrivacy{}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Registrar.disable_whois_privacy(req, 1010, "example.test")
-      #=> {:ok, %ReqDnsimple.Registrar.WhoisPrivacy{enabled: false}}
+      #=> {:ok, {%ReqDnsimple.Registrar.WhoisPrivacy{enabled: false}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Registrar.register(req, 1010, "example.test",
         registrant_id: 11,
         whois_privacy: false,
         premium_price: "12.00"
       )
-      #=> {:ok, %ReqDnsimple.Registrar.Registration{}}
+      #=> {:ok, {%ReqDnsimple.Registrar.Registration{}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Registrar.transfer(req, 1010, "example.test",
         registrant_id: 11,
@@ -47,26 +56,26 @@ defmodule ReqDnsimple.Registrar do
         whois_privacy: false,
         premium_price: "12.00"
       )
-      #=> {:ok, %ReqDnsimple.Registrar.Transfer{}}
+      #=> {:ok, {%ReqDnsimple.Registrar.Transfer{}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Registrar.renew(req, 1010, "example.test",
         period: 2,
         premium_price: "20.00"
       )
-      #=> {:ok, %ReqDnsimple.Registrar.Renewal{}}
+      #=> {:ok, {%ReqDnsimple.Registrar.Renewal{}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Registrar.restore(req, 1010, "example.test",
         premium_price: "109.00"
       )
-      #=> {:ok, %ReqDnsimple.Registrar.Restore{}}
+      #=> {:ok, {%ReqDnsimple.Registrar.Restore{}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Registrar.get_delegation(req, 1010, "example.test")
-      #=> {:ok, ["ns1.example.test", "ns2.example.test"]}
+      #=> {:ok, {["ns1.example.test", "ns2.example.test"], %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Registrar.change_delegation(req, 1010, "example.test",
         name_servers: ["ns1.example.test", "ns2.example.test"]
       )
-      #=> {:ok, ["ns1.example.test", "ns2.example.test"]}
+      #=> {:ok, {["ns1.example.test", "ns2.example.test"], %ReqDnsimple.Metadata{}}}
   """
 
   defmodule CheckResult do
@@ -233,8 +242,8 @@ defmodule ReqDnsimple.Registrar do
     @type t :: %__MODULE__{
             id: integer(),
             domain_id: integer(),
-            enabled: boolean(),
-            expires_on: Date.t(),
+            enabled: boolean() | nil,
+            expires_on: Date.t() | nil,
             created_at: DateTime.t(),
             updated_at: DateTime.t()
           }
@@ -264,6 +273,24 @@ defmodule ReqDnsimple.Registrar do
   @delegation_path_schema [
     account_id: [type: :integer, required: true],
     domain: [type: {:or, [:string, :integer]}, required: true]
+  ]
+
+  @registration_path_schema [
+    account_id: [type: :integer, required: true],
+    domain: [type: :string, required: true],
+    registration_id: [type: :integer, required: true]
+  ]
+
+  @renewal_path_schema [
+    account_id: [type: :integer, required: true],
+    domain: [type: :string, required: true],
+    renewal_id: [type: :integer, required: true]
+  ]
+
+  @transfer_path_schema [
+    account_id: [type: :integer, required: true],
+    domain: [type: :string, required: true],
+    transfer_id: [type: :integer, required: true]
   ]
 
   @delegation_schema [
@@ -301,11 +328,11 @@ defmodule ReqDnsimple.Registrar do
 
   @doc """
   Uses the client's configured account. See `check/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec check(Req.Request.t(), String.t()) ::
-          {:ok, CheckResult.t()} | {:error, term()}
+          ReqDnsimple.Response.result(CheckResult.t())
   def check(req, domain_name) do
     ReqDnsimple.Client.with_account(req, &check(req, &1, domain_name))
   end
@@ -322,7 +349,7 @@ defmodule ReqDnsimple.Registrar do
   `nil`.
   """
   @spec check(Req.Request.t(), ReqDnsimple.account_id(), String.t()) ::
-          {:ok, CheckResult.t()} | {:error, term()}
+          ReqDnsimple.Response.result(CheckResult.t())
   def check(req, account_id, domain_name) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -341,7 +368,7 @@ defmodule ReqDnsimple.Registrar do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode_check_result(data) do
-            {:ok, result} -> {:ok, result}
+            {:ok, result} -> ReqDnsimple.Response.ok(result, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -352,15 +379,16 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `get_prices/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec get_prices(Req.Request.t(), String.t()) ::
-          {:ok, Prices.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Prices.t())
   def get_prices(req, domain_name) do
     ReqDnsimple.Client.with_account(req, &get_prices(req, &1, domain_name))
   end
@@ -374,7 +402,7 @@ defmodule ReqDnsimple.Registrar do
   transfer, restore, or otherwise modify the domain.
   """
   @spec get_prices(Req.Request.t(), ReqDnsimple.account_id(), String.t()) ::
-          {:ok, Prices.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Prices.t())
   def get_prices(req, account_id, domain_name) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -393,7 +421,7 @@ defmodule ReqDnsimple.Registrar do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode_prices(data) do
-            {:ok, prices} -> {:ok, prices}
+            {:ok, prices} -> ReqDnsimple.Response.ok(prices, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -404,18 +432,19 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `get_transfer_lock/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec get_transfer_lock(
           Req.Request.t(),
           binary() | integer()
         ) ::
-          {:ok, TransferLock.t()} | {:error, term()}
+          ReqDnsimple.Response.result(TransferLock.t())
   def get_transfer_lock(req, domain) do
     ReqDnsimple.Client.with_account(req, &get_transfer_lock(req, &1, domain))
   end
@@ -436,7 +465,7 @@ defmodule ReqDnsimple.Registrar do
           ReqDnsimple.account_id(),
           binary() | integer()
         ) ::
-          {:ok, TransferLock.t()} | {:error, term()}
+          ReqDnsimple.Response.result(TransferLock.t())
   def get_transfer_lock(req, account_id, domain) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -455,7 +484,7 @@ defmodule ReqDnsimple.Registrar do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode_transfer_lock(data) do
-            {:ok, transfer_lock} -> {:ok, transfer_lock}
+            {:ok, transfer_lock} -> ReqDnsimple.Response.ok(transfer_lock, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -466,18 +495,19 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `enable_transfer_lock/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec enable_transfer_lock(
           Req.Request.t(),
           binary() | integer()
         ) ::
-          {:ok, TransferLock.t()} | {:error, term()}
+          ReqDnsimple.Response.result(TransferLock.t())
   def enable_transfer_lock(req, domain) do
     ReqDnsimple.Client.with_account(req, &enable_transfer_lock(req, &1, domain))
   end
@@ -498,7 +528,7 @@ defmodule ReqDnsimple.Registrar do
           ReqDnsimple.account_id(),
           binary() | integer()
         ) ::
-          {:ok, TransferLock.t()} | {:error, term()}
+          ReqDnsimple.Response.result(TransferLock.t())
   def enable_transfer_lock(req, account_id, domain) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -517,7 +547,7 @@ defmodule ReqDnsimple.Registrar do
       case Req.request(req) do
         {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
           case decode_transfer_lock(data) do
-            {:ok, transfer_lock} -> {:ok, transfer_lock}
+            {:ok, transfer_lock} -> ReqDnsimple.Response.ok(transfer_lock, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -528,18 +558,19 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `disable_transfer_lock/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec disable_transfer_lock(
           Req.Request.t(),
           binary() | integer()
         ) ::
-          {:ok, TransferLock.t()} | {:error, term()}
+          ReqDnsimple.Response.result(TransferLock.t())
   def disable_transfer_lock(req, domain) do
     ReqDnsimple.Client.with_account(req, &disable_transfer_lock(req, &1, domain))
   end
@@ -560,7 +591,7 @@ defmodule ReqDnsimple.Registrar do
           ReqDnsimple.account_id(),
           binary() | integer()
         ) ::
-          {:ok, TransferLock.t()} | {:error, term()}
+          ReqDnsimple.Response.result(TransferLock.t())
   def disable_transfer_lock(req, account_id, domain) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -579,7 +610,7 @@ defmodule ReqDnsimple.Registrar do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode_transfer_lock(data) do
-            {:ok, transfer_lock} -> {:ok, transfer_lock}
+            {:ok, transfer_lock} -> ReqDnsimple.Response.ok(transfer_lock, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -590,15 +621,16 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `authorize_transfer_out/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec authorize_transfer_out(Req.Request.t(), String.t()) ::
-          :ok | {:error, term()}
+          ReqDnsimple.Response.result(nil)
   def authorize_transfer_out(req, domain_name) do
     ReqDnsimple.Client.with_account(req, &authorize_transfer_out(req, &1, domain_name))
   end
@@ -610,11 +642,11 @@ defmodule ReqDnsimple.Registrar do
   administrative contact. This function sends exactly one request; it does not
   retrieve the code, contact, or domain, or initiate a transfer.
 
-  Returns `:ok` only for the API's empty HTTP 204 response. Other HTTP responses
+  Returns `{:ok, {nil, %ReqDnsimple.Metadata{status: 204}}}` only for the API's empty HTTP 204 response. Other HTTP responses
   and transport failures are returned as explicit error tuples.
   """
   @spec authorize_transfer_out(Req.Request.t(), ReqDnsimple.account_id(), String.t()) ::
-          :ok | {:error, term()}
+          ReqDnsimple.Response.result(nil)
   def authorize_transfer_out(req, account_id, domain_name) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -630,8 +662,8 @@ defmodule ReqDnsimple.Registrar do
         )
 
       case Req.request(req) do
-        {:ok, %Req.Response{status: 204}} ->
-          :ok
+        {:ok, %Req.Response{status: 204} = response} ->
+          ReqDnsimple.Response.ok(nil, response)
 
         {:ok, response} ->
           ReqDnsimple.response_error(response)
@@ -640,18 +672,19 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `disable_auto_renewal/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec disable_auto_renewal(
           Req.Request.t(),
           binary() | integer()
         ) ::
-          :ok | {:error, term()}
+          ReqDnsimple.Response.result(nil)
   def disable_auto_renewal(req, domain) do
     ReqDnsimple.Client.with_account(req, &disable_auto_renewal(req, &1, domain))
   end
@@ -662,7 +695,7 @@ defmodule ReqDnsimple.Registrar do
   This function sends exactly one bodyless request. It does not renew, delete,
   or otherwise modify the domain.
 
-  Returns `:ok` only for the API's empty HTTP 204 response. Registry or TLD
+  Returns `{:ok, {nil, %ReqDnsimple.Metadata{status: 204}}}` only for the API's empty HTTP 204 response. Registry or TLD
   refusal responses, other HTTP responses, validation failures, and transport
   failures are returned as explicit error tuples.
   """
@@ -671,7 +704,7 @@ defmodule ReqDnsimple.Registrar do
           ReqDnsimple.account_id(),
           binary() | integer()
         ) ::
-          :ok | {:error, term()}
+          ReqDnsimple.Response.result(nil)
   def disable_auto_renewal(req, account_id, domain) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -688,8 +721,8 @@ defmodule ReqDnsimple.Registrar do
         )
 
       case Req.request(req) do
-        {:ok, %Req.Response{status: 204}} ->
-          :ok
+        {:ok, %Req.Response{status: 204} = response} ->
+          ReqDnsimple.Response.ok(nil, response)
 
         {:ok, response} ->
           ReqDnsimple.response_error(response)
@@ -698,18 +731,19 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `enable_auto_renewal/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec enable_auto_renewal(
           Req.Request.t(),
           binary() | integer()
         ) ::
-          :ok | {:error, term()}
+          ReqDnsimple.Response.result(nil)
   def enable_auto_renewal(req, domain) do
     ReqDnsimple.Client.with_account(req, &enable_auto_renewal(req, &1, domain))
   end
@@ -720,7 +754,7 @@ defmodule ReqDnsimple.Registrar do
   This function sends exactly one bodyless request. It does not renew the
   domain immediately or read its current state first.
 
-  Returns `:ok` only for the API's empty HTTP 204 response. Registry or TLD
+  Returns `{:ok, {nil, %ReqDnsimple.Metadata{status: 204}}}` only for the API's empty HTTP 204 response. Registry or TLD
   refusal responses, other HTTP responses, validation failures, and transport
   failures are returned as explicit error tuples.
   """
@@ -729,7 +763,7 @@ defmodule ReqDnsimple.Registrar do
           ReqDnsimple.account_id(),
           binary() | integer()
         ) ::
-          :ok | {:error, term()}
+          ReqDnsimple.Response.result(nil)
   def enable_auto_renewal(req, account_id, domain) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -746,8 +780,8 @@ defmodule ReqDnsimple.Registrar do
         )
 
       case Req.request(req) do
-        {:ok, %Req.Response{status: 204}} ->
-          :ok
+        {:ok, %Req.Response{status: 204} = response} ->
+          ReqDnsimple.Response.ok(nil, response)
 
         {:ok, response} ->
           ReqDnsimple.response_error(response)
@@ -756,18 +790,19 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `enable_whois_privacy/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec enable_whois_privacy(
           Req.Request.t(),
           binary() | integer()
         ) ::
-          {:ok, WhoisPrivacy.t()} | {:error, term()}
+          ReqDnsimple.Response.result(WhoisPrivacy.t())
   def enable_whois_privacy(req, domain) do
     ReqDnsimple.Client.with_account(req, &enable_whois_privacy(req, &1, domain))
   end
@@ -782,13 +817,15 @@ defmodule ReqDnsimple.Registrar do
   transport failures are returned as explicit error tuples.
 
   Returns the resulting privacy state as a typed `WhoisPrivacy` resource.
+  Newly created privacy records can have `nil` for `enabled` and `expires_on`;
+  these values are preserved until DNSimple finishes provisioning the record.
   """
   @spec enable_whois_privacy(
           Req.Request.t(),
           ReqDnsimple.account_id(),
           binary() | integer()
         ) ::
-          {:ok, WhoisPrivacy.t()} | {:error, term()}
+          ReqDnsimple.Response.result(WhoisPrivacy.t())
   def enable_whois_privacy(req, account_id, domain) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -808,7 +845,7 @@ defmodule ReqDnsimple.Registrar do
         {:ok, %Req.Response{status: status, body: %{"data" => data}} = response}
         when status in [200, 201] ->
           case decode_whois_privacy(data) do
-            {:ok, whois_privacy} -> {:ok, whois_privacy}
+            {:ok, whois_privacy} -> ReqDnsimple.Response.ok(whois_privacy, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -819,18 +856,19 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `disable_whois_privacy/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec disable_whois_privacy(
           Req.Request.t(),
           binary() | integer()
         ) ::
-          {:ok, WhoisPrivacy.t()} | {:error, term()}
+          ReqDnsimple.Response.result(WhoisPrivacy.t())
   def disable_whois_privacy(req, domain) do
     ReqDnsimple.Client.with_account(req, &disable_whois_privacy(req, &1, domain))
   end
@@ -850,7 +888,7 @@ defmodule ReqDnsimple.Registrar do
           ReqDnsimple.account_id(),
           binary() | integer()
         ) ::
-          {:ok, WhoisPrivacy.t()} | {:error, term()}
+          ReqDnsimple.Response.result(WhoisPrivacy.t())
   def disable_whois_privacy(req, account_id, domain) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -869,7 +907,7 @@ defmodule ReqDnsimple.Registrar do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode_whois_privacy(data) do
-            {:ok, whois_privacy} -> {:ok, whois_privacy}
+            {:ok, whois_privacy} -> ReqDnsimple.Response.ok(whois_privacy, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -880,18 +918,19 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account with default options.
   See `renew/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` without making a request when the client is unscoped.
   """
   @spec renew(
           Req.Request.t(),
           String.t()
         ) ::
-          {:ok, Renewal.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Renewal.t())
   def renew(req, domain_name) do
     renew(req, domain_name, [])
   end
@@ -899,7 +938,7 @@ defmodule ReqDnsimple.Registrar do
   @doc """
   Uses the client's configured account and the supplied options.
   See `renew/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` without making a request when the client is unscoped.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
@@ -909,13 +948,13 @@ defmodule ReqDnsimple.Registrar do
           String.t(),
           keyword()
         ) ::
-          {:ok, Renewal.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Renewal.t())
   @spec renew(
           Req.Request.t(),
           ReqDnsimple.account_id(),
           String.t()
         ) ::
-          {:ok, Renewal.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Renewal.t())
   def renew(req, account_id, domain_name)
       when is_integer(domain_name) or is_binary(domain_name) do
     renew(req, account_id, domain_name, [])
@@ -943,7 +982,7 @@ defmodule ReqDnsimple.Registrar do
           String.t(),
           keyword()
         ) ::
-          {:ok, Renewal.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Renewal.t())
   def renew(req, account_id, domain_name, attrs) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -972,7 +1011,7 @@ defmodule ReqDnsimple.Registrar do
         {:ok, %Req.Response{status: status, body: %{"data" => data}} = response}
         when status in [201, 202] ->
           case decode_renewal(data) do
-            {:ok, renewal} -> {:ok, renewal}
+            {:ok, renewal} -> ReqDnsimple.Response.ok(renewal, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -983,11 +1022,12 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `register/4` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec register(
@@ -995,7 +1035,7 @@ defmodule ReqDnsimple.Registrar do
           String.t(),
           keyword()
         ) ::
-          {:ok, Registration.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Registration.t())
   def register(req, domain_name, attrs) do
     ReqDnsimple.Client.with_account(req, &register(req, &1, domain_name, attrs))
   end
@@ -1021,7 +1061,7 @@ defmodule ReqDnsimple.Registrar do
           String.t(),
           keyword()
         ) ::
-          {:ok, Registration.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Registration.t())
   def register(req, account_id, domain_name, attrs) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -1043,7 +1083,7 @@ defmodule ReqDnsimple.Registrar do
         {:ok, %Req.Response{status: status, body: %{"data" => data}} = response}
         when status in [201, 202] ->
           case decode_registration(data) do
-            {:ok, registration} -> {:ok, registration}
+            {:ok, registration} -> ReqDnsimple.Response.ok(registration, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -1054,11 +1094,12 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `transfer/4` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec transfer(
@@ -1066,7 +1107,7 @@ defmodule ReqDnsimple.Registrar do
           String.t(),
           keyword()
         ) ::
-          {:ok, Transfer.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Transfer.t())
   def transfer(req, domain_name, attrs) do
     ReqDnsimple.Client.with_account(req, &transfer(req, &1, domain_name, attrs))
   end
@@ -1091,7 +1132,7 @@ defmodule ReqDnsimple.Registrar do
           String.t(),
           keyword()
         ) ::
-          {:ok, Transfer.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Transfer.t())
   def transfer(req, account_id, domain_name, attrs) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -1113,7 +1154,7 @@ defmodule ReqDnsimple.Registrar do
         {:ok, %Req.Response{status: status, body: %{"data" => data}} = response}
         when status in [201, 202] ->
           case decode_transfer(data) do
-            {:ok, transfer} -> {:ok, transfer}
+            {:ok, transfer} -> ReqDnsimple.Response.ok(transfer, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -1124,18 +1165,19 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account with default options.
   See `restore/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` without making a request when the client is unscoped.
   """
   @spec restore(
           Req.Request.t(),
           String.t()
         ) ::
-          {:ok, Restore.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Restore.t())
   def restore(req, domain_name) do
     restore(req, domain_name, [])
   end
@@ -1143,7 +1185,7 @@ defmodule ReqDnsimple.Registrar do
   @doc """
   Uses the client's configured account and the supplied options.
   See `restore/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` without making a request when the client is unscoped.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
@@ -1153,13 +1195,13 @@ defmodule ReqDnsimple.Registrar do
           String.t(),
           keyword()
         ) ::
-          {:ok, Restore.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Restore.t())
   @spec restore(
           Req.Request.t(),
           ReqDnsimple.account_id(),
           String.t()
         ) ::
-          {:ok, Restore.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Restore.t())
   def restore(req, account_id, domain_name)
       when is_integer(domain_name) or is_binary(domain_name) do
     restore(req, account_id, domain_name, [])
@@ -1187,7 +1229,7 @@ defmodule ReqDnsimple.Registrar do
           String.t(),
           keyword()
         ) ::
-          {:ok, Restore.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Restore.t())
   def restore(req, account_id, domain_name, attrs) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -1216,7 +1258,7 @@ defmodule ReqDnsimple.Registrar do
         {:ok, %Req.Response{status: status, body: %{"data" => data}} = response}
         when status in [201, 202] ->
           case decode_restore(data) do
-            {:ok, restore} -> {:ok, restore}
+            {:ok, restore} -> ReqDnsimple.Response.ok(restore, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -1227,18 +1269,19 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `get_delegation/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec get_delegation(
           Req.Request.t(),
           binary() | integer()
         ) ::
-          {:ok, [String.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([String.t()])
   def get_delegation(req, domain) do
     ReqDnsimple.Client.with_account(req, &get_delegation(req, &1, domain))
   end
@@ -1258,7 +1301,7 @@ defmodule ReqDnsimple.Registrar do
           ReqDnsimple.account_id(),
           binary() | integer()
         ) ::
-          {:ok, [String.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([String.t()])
   def get_delegation(req, account_id, domain) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -1277,7 +1320,7 @@ defmodule ReqDnsimple.Registrar do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode_name_servers(data) do
-            {:ok, name_servers} -> {:ok, name_servers}
+            {:ok, name_servers} -> ReqDnsimple.Response.ok(name_servers, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -1288,11 +1331,12 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `change_delegation/4` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec change_delegation(
@@ -1300,7 +1344,7 @@ defmodule ReqDnsimple.Registrar do
           binary() | integer(),
           keyword()
         ) ::
-          {:ok, [String.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([String.t()])
   def change_delegation(req, domain, attrs) do
     ReqDnsimple.Client.with_account(req, &change_delegation(req, &1, domain, attrs))
   end
@@ -1322,7 +1366,7 @@ defmodule ReqDnsimple.Registrar do
           binary() | integer(),
           keyword()
         ) ::
-          {:ok, [String.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([String.t()])
   def change_delegation(req, account_id, domain, attrs) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -1343,7 +1387,7 @@ defmodule ReqDnsimple.Registrar do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode_name_servers(data) do
-            {:ok, name_servers} -> {:ok, name_servers}
+            {:ok, name_servers} -> ReqDnsimple.Response.ok(name_servers, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -1354,6 +1398,392 @@ defmodule ReqDnsimple.Registrar do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
+  end
+
+  @doc """
+  Retrieves a registration using the client's configured account.
+
+  See `get_registration/4` for the domain name, registration ID, and return
+  values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` before authentication or HTTP
+  when the client has no configured account.
+  """
+  @spec get_registration(Req.Request.t(), String.t(), integer()) ::
+          ReqDnsimple.Response.result(Registration.t())
+  def get_registration(req, domain, registration_id) do
+    ReqDnsimple.Client.with_account(req, &get_registration(req, &1, domain, registration_id))
+  end
+
+  @doc """
+  Retrieves an existing domain registration by its domain name and registration ID.
+
+  Sends one bodyless GET request and returns `{:ok, {registration, %ReqDnsimple.Metadata{}}}` with a typed
+  `Registration` on HTTP 200, including its current or terminal state. It does
+  not register the domain, poll for completion, or perform follow-up requests.
+  Validation failures, malformed success bodies, other HTTP responses, and
+  transport failures return `{:error, %ReqDnsimple.Error{reason: reason}}`.
+
+  ## Example
+
+      ReqDnsimple.Registrar.get_registration(req, 1010, "example.com", 361)
+      #=> {:ok, {%ReqDnsimple.Registrar.Registration{}, %ReqDnsimple.Metadata{}}}
+  """
+  @spec get_registration(Req.Request.t(), ReqDnsimple.account_id(), String.t(), integer()) ::
+          ReqDnsimple.Response.result(Registration.t())
+  def get_registration(req, account_id, domain, registration_id) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain, registration_id: registration_id],
+             @registration_path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :get,
+          url: "/:account_id/registrar/domains/:domain/registrations/:registration_id",
+          path_params_style: :colon,
+          path_params: [
+            account_id: account_id,
+            domain: domain,
+            registration_id: registration_id
+          ],
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
+          case decode_registration(data) do
+            {:ok, registration} -> ReqDnsimple.Response.ok(registration, response)
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+    |> ReqDnsimple.Response.normalize_error()
+  end
+
+  @doc """
+  Retrieves a renewal using the client's configured account.
+
+  See `get_renewal/4` for the domain name, renewal ID, and return values. Returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` before authentication or HTTP when the client
+  has no configured account.
+  """
+  @spec get_renewal(Req.Request.t(), String.t(), integer()) ::
+          ReqDnsimple.Response.result(Renewal.t())
+  def get_renewal(req, domain, renewal_id) do
+    ReqDnsimple.Client.with_account(req, &get_renewal(req, &1, domain, renewal_id))
+  end
+
+  @doc """
+  Retrieves an existing domain renewal by its domain name and renewal ID.
+
+  Sends one bodyless GET request and returns `{:ok, {renewal, %ReqDnsimple.Metadata{}}}` with a typed
+  `Renewal` on HTTP 200. Legacy HTTP 201 responses are also accepted. The
+  renewal's current or terminal state is returned without renewing the domain,
+  polling, or making follow-up requests. Validation failures, malformed success
+  bodies, other HTTP responses, and transport failures return `{:error, %ReqDnsimple.Error{reason: reason}}`.
+
+  ## Example
+
+      ReqDnsimple.Registrar.get_renewal(req, 1010, "example.com", 1)
+      #=> {:ok, {%ReqDnsimple.Registrar.Renewal{}, %ReqDnsimple.Metadata{}}}
+  """
+  @spec get_renewal(Req.Request.t(), ReqDnsimple.account_id(), String.t(), integer()) ::
+          ReqDnsimple.Response.result(Renewal.t())
+  def get_renewal(req, account_id, domain, renewal_id) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain, renewal_id: renewal_id],
+             @renewal_path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :get,
+          url: "/:account_id/registrar/domains/:domain/renewals/:renewal_id",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain: domain, renewal_id: renewal_id],
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: status, body: %{"data" => data}} = response}
+        when status in [200, 201] ->
+          case decode_renewal(data) do
+            {:ok, renewal} -> ReqDnsimple.Response.ok(renewal, response)
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+    |> ReqDnsimple.Response.normalize_error()
+  end
+
+  @doc """
+  Retrieves a transfer using the client's configured account.
+
+  See `get_transfer/4` for the domain name, transfer ID, and return values.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` before authentication or HTTP when the
+  client has no configured account.
+  """
+  @spec get_transfer(Req.Request.t(), String.t(), integer()) ::
+          ReqDnsimple.Response.result(Transfer.t())
+  def get_transfer(req, domain, transfer_id) do
+    ReqDnsimple.Client.with_account(req, &get_transfer(req, &1, domain, transfer_id))
+  end
+
+  @doc """
+  Retrieves an existing domain transfer by its domain name and transfer ID.
+
+  Sends one bodyless GET request and returns `{:ok, {transfer, %ReqDnsimple.Metadata{}}}` with a typed
+  `Transfer` on HTTP 200. Current and terminal states, including cancellation
+  descriptions, are preserved without starting a transfer or polling.
+  Validation failures, malformed success bodies, other HTTP responses, and
+  transport failures return `{:error, %ReqDnsimple.Error{reason: reason}}`.
+
+  ## Example
+
+      ReqDnsimple.Registrar.get_transfer(req, 1010, "example.com", 361)
+      #=> {:ok, {%ReqDnsimple.Registrar.Transfer{}, %ReqDnsimple.Metadata{}}}
+  """
+  @spec get_transfer(Req.Request.t(), ReqDnsimple.account_id(), String.t(), integer()) ::
+          ReqDnsimple.Response.result(Transfer.t())
+  def get_transfer(req, account_id, domain, transfer_id) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain, transfer_id: transfer_id],
+             @transfer_path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :get,
+          url: "/:account_id/registrar/domains/:domain/transfers/:transfer_id",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain: domain, transfer_id: transfer_id],
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
+          case decode_transfer(data) do
+            {:ok, transfer} -> ReqDnsimple.Response.ok(transfer, response)
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+    |> ReqDnsimple.Response.normalize_error()
+  end
+
+  @doc """
+  Cancels a transfer using the client's configured account.
+
+  See `cancel_transfer/4` for the domain name, transfer ID, and return values.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` before authentication or HTTP when the
+  client has no configured account.
+  """
+  @spec cancel_transfer(Req.Request.t(), String.t(), integer()) ::
+          ReqDnsimple.Response.result(Transfer.t())
+  def cancel_transfer(req, domain, transfer_id) do
+    ReqDnsimple.Client.with_account(req, &cancel_transfer(req, &1, domain, transfer_id))
+  end
+
+  @doc """
+  Requests cancellation of an in-progress domain transfer.
+
+  Identifies the transfer by domain name and transfer ID, sends one bodyless
+  DELETE request with retries disabled, and returns `{:ok, {transfer, %ReqDnsimple.Metadata{}}}` with a
+  typed `Transfer` on HTTP 202. Cancellation is asynchronous, so the returned
+  state can still be `"transferring"`; no polling or follow-up mutation occurs.
+  Validation failures, malformed success bodies, other HTTP responses, and
+  transport failures return `{:error, %ReqDnsimple.Error{reason: reason}}`.
+
+  ## Example
+
+      ReqDnsimple.Registrar.cancel_transfer(req, 1010, "example.com", 361)
+      #=> {:ok, {%ReqDnsimple.Registrar.Transfer{}, %ReqDnsimple.Metadata{}}}
+  """
+  @spec cancel_transfer(Req.Request.t(), ReqDnsimple.account_id(), String.t(), integer()) ::
+          ReqDnsimple.Response.result(Transfer.t())
+  def cancel_transfer(req, account_id, domain, transfer_id) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain, transfer_id: transfer_id],
+             @transfer_path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :delete,
+          url: "/:account_id/registrar/domains/:domain/transfers/:transfer_id",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain: domain, transfer_id: transfer_id],
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 202, body: %{"data" => data}} = response} ->
+          case decode_transfer(data) do
+            {:ok, transfer} -> ReqDnsimple.Response.ok(transfer, response)
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+    |> ReqDnsimple.Response.normalize_error()
+  end
+
+  @doc """
+  Delegates to vanity name servers using the client's configured account.
+
+  See `change_delegation_to_vanity/4` for the required `:name_servers` option and
+  return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` before authentication
+  or HTTP when the client has no configured account.
+  """
+  @spec change_delegation_to_vanity(Req.Request.t(), binary() | integer(), keyword()) ::
+          ReqDnsimple.Response.result([ReqDnsimple.VanityNameServer.t()])
+  def change_delegation_to_vanity(req, domain, attrs) do
+    ReqDnsimple.Client.with_account(req, &change_delegation_to_vanity(req, &1, domain, attrs))
+  end
+
+  @doc """
+  Replaces a domain's registrar delegation with vanity name servers.
+
+  The domain accepts a name or integer ID. The required `:name_servers` keyword
+  option is a list of hostnames sent as the root JSON array, not an object.
+  Explicit empty lists are preserved. Sends one PUT request with retries
+  disabled and returns the ordered list of typed `ReqDnsimple.VanityNameServer`
+  resources from HTTP 200, including their IP addresses and timestamps.
+
+  This does not call the separate vanity-enablement endpoint or perform any
+  follow-up requests. HTTP 412 plan restrictions, other HTTP responses,
+  validation failures, malformed success bodies, and transport failures return
+  `{:error, %ReqDnsimple.Error{reason: reason}}`.
+
+  ## Example
+
+      ReqDnsimple.Registrar.change_delegation_to_vanity(req, 1010, "example.com",
+        name_servers: ["ns1.example.com", "ns2.example.com"]
+      )
+      #=> {:ok, {[%ReqDnsimple.VanityNameServer{}], %ReqDnsimple.Metadata{}}}
+  """
+  @spec change_delegation_to_vanity(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer(),
+          keyword()
+        ) :: ReqDnsimple.Response.result([ReqDnsimple.VanityNameServer.t()])
+  def change_delegation_to_vanity(req, account_id, domain, attrs) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain],
+             @delegation_path_schema
+           ),
+         {:ok, validated_attrs} <- validate_delegation_attrs(attrs) do
+      req =
+        Req.merge(req,
+          method: :put,
+          url: "/:account_id/registrar/domains/:domain/delegation/vanity",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain: domain],
+          json: validated_attrs[:name_servers],
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
+          case decode_vanity_name_servers(data) do
+            {:ok, name_servers} -> ReqDnsimple.Response.ok(name_servers, response)
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+    |> ReqDnsimple.Response.normalize_error()
+  end
+
+  @doc """
+  Removes vanity delegation using the client's configured account.
+
+  See `change_delegation_from_vanity/3` for domain identifiers and return values.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` before authentication or HTTP when the
+  client has no configured account.
+  """
+  @spec change_delegation_from_vanity(Req.Request.t(), binary() | integer()) ::
+          ReqDnsimple.Response.result(nil)
+  def change_delegation_from_vanity(req, domain) do
+    ReqDnsimple.Client.with_account(req, &change_delegation_from_vanity(req, &1, domain))
+  end
+
+  @doc """
+  Removes a domain's registrar delegation to vanity name servers.
+
+  The domain accepts a name or integer ID. Sends one bodyless DELETE request
+  with retries disabled and returns `{:ok, {nil, %ReqDnsimple.Metadata{status: 204}}}` on HTTP 204. It does not call the
+  separate vanity-disablement endpoint or perform any follow-up requests.
+  HTTP 412 plan restrictions, other HTTP responses, validation failures, and
+  transport failures return `{:error, %ReqDnsimple.Error{reason: reason}}`.
+
+  ## Example
+
+      ReqDnsimple.Registrar.change_delegation_from_vanity(req, 1010, "example.com")
+      #=> {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}}
+  """
+  @spec change_delegation_from_vanity(
+          Req.Request.t(),
+          ReqDnsimple.account_id(),
+          binary() | integer()
+        ) :: ReqDnsimple.Response.result(nil)
+  def change_delegation_from_vanity(req, account_id, domain) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate(
+             [account_id: account_id, domain: domain],
+             @delegation_path_schema
+           ) do
+      req =
+        Req.merge(req,
+          method: :delete,
+          url: "/:account_id/registrar/domains/:domain/delegation/vanity",
+          path_params_style: :colon,
+          path_params: [account_id: account_id, domain: domain],
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 204} = response} ->
+          ReqDnsimple.Response.ok(nil, response)
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   defp validate_delegation_attrs(attrs) do
@@ -1546,8 +1976,9 @@ defmodule ReqDnsimple.Registrar do
          "created_at" => created_at,
          "updated_at" => updated_at
        })
-       when is_integer(id) and is_integer(domain_id) and is_boolean(enabled) do
-    with {:ok, expires_on} <- parse_date(expires_on),
+       when is_integer(id) and is_integer(domain_id) and
+              (is_boolean(enabled) or is_nil(enabled)) do
+    with {:ok, expires_on} <- parse_optional_date(expires_on),
          {:ok, created_at} <- parse_datetime(created_at),
          {:ok, updated_at} <- parse_datetime(updated_at) do
       {:ok,
@@ -1569,6 +2000,46 @@ defmodule ReqDnsimple.Registrar do
   end
 
   defp decode_name_servers(_name_servers), do: :error
+
+  defp decode_vanity_name_servers(data) when is_list(data) do
+    Enum.reduce_while(data, {:ok, []}, fn item, {:ok, name_servers} ->
+      case decode_vanity_name_server(item) do
+        {:ok, name_server} -> {:cont, {:ok, [name_server | name_servers]}}
+        :error -> {:halt, :error}
+      end
+    end)
+    |> case do
+      {:ok, name_servers} -> {:ok, Enum.reverse(name_servers)}
+      :error -> :error
+    end
+  end
+
+  defp decode_vanity_name_servers(_data), do: :error
+
+  defp decode_vanity_name_server(%{
+         "id" => id,
+         "name" => name,
+         "ipv4" => ipv4,
+         "ipv6" => ipv6,
+         "created_at" => created_at,
+         "updated_at" => updated_at
+       })
+       when is_integer(id) and is_binary(name) and is_binary(ipv4) and is_binary(ipv6) do
+    with {:ok, created_at} <- parse_datetime(created_at),
+         {:ok, updated_at} <- parse_datetime(updated_at) do
+      {:ok,
+       %ReqDnsimple.VanityNameServer{
+         id: id,
+         name: name,
+         ipv4: ipv4,
+         ipv6: ipv6,
+         created_at: created_at,
+         updated_at: updated_at
+       }}
+    end
+  end
+
+  defp decode_vanity_name_server(_data), do: :error
 
   defp decode_transfer_lock(%{"enabled" => enabled}) when is_boolean(enabled) do
     {:ok, %TransferLock{enabled: enabled}}
@@ -1656,6 +2127,9 @@ defmodule ReqDnsimple.Registrar do
   end
 
   defp parse_datetime(_value), do: :error
+
+  defp parse_optional_date(nil), do: {:ok, nil}
+  defp parse_optional_date(value), do: parse_date(value)
 
   defp parse_date(value) when is_binary(value) do
     case Date.from_iso8601(value) do

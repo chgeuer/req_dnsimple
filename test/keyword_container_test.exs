@@ -1,7 +1,7 @@
 defmodule ReqDnsimple.KeywordContainerTest do
   use ExUnit.Case, async: true
 
-  test "legacy keyword-taking interfaces reject malformed containers without requesting" do
+  test "explicit-account keyword-taking interfaces reject malformed containers without requesting" do
     req = ReqDnsimple.new_client("dnsimple_u_fake-token")
 
     operations = [
@@ -23,9 +23,12 @@ defmodule ReqDnsimple.KeywordContainerTest do
 
     for operation <- operations, malformed <- [[:invalid], [{:name}]] do
       assert {:error,
-              %NimbleOptions.ValidationError{
-                message: "expected a keyword list",
-                value: ^malformed
+              %ReqDnsimple.Error{
+                reason: %NimbleOptions.ValidationError{
+                  message: "expected a keyword list",
+                  value: ^malformed
+                },
+                metadata: nil
               }} = operation.(req, malformed)
     end
 

@@ -2,6 +2,22 @@ defmodule ReqDnsimple.Helper do
   @moduledoc """
   Helper functions for Req HTTP client operations.
   """
+
+  @doc """
+  Merges request options, accepting query parameters as maps or tuple lists.
+
+  Supplied query parameters override inherited parameters with the same
+  encoded key, including atom and string spellings of that key.
+  """
+  @spec merge(Req.Request.t(), keyword()) :: Req.Request.t()
+  def merge(req, opts) do
+    {params, opts} = Keyword.pop(opts, :params)
+
+    req
+    |> Req.merge(opts)
+    |> maybe_merge_params(params)
+  end
+
   @doc """
   Appends URL path segments and merges various parameter types.
   """
@@ -22,9 +38,21 @@ defmodule ReqDnsimple.Helper do
   defp maybe_merge_params(req, nil), do: req
 
   defp maybe_merge_params(req, new_params) do
-    existing_params = req.options[:params] || []
-    merged_params = merge_params(existing_params, new_params)
-    Req.merge(req, params: merged_params)
+    merged_params = merge_query_params(req.options[:params], new_params)
+    Req.Request.put_option(req, :params, merged_params)
+  end
+
+  defp merge_query_params(nil, new_params), do: new_params
+
+  defp merge_query_params(existing, new) do
+    new_keys = MapSet.new(new, fn {key, _value} -> to_string(key) end)
+
+    merged =
+      Enum.reject(existing, fn {key, _value} ->
+        MapSet.member?(new_keys, to_string(key))
+      end) ++ Enum.to_list(new)
+
+    if is_map(existing), do: Map.new(merged), else: merged
   end
 
   defp maybe_merge_path_params(req, nil), do: req

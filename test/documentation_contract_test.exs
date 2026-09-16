@@ -4,20 +4,15 @@ defmodule ReqDnsimple.DocumentationContractTest do
   @root Path.expand("..", __DIR__)
   @implementation_states ~w(existing implemented pending out-of-scope)
   @out_of_scope_operation_ids ~w(
-    cancelDomainTransfer
-    changeDomainDelegationFromVanity
-    changeDomainDelegationToVanity
-    checkRegistrantChange
-    getDomainRegistration
-    getDomainRenewal
     getDomainRestore
-    getDomainTransfer
   )
   @catalog_modules ~w(
     ReqDnsimple.Certificate
     ReqDnsimple.DnsAnalytics
     ReqDnsimple.Dnssec
+    ReqDnsimple.OAuth
     ReqDnsimple.RegistrantChange
+    ReqDnsimple.Registrar
     ReqDnsimple.Template
     ReqDnsimple.TemplateRecord
     ReqDnsimple.Webhook
@@ -47,10 +42,12 @@ defmodule ReqDnsimple.DocumentationContractTest do
 
     assert readme =~ "docs/audit/operation-inventory.json"
     assert usage_rules =~ "docs/audit/operation-inventory.json"
-    assert readme =~ "103 supported operations"
-    assert usage_rules =~ "103 supported operations"
-    assert readme =~ "eight additional"
-    assert usage_rules =~ "eight additional"
+    assert readme =~ "110 supported operations"
+    assert usage_rules =~ "110 supported operations"
+    assert readme =~ "One additional"
+    assert usage_rules =~ "One additional"
+    assert readme =~ "`getDomainRestore`"
+    assert usage_rules =~ "`getDomainRestore`"
 
     for state <- @implementation_states do
       assert readme =~ "`#{state}`"
@@ -74,13 +71,13 @@ defmodule ReqDnsimple.DocumentationContractTest do
       |> File.read!()
       |> Jason.decode!()
 
-    assert inventory["approved_operation_count"] == 103
+    assert inventory["approved_operation_count"] == 110
     assert length(inventory["operations"]) == 111
 
     {scoped, excluded} = Enum.split_with(inventory["operations"], & &1["in_scope"])
 
-    assert length(scoped) == 103
-    assert length(excluded) == 8
+    assert length(scoped) == 110
+    assert length(excluded) == 1
     assert Enum.uniq_by(inventory["operations"], & &1["operation_id"]) == inventory["operations"]
 
     assert excluded |> Enum.map(& &1["operation_id"]) |> Enum.sort() ==
@@ -118,8 +115,9 @@ defmodule ReqDnsimple.DocumentationContractTest do
              "constructor" => "ReqDnsimple.new_client/2",
              "discovery_constructor" => "ReqDnsimple.new_unscoped_client/1,2",
              "account_selection" => "ReqDnsimple.for_account/2",
-             "missing_scope_error" => "{:error, :missing_account_id}",
-             "account_scoped_operation_count" => 95
+             "missing_scope_error" =>
+               "{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}",
+             "account_scoped_operation_count" => 102
            } = inventory["client_scope"]
 
     {account_operations, other_operations} =
@@ -127,8 +125,8 @@ defmodule ReqDnsimple.DocumentationContractTest do
         operation["in_scope"] and String.starts_with?(operation["path"], "/{account}/")
       end)
 
-    assert length(account_operations) == 95
-    assert Enum.sum(Enum.map(account_operations, &length(&1["scoped_interfaces"]))) == 137
+    assert length(account_operations) == 102
+    assert Enum.sum(Enum.map(account_operations, &length(&1["scoped_interfaces"]))) == 144
 
     for operation <- account_operations do
       assert operation["scoped_interfaces"] != []
@@ -210,8 +208,8 @@ defmodule ReqDnsimple.DocumentationContractTest do
             "NimbleOptions.ValidationError",
             "scoped_interfaces",
             "client_scope",
-            "95 account-path operations",
-            "137 interface families",
+            "102 account-path operations",
+            "144 interface families",
             "samples/README.md"
           ] do
         assert guide =~ contract, "#{file} omits the #{contract} client contract"
@@ -227,6 +225,167 @@ defmodule ReqDnsimple.DocumentationContractTest do
     for file <- ["README.md", "usage-rules.md"],
         [_, snippet] <- Regex.scan(~r/```elixir\n(.*?)```/s, File.read!(Path.join(@root, file))) do
       assert {:ok, _ast} = Code.string_to_quoted(snippet, file: file)
+    end
+  end
+
+  test "guides describe the uniform HTTP envelope, metadata, and pure helper exception" do
+    for file <- ["README.md", "usage-rules.md", "samples/README.md"] do
+      guide = File.read!(Path.join(@root, file))
+
+      for contract <- [
+            "{:ok, {data, %ReqDnsimple.Metadata{}}}",
+            "ReqDnsimple.Error",
+            "ReqDnsimple.Response.result(data)",
+            "metadata.pagination",
+            "metadata.pages",
+            "parse_errors",
+            "Unix seconds",
+            "HTTP-date",
+            "ETag",
+            "Retry-After",
+            "transport",
+            "nil",
+            "OAuth.authorize_url/2,3",
+            "{:ok, url}",
+            "{:error, %NimbleOptions.ValidationError{}}"
+          ] do
+        assert guide =~ contract, "#{file} omits the #{contract} result contract"
+      end
+
+      refute guide =~ "Different modules use slightly different return conventions"
+      refute guide =~ "returns a bare list"
+      refute guide =~ "{records, pagination}"
+      refute guide =~ "{:error, :missing_account_id}"
+      assert guide =~ ~r/opaque/i
+
+      assert String.replace(guide, "**", "") =~
+               ~r/(?:no|does not add) automatic rate\s+limiting, retries, or\s+caching/i
+    end
+  end
+
+  test "the domain glossary and audit distinguish the current contract from historical scope" do
+    glossary = File.read!(Path.join(@root, "CONTEXT.md"))
+    assert glossary =~ "ReqDnsimple.Metadata"
+    assert glossary =~ "metadata.pages"
+    assert glossary =~ "ReqDnsimple.Response.result(data)"
+    assert glossary =~ "Unix seconds"
+    assert glossary =~ "parse_errors"
+
+    for file <- ["docs/audit/README.md", "docs/audit/api-parity.md"] do
+      guide = File.read!(Path.join(@root, file))
+      assert guide =~ ~r/historical/i
+      assert guide =~ "103"
+      assert guide =~ "110"
+      assert guide =~ "111 published operations"
+      assert guide =~ "`getDomainRestore`"
+      assert guide =~ "{:ok, {data, %ReqDnsimple.Metadata{}}}"
+      assert guide =~ "schema version 2" or guide =~ "schema\nversion 2"
+    end
+  end
+
+  test "inventory schema describes metadata-bearing results without altering endpoint scope" do
+    inventory =
+      @root
+      |> Path.join("docs/audit/operation-inventory.json")
+      |> File.read!()
+      |> Jason.decode!()
+
+    assert inventory["schema_version"] == 2
+
+    assert %{
+             "type" => "ReqDnsimple.Response.result(data)",
+             "success" => "{:ok, {data, %ReqDnsimple.Metadata{}}}",
+             "bodyless_data" => "nil",
+             "bang_success" => "{data, metadata}",
+             "metadata_type" => "ReqDnsimple.Metadata.t()"
+           } = contract = inventory["result_contract"]
+
+    assert Map.keys(contract["metadata_fields"]) |> Enum.sort() ==
+             %ReqDnsimple.Metadata{}
+             |> Map.from_struct()
+             |> Map.keys()
+             |> Enum.map(&Atom.to_string/1)
+             |> Enum.sort()
+
+    assert contract["aggregate_metadata"]["nil_fields"] ==
+             ~w(status pagination request_id etag)
+
+    assert contract["aggregate_metadata"]["last_page_fields"] ==
+             ~w(rate_limit rate_limit_remaining rate_limit_reset retry_after parse_errors)
+
+    assert contract["pure_helpers"] =~ "OAuth.authorize_url/2,3"
+    assert contract["identity"] =~ "{:unknown_token, body}"
+    assert contract["ns_records"] =~ "aggregate_metadata"
+
+    for operation <- inventory["operations"], interface <- operation["proposed_interfaces"] do
+      variants = List.wrap(interface["return_values"]["success"])
+      aggregate? = interface["role"] == "explicit complete enumeration"
+      page? = interface["role"] in ["one explicit API page", "single-page convenience alias"]
+      payload = variants |> Enum.map(& &1["payload_type"]) |> Enum.uniq() |> Enum.join(" | ")
+
+      assert interface["response_type"] == "ReqDnsimple.Response.result(#{payload})"
+
+      for success <- variants do
+        assert success["metadata_in_success_tuple"] == true
+        assert success["pagination_in_metadata"] == page?
+        assert success["pagination_in_metadata_pages"] == aggregate?
+        assert success["metadata_scope"] == if(aggregate?, do: "aggregate", else: "response")
+        refute Map.has_key?(success, "pagination_in_success_tuple")
+        assert is_binary(success["payload_type"])
+
+        if success["http_status"] == 204, do: assert(success["payload_type"] == "nil")
+      end
+
+      assert %{
+               "type" => "ReqDnsimple.Error.t()",
+               "reason_type" => "term()",
+               "metadata_type" => "ReqDnsimple.Metadata.t() | nil"
+             } = interface["return_values"]["error"]
+    end
+  end
+
+  test "public HTTP example assignments preserve data and metadata" do
+    for file <- ["README.md", "usage-rules.md"],
+        [_, snippet] <- Regex.scan(~r/```elixir\n(.*?)```/s, File.read!(Path.join(@root, file))) do
+      {:ok, ast} = Code.string_to_quoted(snippet, file: file)
+
+      Macro.prewalk(ast, fn
+        {:=, _, [pattern, expression]} = node ->
+          case example_result_kind(expression) do
+            :http ->
+              case pattern do
+                {:ok, {_data, metadata}} ->
+                  assert_metadata_pattern(metadata, file)
+
+                pattern ->
+                  assert structured_error_pattern?(pattern),
+                         "#{file} HTTP example must consume {:ok, {data, metadata}} or a structured error"
+              end
+
+            :unwrapped ->
+              assert {_data, metadata} = pattern,
+                     "#{file} bang example must preserve {data, metadata}"
+
+              assert_metadata_pattern(metadata, file)
+
+            :pure ->
+              :ok
+          end
+
+          node
+
+        node ->
+          node
+      end)
+    end
+  end
+
+  test "standalone record documentation retains nullable priorities" do
+    for file <- ["README.md", "usage-rules.md"] do
+      guide = File.read!(Path.join(@root, file))
+      assert guide =~ ~r/`priority` also accepts `nil`/
+      assert guide =~ "JSON `null`"
+      assert guide =~ "Batch record priorities remain non-negative integers only"
     end
   end
 
@@ -272,6 +431,8 @@ defmodule ReqDnsimple.DocumentationContractTest do
       {ReqDnsimple, :list_billing_charges, [1, 2, 3]},
       {ReqDnsimple, :create_zone_record, [3, 4]},
       {ReqDnsimple, :unwrap!, [1]},
+      {ReqDnsimple.OAuth, :authorize_url, [2, 3]},
+      {ReqDnsimple.OAuth, :exchange_code, [2]},
       {ReqDnsimple.Account, :list, [1]},
       {ReqDnsimple.Zone, :list, [1, 2, 3]},
       {ReqDnsimple.Zone, :list!, [1, 2, 3]},
@@ -290,6 +451,13 @@ defmodule ReqDnsimple.DocumentationContractTest do
       {ReqDnsimple.Contact, :get, [2, 3]},
       {ReqDnsimple.Contact, :delete, [2, 3]},
       {ReqDnsimple.Registrar, :disable_auto_renewal, [2, 3]},
+      {ReqDnsimple.Registrar, :get_registration, [3, 4]},
+      {ReqDnsimple.Registrar, :get_renewal, [3, 4]},
+      {ReqDnsimple.Registrar, :get_transfer, [3, 4]},
+      {ReqDnsimple.Registrar, :cancel_transfer, [3, 4]},
+      {ReqDnsimple.Registrar, :change_delegation_to_vanity, [3, 4]},
+      {ReqDnsimple.Registrar, :change_delegation_from_vanity, [2, 3]},
+      {ReqDnsimple.RegistrantChange, :check, [2, 3]},
       {ReqDnsimple.PrimaryServer, :get, [2, 3]},
       {ReqDnsimple.PrimaryServer, :list, [1, 2, 3]},
       {ReqDnsimple.PrimaryServer, :list_page, [1, 2, 3]},
@@ -359,6 +527,52 @@ defmodule ReqDnsimple.DocumentationContractTest do
     inventory
     |> Map.put("operations", operations)
     |> Jason.encode!(pretty: true)
+  end
+
+  defp example_result_kind({:|>, _, [expression, function]}) do
+    if example_result_kind(function) == :unwrapped and example_result_kind(expression) == :http,
+      do: :unwrapped,
+      else: example_result_kind(function)
+  end
+
+  defp example_result_kind({{:., _, [{:__aliases__, _, [:ReqDnsimple | _]}, function]}, _, _}) do
+    cond do
+      function in [
+        :new_client,
+        :new_unscoped_client,
+        :for_account,
+        :authorize_url,
+        :token_type,
+        :from_json,
+        :convert_sort_to_string
+      ] ->
+        :pure
+
+      function in [:unwrap!, :list!, :list_zones!] ->
+        :unwrapped
+
+      true ->
+        :http
+    end
+  end
+
+  defp example_result_kind(_expression), do: :pure
+
+  defp structured_error_pattern?(
+         {:error, {:%, _, [{:__aliases__, _, [:ReqDnsimple, :Error]}, _fields]}}
+       ),
+       do: true
+
+  defp structured_error_pattern?(_pattern), do: false
+
+  defp assert_metadata_pattern({name, _, context}, file)
+       when is_atom(name) and is_atom(context) do
+    assert String.ends_with?(Atom.to_string(name), "metadata"),
+           "#{file} must bind response metadata, not a former pagination map"
+  end
+
+  defp assert_metadata_pattern(_pattern, file) do
+    flunk("#{file} must bind the response metadata alongside its data")
   end
 
   defp assert_inventory_states(inventory) do

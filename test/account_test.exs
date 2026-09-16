@@ -12,9 +12,16 @@ defmodule ReqDnsimple.AccountTest do
     "updated_at" => "2024-01-02T00:00:00Z"
   }
 
-  test "list preserves the optional account name and its existing bare-list response" do
-    assert [account] =
-             ReqDnsimple.Account.list(client(200, %{"data" => [@account_data]}))
+  test "list preserves the optional account name and returns response metadata" do
+    assert {:ok,
+            {[account],
+             %ReqDnsimple.Metadata{status: 200, request_id: "accounts-request", rate_limit: 2400}}} =
+             ReqDnsimple.Account.list(
+               client(200, %{"data" => [@account_data]}, self(), [
+                 {"x-request-id", "accounts-request"},
+                 {"x-ratelimit-limit", "2400"}
+               ])
+             )
 
     assert %ReqDnsimple.Account{
              id: 1010,

@@ -2,10 +2,11 @@ defmodule ReqDnsimple.DnsAnalytics do
   @moduledoc """
   DNS query-volume analytics for an account.
 
-  Analytics are returned as headers plus ordered tabular rows. `list_page/3`
-  and `query/3` make one request and include the server pagination map.
-  `list_all/3` explicitly enumerates compatible pages and retains the first
-  page's query as provenance.
+  Analytics data contains column headers plus ordered tabular rows. `list_page/3`
+  and `query/3` make one request and return `{data, metadata}`, with the server
+  pagination map in `metadata.pagination`. `list_all/3` explicitly enumerates
+  compatible pages, retains the first page's query as data provenance, and
+  records every HTTP response in `metadata.pages`.
 
   ## Example
 
@@ -17,7 +18,7 @@ defmodule ReqDnsimple.DnsAnalytics do
         page: 2,
         per_page: 1
       )
-      #=> {:ok, {%ReqDnsimple.DnsAnalytics.Result{}, %{"current_page" => 2}}}
+      #=> {:ok, {%ReqDnsimple.DnsAnalytics.Result{}, %ReqDnsimple.Metadata{}}}
   """
 
   defmodule Query do
@@ -83,10 +84,10 @@ defmodule ReqDnsimple.DnsAnalytics do
   @doc """
   Uses the client's configured account with default options.
   See `list_page/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns a missing-account `ReqDnsimple.Error` without making a request when the client is unscoped.
   """
   @spec list_page(Req.Request.t()) ::
-          {:ok, {Result.t(), ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result(Result.t())
   def list_page(req) do
     list_page(req, [])
   end
@@ -94,15 +95,15 @@ defmodule ReqDnsimple.DnsAnalytics do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list_page/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns a missing-account `ReqDnsimple.Error` without making a request when the client is unscoped.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
   @spec list_page(Req.Request.t(), keyword()) ::
-          {:ok, {Result.t(), ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result(Result.t())
   @spec list_page(Req.Request.t(), ReqDnsimple.account_id()) ::
-          {:ok, {Result.t(), ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result(Result.t())
   def list_page(req, account_id)
       when is_integer(account_id) or is_binary(account_id) do
     list_page(req, account_id, [])
@@ -120,7 +121,7 @@ defmodule ReqDnsimple.DnsAnalytics do
   accepts `:volume`. Multiple terms retain caller order.
   """
   @spec list_page(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, {Result.t(), ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result(Result.t())
   def list_page(req, account_id, opts) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate([account_id: account_id], @path_schema),
@@ -130,10 +131,10 @@ defmodule ReqDnsimple.DnsAnalytics do
         {:ok,
          %Req.Response{
            status: 200,
-           body: %{"data" => data, "query" => query, "pagination" => pagination}
+           body: %{"data" => data, "query" => query}
          } = response} ->
-          case decode_page(data, query, pagination) do
-            {:ok, result} -> {:ok, result}
+          case decode_result(data, query) do
+            {:ok, result} -> ReqDnsimple.Response.ok(result, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -141,18 +142,19 @@ defmodule ReqDnsimple.DnsAnalytics do
           ReqDnsimple.response_error(response)
 
         {:error, error} ->
-          {:error, error}
+          ReqDnsimple.Response.error(error)
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account with default options.
   See `query/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns a missing-account `ReqDnsimple.Error` without making a request when the client is unscoped.
   """
   @spec query(Req.Request.t()) ::
-          {:ok, {Result.t(), ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result(Result.t())
   def query(req) do
     query(req, [])
   end
@@ -160,15 +162,15 @@ defmodule ReqDnsimple.DnsAnalytics do
   @doc """
   Uses the client's configured account and the supplied options.
   See `query/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns a missing-account `ReqDnsimple.Error` without making a request when the client is unscoped.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
   @spec query(Req.Request.t(), keyword()) ::
-          {:ok, {Result.t(), ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result(Result.t())
   @spec query(Req.Request.t(), ReqDnsimple.account_id()) ::
-          {:ok, {Result.t(), ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result(Result.t())
   def query(req, account_id)
       when is_integer(account_id) or is_binary(account_id) do
     query(req, account_id, [])
@@ -185,16 +187,16 @@ defmodule ReqDnsimple.DnsAnalytics do
   additional pages.
   """
   @spec query(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, {Result.t(), ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result(Result.t())
   def query(req, account_id, opts), do: list_page(req, account_id, opts)
 
   @doc """
   Uses the client's configured account with default options.
   See `list_all/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns a missing-account `ReqDnsimple.Error` without making a request when the client is unscoped.
   """
   @spec list_all(Req.Request.t()) ::
-          {:ok, Result.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Result.t())
   def list_all(req) do
     list_all(req, [])
   end
@@ -202,15 +204,15 @@ defmodule ReqDnsimple.DnsAnalytics do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list_all/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns a missing-account `ReqDnsimple.Error` without making a request when the client is unscoped.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
   @spec list_all(Req.Request.t(), keyword()) ::
-          {:ok, Result.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Result.t())
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id()) ::
-          {:ok, Result.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Result.t())
   def list_all(req, account_id)
       when is_integer(account_id) or is_binary(account_id) do
     list_all(req, account_id, [])
@@ -224,18 +226,20 @@ defmodule ReqDnsimple.DnsAnalytics do
   Enumerates all compatible DNS analytics pages in server order.
 
   Enumeration starts at page one and rejects an explicit `:page`. The returned
-  result retains the first page's headers and query metadata.
+  data retains the first page's analytics headers and query. HTTP metadata
+  retains every page and the latest rate-limit budget.
   """
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, Result.t()} | {:error, term()}
+          ReqDnsimple.Response.result(Result.t())
   def list_all(req, account_id, opts) do
     with {:ok, opts} <- ReqDnsimple.validate_keyword_list(opts) do
       if Keyword.has_key?(opts, :page) do
-        {:error, {:invalid_option, :page}}
+        ReqDnsimple.Response.error({:invalid_option, :page})
       else
-        fetch_all(req, account_id, opts, 1, nil, nil)
+        fetch_all(req, account_id, opts, 1, nil, nil, [])
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc false
@@ -249,21 +253,36 @@ defmodule ReqDnsimple.DnsAnalytics do
 
   def validate_date(_value), do: {:error, "expected an ISO8601 date in YYYY-MM-DD format"}
 
-  defp fetch_all(req, account_id, opts, page, expected_total_pages, accumulator) do
+  defp fetch_all(req, account_id, opts, page, expected_total_pages, accumulator, prior_pages) do
     case list_page(req, account_id, Keyword.put(opts, :page, page)) do
-      {:ok, {result, pagination}} ->
+      {:ok, {result, %ReqDnsimple.Metadata{} = metadata}} ->
+        pagination =
+          case metadata.parse_errors[:pagination] do
+            {:invalid_pagination, value} -> value
+            nil -> metadata.pagination
+          end
+
         with {:ok, total_pages} <-
                validate_enumeration_pagination(pagination, page, expected_total_pages),
              {:ok, accumulator} <- append_page(accumulator, result) do
+          pages = [metadata | prior_pages]
+
           if page >= total_pages do
-            {:ok, accumulator}
+            ReqDnsimple.Response.ok(
+              accumulator,
+              ReqDnsimple.Metadata.aggregate(Enum.reverse(pages))
+            )
           else
-            fetch_all(req, account_id, opts, page + 1, total_pages, accumulator)
+            fetch_all(req, account_id, opts, page + 1, total_pages, accumulator, pages)
           end
+        else
+          {:error, reason} ->
+            {:error, error} = ReqDnsimple.Response.error(reason, metadata)
+            ReqDnsimple.Response.error_after_pages(error, Enum.reverse(prior_pages))
         end
 
-      {:error, reason} ->
-        {:error, reason}
+      {:error, %ReqDnsimple.Error{} = error} ->
+        ReqDnsimple.Response.error_after_pages(error, Enum.reverse(prior_pages))
     end
   end
 
@@ -309,7 +328,7 @@ defmodule ReqDnsimple.DnsAnalytics do
       |> Map.new()
 
     req
-    |> Req.merge(
+    |> ReqDnsimple.Helper.merge(
       method: :get,
       url: "/:account_id/dns_analytics",
       path_params_style: :colon,
@@ -323,15 +342,6 @@ defmodule ReqDnsimple.DnsAnalytics do
     case Keyword.fetch(opts, :groupings) do
       {:ok, groupings} -> Keyword.put(opts, :groupings, Enum.join(groupings, ","))
       :error -> opts
-    end
-  end
-
-  defp decode_page(data, query, pagination) do
-    with {:ok, result} <- decode_result(data, query),
-         true <- valid_pagination?(pagination) do
-      {:ok, {result, pagination}}
-    else
-      _invalid -> :error
     end
   end
 
@@ -389,19 +399,6 @@ defmodule ReqDnsimple.DnsAnalytics do
   end
 
   defp valid_rows?(_rows, _header_count), do: false
-
-  defp valid_pagination?(%{
-         "current_page" => current_page,
-         "per_page" => per_page,
-         "total_entries" => total_entries,
-         "total_pages" => total_pages
-       })
-       when is_integer(current_page) and current_page >= 0 and is_integer(per_page) and
-              per_page >= 0 and is_integer(total_entries) and total_entries >= 0 and
-              is_integer(total_pages) and total_pages >= 0,
-       do: true
-
-  defp valid_pagination?(_pagination), do: false
 
   defp validate_enumeration_pagination(
          %{

@@ -46,10 +46,10 @@ and user-token (`dnsimple_u_`) scoped clients require `account_id`.
 
 | Program | Command | What it demonstrates |
 | --- | --- | --- |
-| [Basic scoped reads](basic_reads.exs) | `mix run samples/basic_reads.exs` | Root `list_zones!` with options, `Zone.get` with `unwrap!`, and bare-list apex `ns_records`. Needs token, account ID, and zone. |
+| [Basic scoped reads](basic_reads.exs) | `mix run samples/basic_reads.exs` | Root `list_zones!` with options, `Zone.get` with `unwrap!`, and metadata-bearing apex `ns_records` enumeration. Needs token, account ID, and zone. |
 | [Filtered record pages](records.exs) | `mix run samples/records.exs` | `ZoneRecord.list_page` versus explicit `list_all`, preserving filters, ordered sorting, and page size. Needs token, account ID, and zone. |
-| [Account-token discovery](discover_account.exs) | `mix run samples/discover_account.exs` | Explicit unscoped client → `whoami` → `{:account, %{"id" => id}}` → `for_account`. Needs an account token; no account-ID environment variable is required. |
-| [User-token discovery](discover_user.exs) | `mix run samples/discover_user.exs` | Explicit unscoped client → bare-list `Account.list` → your selected account → `for_account`. Needs a user token and `DNSIMPLE_ACCOUNT_ID`; without the ID it first prints available IDs, then fails with setup guidance. |
+| [Account-token discovery](discover_account.exs) | `mix run samples/discover_account.exs` | Explicit unscoped client → `whoami` → `{:ok, {{:account, %{"id" => id}}, metadata}}` → `for_account`. Needs an account token; no account-ID environment variable is required. |
+| [User-token discovery](discover_user.exs) | `mix run samples/discover_user.exs` | Explicit unscoped client → `{:ok, {accounts, metadata}}` from `Account.list` → your selected account → `for_account`. Needs a user token and `DNSIMPLE_ACCOUNT_ID`; without the ID it first prints available IDs, then fails with setup guidance. |
 | [Multiple accounts](multiple_accounts.exs) | `mix run samples/multiple_accounts.exs` | Independent immutable clients sharing one user token and transport, with a local missing-scope check on the unchanged discovery client. Needs a user token and `DNSIMPLE_ACCOUNT_IDS`. |
 | [Dynamic credentials and proxy](dynamic_credentials.exs) | `mix run samples/dynamic_credentials.exs` | Lazy callback returning `{:bearer, token}`, custom constructor transport options, `Req.merge`, and two requests that each resolve credentials. Needs token, account ID, and zone; optionally set `DNSIMPLE_BASE_URL`. |
 
@@ -64,12 +64,40 @@ Do not inspect a client or call `token_type(client)` during setup: the latter
 evaluates a dynamic callback. The example uses an API-compatible **reverse**
 proxy via `base_url`, not an HTTP CONNECT/forward-proxy configuration.
 
-`Zone.list` still returns `{:ok, zones}`; `ZoneRecord.list` still returns
-`{:ok, {records, pagination}}`. Prefer `list_page` when you need pagination and
-`list_all` when you deliberately want every page. `list_all` always starts at
-page one and rejects `page:`. Named bang helpers exist only for zone listing;
-use `unwrap!/1` for other tuple-returning operations, not `Account.list/1`,
-`ns_records`, or the tagged identity from `whoami/1`.
+Every HTTP operation returns `{:ok, {data, %ReqDnsimple.Metadata{}}}` or
+`{:error, %ReqDnsimple.Error{}}`, including non-paginated account lists, tagged
+identities, and mutations. HTTP 204/bodyless successes have `nil` data.
+`ReqDnsimple.Response.result(data)` is the common type; `Response` is a
+formatter, not a returned struct. Named bang helpers exist only for zone
+listing and strip only `:ok`, returning `{data, metadata}`. `unwrap!/1` works
+the same way for every HTTP operation, including `Account.list`, `ns_records`,
+and `whoami`. The samples explicitly destructure `_metadata` where they do
+not need it.
+
+Prefer `list_page` for page-oriented code and `list_all` when you deliberately
+want every page. Both expose metadata; read the nested string-keyed pagination
+map as `metadata.pagination`. Complete enumeration always starts at page one,
+rejects `page:`, and retains each response's metadata under `metadata.pages`
+in request order, including empty/single-page collections. Aggregate budget,
+Retry-After, and parse-error fields reflect the last page; top-level status,
+pagination, request ID, and ETag are `nil`, not synthetic collection values.
+
+Optional response metadata fields may be `nil`; malformed headers or body
+pagination are reported in `parse_errors` instead of failing valid resource
+data. Rate-limit reset is non-negative integer Unix seconds. Request IDs,
+ETags (including quotes and weak prefixes), and Retry-After (delay or HTTP-date)
+are opaque strings. Metadata adds no automatic rate limiting, retries, or
+caching, and retains no raw response headers or bodies wholesale.
+
+`ReqDnsimple.Error` retains the original `reason` and optional `metadata`.
+Generic HTTP error reasons retain status/body; Retry-After lives in metadata.
+Local validation and transport failures have no HTTP metadata of their own.
+Later enumeration failures retain received pages; an HTTP failure also retains
+the failing response, while a transport failure never fabricates one. Bang
+failures raise that structured error without stripping metadata.
+The pure `OAuth.authorize_url/2,3` helper is unchanged: `{:ok, url}` or
+`{:error, %NimbleOptions.ValidationError{}}`. Constructors still return
+`Req.Request` and raise `ArgumentError` on invalid configuration.
 
 ## Opt-in mutation: one record lifecycle
 
@@ -92,12 +120,15 @@ or a missing test zone fails before a client is used. Automatic retries are
 disabled in sample transport setup.
 
 Cleanup runs even when update returns an API/transport error. The script reports
-an update failure after successful cleanup. If deletion fails, it reports the
-new record's ID and retains **both** outcomes in
-`ReqDnsimple.Error.reason` under `:sample_cleanup_failed` rather than silently
-discarding either error. Check that specific record in the sandbox before
-rerunning. This is a sequence of requests, not an atomic transaction: process
-termination, an unexpected exception, or an ambiguous create response can leave
+an update failure after successful cleanup, preserving the update error's
+response metadata. If deletion fails, it reports the new record's ID and
+retains **both** full outcomes (`operation_result` and `cleanup_result`,
+including their metadata) in `ReqDnsimple.Error.reason` under
+`:sample_cleanup_failed`. The outer error metadata is the cleanup error's
+metadata. It never prints tokens or raw response bodies. Check that specific
+record in the sandbox before rerunning. This is a sequence of requests, not an
+atomic transaction: process termination, an unexpected exception, or an
+ambiguous create response can leave
 a record behind. If creation times out without an ID, inspect the test zone
 manually; the script does not guess which record to delete.
 

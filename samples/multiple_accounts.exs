@@ -19,10 +19,12 @@ discovery = Samples.unscoped_client()
 
 # Re-scoping is local and immutable; it does not verify token permissions.
 clients = Map.new(account_ids, &{&1, ReqDnsimple.for_account(discovery, &1)})
-{:error, :missing_account_id} = ReqDnsimple.Zone.list(discovery)
+
+{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}} =
+  ReqDnsimple.Zone.list(discovery)
 
 Enum.each(account_ids, fn account_id ->
   client = Map.fetch!(clients, account_id)
-  zones = ReqDnsimple.Zone.list!(client, per_page: 20)
+  {zones, _metadata} = ReqDnsimple.Zone.list!(client, per_page: 20)
   IO.puts("Account #{account_id}: #{length(zones)} zones on the first page")
 end)

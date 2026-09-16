@@ -69,10 +69,10 @@ defmodule ReqDnsimple.BillingCharge do
   @doc """
   Uses the client's configured account with default options.
   See `list/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns a missing-account `ReqDnsimple.Error` without making a request when the client is unscoped.
   """
   @spec list(Req.Request.t()) ::
-          {:ok, [__MODULE__.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([__MODULE__.t()])
   def list(req) do
     list(req, [])
   end
@@ -80,15 +80,15 @@ defmodule ReqDnsimple.BillingCharge do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns a missing-account `ReqDnsimple.Error` without making a request when the client is unscoped.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
   @spec list(Req.Request.t(), keyword()) ::
-          {:ok, [__MODULE__.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([__MODULE__.t()])
   @spec list(Req.Request.t(), ReqDnsimple.account_id()) ::
-          {:ok, [__MODULE__.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([__MODULE__.t()])
   def list(req, account_id)
       when is_integer(account_id) or is_binary(account_id) do
     list(req, account_id, [])
@@ -99,26 +99,26 @@ defmodule ReqDnsimple.BillingCharge do
   end
 
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, [__MODULE__.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([__MODULE__.t()])
   def list(req, account_id, opts) do
     with {:ok, validated_opts} <-
            ReqDnsimple.validate_options(opts, @list_billing_charges_schema),
-         {:ok, %Req.Response{status: 200, body: %{"data" => data}}} <-
+         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} <-
            request_list(req, account_id, validated_opts) do
-      {:ok, Enum.map(data, &from_json/1)}
+      ReqDnsimple.Response.ok(Enum.map(data, &from_json/1), response)
     else
       {:ok, response} -> ReqDnsimple.response_error(response)
-      {:error, error} -> {:error, error}
+      {:error, error} -> ReqDnsimple.Response.error(error)
     end
   end
 
   @doc """
   Uses the client's configured account with default options.
   See `list_page/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns a missing-account `ReqDnsimple.Error` without making a request when the client is unscoped.
   """
   @spec list_page(Req.Request.t()) ::
-          {:ok, {[__MODULE__.t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([__MODULE__.t()])
   def list_page(req) do
     list_page(req, [])
   end
@@ -126,15 +126,15 @@ defmodule ReqDnsimple.BillingCharge do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list_page/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns a missing-account `ReqDnsimple.Error` without making a request when the client is unscoped.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
   @spec list_page(Req.Request.t(), keyword()) ::
-          {:ok, {[__MODULE__.t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([__MODULE__.t()])
   @spec list_page(Req.Request.t(), ReqDnsimple.account_id()) ::
-          {:ok, {[__MODULE__.t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([__MODULE__.t()])
   def list_page(req, account_id)
       when is_integer(account_id) or is_binary(account_id) do
     list_page(req, account_id, [])
@@ -145,30 +145,31 @@ defmodule ReqDnsimple.BillingCharge do
   end
 
   @spec list_page(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, {[__MODULE__.t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([__MODULE__.t()])
   def list_page(req, account_id, opts) do
     with {:ok, validated_opts} <-
            ReqDnsimple.validate_options(opts, @list_billing_charges_schema) do
       case request_list(req, account_id, validated_opts) do
-        {:ok, %Req.Response{status: 200, body: %{"data" => data, "pagination" => pagination}}} ->
-          {:ok, {Enum.map(data, &from_json/1), pagination}}
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
+          ReqDnsimple.Response.ok(Enum.map(data, &from_json/1), response)
 
         {:ok, response} ->
           ReqDnsimple.response_error(response)
 
         {:error, e} ->
-          {:error, e}
+          ReqDnsimple.Response.error(e)
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account with default options.
   See `list_all/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns a missing-account `ReqDnsimple.Error` without making a request when the client is unscoped.
   """
   @spec list_all(Req.Request.t()) ::
-          {:ok, [__MODULE__.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([__MODULE__.t()])
   def list_all(req) do
     list_all(req, [])
   end
@@ -176,15 +177,15 @@ defmodule ReqDnsimple.BillingCharge do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list_all/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns a missing-account `ReqDnsimple.Error` without making a request when the client is unscoped.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
   @spec list_all(Req.Request.t(), keyword()) ::
-          {:ok, [__MODULE__.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([__MODULE__.t()])
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id()) ::
-          {:ok, [__MODULE__.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([__MODULE__.t()])
   def list_all(req, account_id)
       when is_integer(account_id) or is_binary(account_id) do
     list_all(req, account_id, [])
@@ -195,7 +196,7 @@ defmodule ReqDnsimple.BillingCharge do
   end
 
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, [__MODULE__.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([__MODULE__.t()])
   def list_all(req, account_id, opts) do
     ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, &1))
   end
@@ -207,7 +208,7 @@ defmodule ReqDnsimple.BillingCharge do
       |> Map.new()
 
     req
-    |> Req.merge(
+    |> ReqDnsimple.Helper.merge(
       method: :get,
       url: "/:account_id/billing/charges",
       path_params_style: :colon,

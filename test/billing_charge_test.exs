@@ -26,19 +26,20 @@ defmodule ReqDnsimple.BillingChargeTest do
     }
 
     assert {:ok,
-            [
-              %ReqDnsimple.BillingCharge{
-                balance_amount: "12345678901234567890.1200",
-                items: [
-                  %ReqDnsimple.BillingCharge.Item{
-                    amount: "99999999999999999999.9900",
-                    product_id: nil,
-                    product_reference: nil
-                  }
-                ],
-                total_amount: "100000000000000000000.1100"
-              }
-            ]} = ReqDnsimple.BillingCharge.list(client(200, body), 1010)
+            {[
+               %ReqDnsimple.BillingCharge{
+                 balance_amount: "12345678901234567890.1200",
+                 items: [
+                   %ReqDnsimple.BillingCharge.Item{
+                     amount: "99999999999999999999.9900",
+                     product_id: nil,
+                     product_reference: nil
+                   }
+                 ],
+                 total_amount: "100000000000000000000.1100"
+               }
+             ], %ReqDnsimple.Metadata{status: 200}}} =
+             ReqDnsimple.BillingCharge.list(client(200, body), 1010)
 
     assert_request(:get, "/v2/1010/billing/charges")
   end

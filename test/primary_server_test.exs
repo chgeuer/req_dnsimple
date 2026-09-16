@@ -21,6 +21,55 @@ defmodule ReqDnsimple.PrimaryServerTest do
     "total_pages" => 1
   }
 
+  test "preserves HTTP headers on primary-server operations, page responses, and errors" do
+    headers = [
+      {"x-request-id", "primary-response"},
+      {"x-ratelimit-remaining", "0"},
+      {"retry-after", "5"}
+    ]
+
+    for {operation, status, body, pagination} <- [
+          {&ReqDnsimple.PrimaryServer.create(&1, 1010,
+             name: "Offline primary",
+             ip: "192.0.2.1",
+             port: 5353
+           ), 201, %{"data" => @primary_server_data}, nil},
+          {&ReqDnsimple.PrimaryServer.get(&1, 1010, 1), 200, %{"data" => @primary_server_data},
+           nil},
+          {&ReqDnsimple.PrimaryServer.list_page(&1, 1010), 200,
+           %{"data" => [@primary_server_data], "pagination" => @pagination}, @pagination},
+          {&ReqDnsimple.PrimaryServer.link(&1, 1010, 1, zone: "secondary.example.test"), 200,
+           %{"data" => @primary_server_data}, nil},
+          {&ReqDnsimple.PrimaryServer.unlink(&1, 1010, 1, zone: "secondary.example.test"), 200,
+           %{"data" => @primary_server_data}, nil},
+          {&ReqDnsimple.PrimaryServer.delete(&1, 1010, 1), 204, nil, nil}
+        ] do
+      metadata = %ReqDnsimple.Metadata{
+        status: status,
+        pagination: pagination,
+        request_id: "primary-response",
+        rate_limit_remaining: 0,
+        retry_after: "5"
+      }
+
+      assert {:ok, {data, ^metadata}} = operation.(client(status, body, self(), headers))
+      if status == 204, do: assert(is_nil(data))
+      assert_received {:request, _request}
+
+      error_body = %{"message" => "retry later"}
+      error_metadata = %{metadata | status: 429, pagination: nil}
+
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: %{status: 429, response: ^error_body},
+                metadata: ^error_metadata
+              }} = operation.(client(429, error_body, self(), headers))
+
+      assert_received {:request, _request}
+      refute_received {:request, _request}
+    end
+  end
+
   describe "list_page/3 and list/3" do
     test "listPrimaryServers sends ordered options once and returns typed data with pagination" do
       data =
@@ -45,7 +94,7 @@ defmodule ReqDnsimple.PrimaryServerTest do
                    created_at: ~U[2026-09-01 08:00:00Z],
                    updated_at: ~U[2026-09-01 08:30:00Z]
                  }
-               ], pagination}} =
+               ], %ReqDnsimple.Metadata{pagination: pagination}}} =
                ReqDnsimple.PrimaryServer.list_page(
                  client(200, %{
                    "data" => [data],
@@ -77,7 +126,7 @@ defmodule ReqDnsimple.PrimaryServerTest do
         "total_pages" => 0
       }
 
-      assert {:ok, {[], ^pagination}} =
+      assert {:ok, {[], %ReqDnsimple.Metadata{pagination: ^pagination}}} =
                ReqDnsimple.PrimaryServer.list(
                  client(200, %{"data" => [], "pagination" => pagination}),
                  0
@@ -106,7 +155,8 @@ defmodule ReqDnsimple.PrimaryServerTest do
       ]
 
       for {account_id, opts} <- invalid_calls do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.PrimaryServer.list_page(request, account_id, opts)
       end
 
@@ -120,14 +170,19 @@ defmodule ReqDnsimple.PrimaryServerTest do
           "errors" => %{"account" => ["is unavailable"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.PrimaryServer.list_page(client(status, body), 1010)
 
         assert_request(:get, "/v2/1010/secondary_dns/primaries", %{}, nil)
         refute_received {:request, _request}
       end
 
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.PrimaryServer.list_page(transport_error_client(:timeout), 1010)
     end
 
@@ -147,26 +202,47 @@ defmodule ReqDnsimple.PrimaryServerTest do
         %{
           "data" => [Map.put(@primary_server_data, "created_at", "not-a-timestamp")],
           "pagination" => @pagination
-        },
-        %{"data" => [@primary_server_data]},
-        %{"data" => [@primary_server_data], "pagination" => nil},
-        %{
-          "data" => [@primary_server_data],
-          "pagination" => Map.delete(@pagination, "total_entries")
-        },
-        %{
-          "data" => [@primary_server_data],
-          "pagination" => %{@pagination | "per_page" => 0}
         }
       ]
 
       for body <- malformed_bodies do
-        assert {:error, %{status: 200, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: 200, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: 200}
+                }} =
                  ReqDnsimple.PrimaryServer.list_page(client(200, body), 1010)
 
         assert_request(:get, "/v2/1010/secondary_dns/primaries", %{}, nil)
         refute_received {:request, _request}
       end
+    end
+  end
+
+  test "primary-server pages retain valid data and headers when pagination is absent or malformed" do
+    invalid = Map.delete(@pagination, "total_entries")
+    zero = %{@pagination | "per_page" => 0}
+
+    for {fields, pagination, errors} <- [
+          {%{}, nil, %{}},
+          {%{"pagination" => nil}, nil, %{}},
+          {%{"pagination" => invalid}, nil, %{pagination: {:invalid_pagination, invalid}}},
+          {%{"pagination" => zero}, zero, %{}}
+        ] do
+      body = Map.put(fields, "data", [@primary_server_data])
+      req = client(200, body, self(), [{"x-request-id", "primary-page"}])
+
+      assert {:ok,
+              {[%ReqDnsimple.PrimaryServer{}],
+               %ReqDnsimple.Metadata{
+                 status: 200,
+                 request_id: "primary-page",
+                 pagination: ^pagination,
+                 parse_errors: ^errors
+               }}} = ReqDnsimple.PrimaryServer.list_page(req, 1010)
+
+      assert_request(:get, "/v2/1010/secondary_dns/primaries", %{}, nil)
+      refute_received {:request, _request}
     end
   end
 
@@ -184,10 +260,10 @@ defmodule ReqDnsimple.PrimaryServerTest do
       }
 
       assert {:ok,
-              [
-                %ReqDnsimple.PrimaryServer{id: 1, name: "Offline primary"},
-                %ReqDnsimple.PrimaryServer{id: 2, name: "Second primary"}
-              ]} =
+              {[
+                 %ReqDnsimple.PrimaryServer{id: 1, name: "Offline primary"},
+                 %ReqDnsimple.PrimaryServer{id: 2, name: "Second primary"}
+               ], %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.PrimaryServer.list_all(page_client(pages), 1010,
                  sort: [name: :desc, id: :asc],
                  per_page: 1
@@ -202,11 +278,12 @@ defmodule ReqDnsimple.PrimaryServerTest do
     test "rejects explicit pages and malformed option containers before HTTP" do
       request = client(200, %{"data" => [], "pagination" => @pagination})
 
-      assert {:error, {:invalid_option, :page}} =
+      assert {:error, %ReqDnsimple.Error{reason: {:invalid_option, :page}, metadata: nil}} =
                ReqDnsimple.PrimaryServer.list_all(request, 1010, page: 2)
 
       for opts <- [[:invalid], [{:name}]] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.PrimaryServer.list_all(request, 1010, opts)
       end
 
@@ -223,7 +300,11 @@ defmodule ReqDnsimple.PrimaryServerTest do
           2 -> {503, %{"message" => "unavailable"}}
         end)
 
-      assert {:error, %{status: 503, response: %{"message" => "unavailable"}}} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: %{status: 503, response: %{"message" => "unavailable"}},
+                metadata: %ReqDnsimple.Metadata{status: 503}
+              }} =
                ReqDnsimple.PrimaryServer.list_all(http_client, 1010)
 
       assert_request(:get, "/v2/1010/secondary_dns/primaries", %{"page" => 1})
@@ -231,7 +312,11 @@ defmodule ReqDnsimple.PrimaryServerTest do
 
       repeated = %{@pagination | "current_page" => 1, "total_entries" => 2, "total_pages" => 2}
 
-      assert {:error, {:invalid_pagination, ^repeated}} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: {:invalid_pagination, ^repeated},
+                metadata: %ReqDnsimple.Metadata{}
+              }} =
                ReqDnsimple.PrimaryServer.list_all(
                  response_client(fn _page ->
                    {200, %{"data" => [@primary_server_data], "pagination" => repeated}}
@@ -248,16 +333,16 @@ defmodule ReqDnsimple.PrimaryServerTest do
   describe "get/3" do
     test "getPrimaryServer requests one unlinked server and returns a typed response" do
       assert {:ok,
-              %ReqDnsimple.PrimaryServer{
-                id: 1,
-                account_id: 1010,
-                name: "Offline primary",
-                ip: "192.0.2.1",
-                port: 5353,
-                linked_secondary_zones: [],
-                created_at: ~U[2026-09-01 08:00:00Z],
-                updated_at: ~U[2026-09-01 08:30:00Z]
-              }} =
+              {%ReqDnsimple.PrimaryServer{
+                 id: 1,
+                 account_id: 1010,
+                 name: "Offline primary",
+                 ip: "192.0.2.1",
+                 port: 5353,
+                 linked_secondary_zones: [],
+                 created_at: ~U[2026-09-01 08:00:00Z],
+                 updated_at: ~U[2026-09-01 08:30:00Z]
+               }, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.PrimaryServer.get(
                  client(200, %{"data" => @primary_server_data}),
                  1010,
@@ -277,12 +362,12 @@ defmodule ReqDnsimple.PrimaryServerTest do
         )
 
       assert {:ok,
-              %ReqDnsimple.PrimaryServer{
-                linked_secondary_zones: [
-                  "secondary.example",
-                  "secondary.example.net"
-                ]
-              }} =
+              {%ReqDnsimple.PrimaryServer{
+                 linked_secondary_zones: [
+                   "secondary.example",
+                   "secondary.example.net"
+                 ]
+               }, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.PrimaryServer.get(client(200, %{"data" => data}), 1010, 1)
 
       assert_request(:get, "/v2/1010/secondary_dns/primaries/1")
@@ -298,7 +383,8 @@ defmodule ReqDnsimple.PrimaryServerTest do
             {1010, "1"},
             {1010, nil}
           ] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.PrimaryServer.get(request, account_id, primary_server_id)
       end
 
@@ -308,7 +394,7 @@ defmodule ReqDnsimple.PrimaryServerTest do
     test "getPrimaryServer preserves explicit zero identifiers" do
       data = Map.merge(@primary_server_data, %{"id" => 0, "account_id" => 0})
 
-      assert {:ok, %ReqDnsimple.PrimaryServer{id: 0, account_id: 0}} =
+      assert {:ok, {%ReqDnsimple.PrimaryServer{id: 0, account_id: 0}, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.PrimaryServer.get(client(200, %{"data" => data}), 0, 0)
 
       assert_request(:get, "/v2/0/secondary_dns/primaries/0")
@@ -321,7 +407,11 @@ defmodule ReqDnsimple.PrimaryServerTest do
           "errors" => %{"primaryserver" => ["is unavailable"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.PrimaryServer.get(client(status, body), 1010, 1)
 
         assert_request(:get, "/v2/1010/secondary_dns/primaries/1")
@@ -340,7 +430,11 @@ defmodule ReqDnsimple.PrimaryServerTest do
       ]
 
       for body <- malformed_payloads do
-        assert {:error, %{status: 200, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: 200, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: 200}
+                }} =
                  ReqDnsimple.PrimaryServer.get(client(200, body), 1010, 1)
 
         assert_request(:get, "/v2/1010/secondary_dns/primaries/1")
@@ -349,7 +443,8 @@ defmodule ReqDnsimple.PrimaryServerTest do
     end
 
     test "getPrimaryServer preserves transport failures" do
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.PrimaryServer.get(transport_error_client(:timeout), 1010, 1)
     end
   end
@@ -357,16 +452,16 @@ defmodule ReqDnsimple.PrimaryServerTest do
   describe "create/3" do
     test "createPrimaryServer sends every supplied field once and returns a typed response" do
       assert {:ok,
-              %ReqDnsimple.PrimaryServer{
-                id: 1,
-                account_id: 1010,
-                name: "Offline primary",
-                ip: "192.0.2.1",
-                port: 5353,
-                linked_secondary_zones: [],
-                created_at: ~U[2026-09-01 08:00:00Z],
-                updated_at: ~U[2026-09-01 08:30:00Z]
-              }} =
+              {%ReqDnsimple.PrimaryServer{
+                 id: 1,
+                 account_id: 1010,
+                 name: "Offline primary",
+                 ip: "192.0.2.1",
+                 port: 5353,
+                 linked_secondary_zones: [],
+                 created_at: ~U[2026-09-01 08:00:00Z],
+                 updated_at: ~U[2026-09-01 08:30:00Z]
+               }, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.PrimaryServer.create(
                  client(201, %{"data" => @primary_server_data}),
                  1010,
@@ -388,7 +483,7 @@ defmodule ReqDnsimple.PrimaryServerTest do
     test "createPrimaryServer omits an absent port and preserves zero and empty strings" do
       request = client(201, %{"data" => @primary_server_data})
 
-      assert {:ok, %ReqDnsimple.PrimaryServer{}} =
+      assert {:ok, {%ReqDnsimple.PrimaryServer{}, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.PrimaryServer.create(request, 1010, name: "", ip: "")
 
       assert_request(
@@ -400,7 +495,7 @@ defmodule ReqDnsimple.PrimaryServerTest do
 
       zero_port_data = Map.put(@primary_server_data, "port", 0)
 
-      assert {:ok, %ReqDnsimple.PrimaryServer{port: 0}} =
+      assert {:ok, {%ReqDnsimple.PrimaryServer{port: 0}, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.PrimaryServer.create(
                  client(201, %{"data" => zero_port_data}),
                  0,
@@ -437,7 +532,8 @@ defmodule ReqDnsimple.PrimaryServerTest do
             {1010, [name: "Primary", ip: "192.0.2.1", port: %{}]},
             {1010, [name: "Primary", ip: "192.0.2.1", unknown: true]}
           ] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.PrimaryServer.create(request, account_id, attrs)
       end
 
@@ -451,7 +547,11 @@ defmodule ReqDnsimple.PrimaryServerTest do
           "errors" => %{"ip" => ["is invalid"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.PrimaryServer.create(
                    client(status, body),
                    1010,
@@ -480,7 +580,11 @@ defmodule ReqDnsimple.PrimaryServerTest do
       ]
 
       for body <- malformed_payloads do
-        assert {:error, %{status: 201, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: 201, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: 201}
+                }} =
                  ReqDnsimple.PrimaryServer.create(
                    client(201, body),
                    1010,
@@ -502,7 +606,11 @@ defmodule ReqDnsimple.PrimaryServerTest do
     test "createPrimaryServer rejects an unexpected success status" do
       body = %{"data" => @primary_server_data}
 
-      assert {:error, %{status: 200, response: ^body}} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: %{status: 200, response: ^body},
+                metadata: %ReqDnsimple.Metadata{status: 200}
+              }} =
                ReqDnsimple.PrimaryServer.create(
                  client(200, body),
                  1010,
@@ -521,7 +629,8 @@ defmodule ReqDnsimple.PrimaryServerTest do
     end
 
     test "createPrimaryServer preserves transport failures" do
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.PrimaryServer.create(
                  transport_error_client(:timeout),
                  1010,
@@ -541,16 +650,16 @@ defmodule ReqDnsimple.PrimaryServerTest do
         )
 
       assert {:ok,
-              %ReqDnsimple.PrimaryServer{
-                id: 1,
-                account_id: 1010,
-                name: "Offline primary",
-                ip: "192.0.2.1",
-                port: 5353,
-                linked_secondary_zones: ["secondary.example.test"],
-                created_at: ~U[2026-09-01 08:00:00Z],
-                updated_at: ~U[2026-09-01 08:30:00Z]
-              }} =
+              {%ReqDnsimple.PrimaryServer{
+                 id: 1,
+                 account_id: 1010,
+                 name: "Offline primary",
+                 ip: "192.0.2.1",
+                 port: 5353,
+                 linked_secondary_zones: ["secondary.example.test"],
+                 created_at: ~U[2026-09-01 08:00:00Z],
+                 updated_at: ~U[2026-09-01 08:30:00Z]
+               }, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.PrimaryServer.link(
                  client(200, %{"data" => data}),
                  1010,
@@ -577,11 +686,11 @@ defmodule ReqDnsimple.PrimaryServerTest do
         })
 
       assert {:ok,
-              %ReqDnsimple.PrimaryServer{
-                id: 0,
-                account_id: 0,
-                linked_secondary_zones: [""]
-              }} =
+              {%ReqDnsimple.PrimaryServer{
+                 id: 0,
+                 account_id: 0,
+                 linked_secondary_zones: [""]
+               }, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.PrimaryServer.link(
                  client(200, %{"data" => data}),
                  0,
@@ -615,7 +724,8 @@ defmodule ReqDnsimple.PrimaryServerTest do
             {1010, 1, [zone: %{}]},
             {1010, 1, [zone: "secondary.example.test", unknown: true]}
           ] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.PrimaryServer.link(
                    request,
                    account_id,
@@ -634,7 +744,11 @@ defmodule ReqDnsimple.PrimaryServerTest do
           "errors" => %{"zone" => ["is unavailable"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.PrimaryServer.link(
                    client(status, body),
                    1010,
@@ -664,7 +778,11 @@ defmodule ReqDnsimple.PrimaryServerTest do
       ]
 
       for body <- malformed_payloads do
-        assert {:error, %{status: 200, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: 200, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: 200}
+                }} =
                  ReqDnsimple.PrimaryServer.link(
                    client(200, body),
                    1010,
@@ -684,7 +802,8 @@ defmodule ReqDnsimple.PrimaryServerTest do
     end
 
     test "linkPrimaryServer preserves transport failures" do
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.PrimaryServer.link(
                  transport_error_client(:timeout),
                  1010,
@@ -697,16 +816,16 @@ defmodule ReqDnsimple.PrimaryServerTest do
   describe "unlink/4" do
     test "unlinkPrimaryServer sends the zone once and returns the updated typed server" do
       assert {:ok,
-              %ReqDnsimple.PrimaryServer{
-                id: 1,
-                account_id: 1010,
-                name: "Offline primary",
-                ip: "192.0.2.1",
-                port: 5353,
-                linked_secondary_zones: [],
-                created_at: ~U[2026-09-01 08:00:00Z],
-                updated_at: ~U[2026-09-01 08:30:00Z]
-              }} =
+              {%ReqDnsimple.PrimaryServer{
+                 id: 1,
+                 account_id: 1010,
+                 name: "Offline primary",
+                 ip: "192.0.2.1",
+                 port: 5353,
+                 linked_secondary_zones: [],
+                 created_at: ~U[2026-09-01 08:00:00Z],
+                 updated_at: ~U[2026-09-01 08:30:00Z]
+               }, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.PrimaryServer.unlink(
                  client(200, %{"data" => @primary_server_data}),
                  1010,
@@ -732,11 +851,11 @@ defmodule ReqDnsimple.PrimaryServerTest do
         })
 
       assert {:ok,
-              %ReqDnsimple.PrimaryServer{
-                id: 0,
-                account_id: 0,
-                linked_secondary_zones: []
-              }} =
+              {%ReqDnsimple.PrimaryServer{
+                 id: 0,
+                 account_id: 0,
+                 linked_secondary_zones: []
+               }, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.PrimaryServer.unlink(
                  client(200, %{"data" => data}),
                  0,
@@ -770,7 +889,8 @@ defmodule ReqDnsimple.PrimaryServerTest do
             {1010, 1, [zone: %{}]},
             {1010, 1, [zone: "secondary.example.test", unknown: true]}
           ] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.PrimaryServer.unlink(
                    request,
                    account_id,
@@ -789,7 +909,11 @@ defmodule ReqDnsimple.PrimaryServerTest do
           "errors" => %{"zone" => ["is unavailable"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.PrimaryServer.unlink(
                    client(status, body),
                    1010,
@@ -819,7 +943,11 @@ defmodule ReqDnsimple.PrimaryServerTest do
       ]
 
       for body <- malformed_payloads do
-        assert {:error, %{status: 200, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: 200, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: 200}
+                }} =
                  ReqDnsimple.PrimaryServer.unlink(
                    client(200, body),
                    1010,
@@ -839,7 +967,8 @@ defmodule ReqDnsimple.PrimaryServerTest do
     end
 
     test "unlinkPrimaryServer preserves transport failures" do
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.PrimaryServer.unlink(
                  transport_error_client(:timeout),
                  1010,
@@ -850,8 +979,9 @@ defmodule ReqDnsimple.PrimaryServerTest do
   end
 
   describe "delete/3" do
-    test "removePrimaryServer sends one bodyless request and returns :ok" do
-      assert :ok = ReqDnsimple.PrimaryServer.delete(client(204, ""), 1010, 1)
+    test "removePrimaryServer sends one bodyless request and returns nil data with metadata" do
+      assert {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}} =
+               ReqDnsimple.PrimaryServer.delete(client(204, ""), 1010, 1)
 
       assert_request(:delete, "/v2/1010/secondary_dns/primaries/1", %{}, nil)
       refute_received {:request, _request}
@@ -866,7 +996,8 @@ defmodule ReqDnsimple.PrimaryServerTest do
             {1010, "1"},
             {1010, nil}
           ] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.PrimaryServer.delete(request, account_id, primary_server_id)
       end
 
@@ -874,7 +1005,8 @@ defmodule ReqDnsimple.PrimaryServerTest do
     end
 
     test "removePrimaryServer preserves explicit zero identifiers" do
-      assert :ok = ReqDnsimple.PrimaryServer.delete(client(204, nil), 0, 0)
+      assert {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}} =
+               ReqDnsimple.PrimaryServer.delete(client(204, nil), 0, 0)
 
       assert_request(:delete, "/v2/0/secondary_dns/primaries/0", %{}, nil)
     end
@@ -886,7 +1018,11 @@ defmodule ReqDnsimple.PrimaryServerTest do
           "errors" => %{"primaryserver" => ["is unavailable"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.PrimaryServer.delete(client(status, body), 1010, 1)
 
         assert_request(:delete, "/v2/1010/secondary_dns/primaries/1", %{}, nil)
@@ -896,7 +1032,11 @@ defmodule ReqDnsimple.PrimaryServerTest do
 
     test "removePrimaryServer rejects non-204 successful responses" do
       for {status, body} <- [{200, %{}}, {200, nil}, {201, %{"data" => %{}}}] do
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.PrimaryServer.delete(client(status, body), 1010, 1)
 
         assert_request(:delete, "/v2/1010/secondary_dns/primaries/1", %{}, nil)
@@ -905,7 +1045,8 @@ defmodule ReqDnsimple.PrimaryServerTest do
     end
 
     test "removePrimaryServer preserves transport failures" do
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.PrimaryServer.delete(transport_error_client(:timeout), 1010, 1)
     end
   end

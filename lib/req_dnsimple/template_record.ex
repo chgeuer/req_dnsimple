@@ -2,9 +2,20 @@ defmodule ReqDnsimple.TemplateRecord do
   @moduledoc """
   Operations for records in DNS templates.
 
+  HTTP operations return `{:ok, {data, %ReqDnsimple.Metadata{}}}` or
+  `{:error, %ReqDnsimple.Error{}}`. HTTP 204 successes have `nil` data.
+  Errors preserve their original reason in `error.reason`. When no response
+  has been received, `error.metadata` is `nil`.
+  Collection pagination is nested in `metadata.pagination`. Complete
+  enumeration retains ordered page metadata in `metadata.pages` and the
+  latest rate-limit budget at the top level.
+
+  Known record types accept uppercase, lowercase, or mixed case. The supplied
+  spelling is preserved in the request body.
+
   Create one template record with a flat attribute list:
 
-      {:ok, record} =
+      {:ok, {record, metadata}} =
         ReqDnsimple.TemplateRecord.create(
           client,
           1010,
@@ -18,7 +29,7 @@ defmodule ReqDnsimple.TemplateRecord do
 
   Retrieve one typed template record:
 
-      {:ok, record} =
+      {:ok, {record, metadata}} =
         ReqDnsimple.TemplateRecord.get(
           client,
           1010,
@@ -28,7 +39,7 @@ defmodule ReqDnsimple.TemplateRecord do
 
   List one page or deliberately enumerate every page:
 
-      {:ok, {records, pagination}} =
+      {:ok, {records, metadata}} =
         ReqDnsimple.TemplateRecord.list_page(
           client,
           1010,
@@ -38,7 +49,7 @@ defmodule ReqDnsimple.TemplateRecord do
           per_page: 30
         )
 
-      {:ok, records} =
+      {:ok, {records, metadata}} =
         ReqDnsimple.TemplateRecord.list_all(
           client,
           1010,
@@ -48,7 +59,7 @@ defmodule ReqDnsimple.TemplateRecord do
 
   Delete one template record:
 
-      :ok =
+      {:ok, {nil, metadata}} =
         ReqDnsimple.TemplateRecord.delete(
           client,
           1010,
@@ -90,7 +101,7 @@ defmodule ReqDnsimple.TemplateRecord do
 
   @create_schema [
     name: [type: :string, required: true],
-    type: [type: {:in, @record_types}, required: true],
+    type: [type: :string, required: true],
     content: [type: :string, required: true],
     ttl: [type: :non_neg_integer],
     priority: [type: :integer]
@@ -107,14 +118,15 @@ defmodule ReqDnsimple.TemplateRecord do
 
   @doc """
   Uses the client's configured account. See `create/4` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
   @spec create(
           Req.Request.t(),
           binary() | integer(),
           keyword()
-        ) :: {:ok, t()} | {:error, term()}
+        ) :: ReqDnsimple.Response.result(t())
   def create(req, template, attrs) do
     ReqDnsimple.Client.with_account(req, &create(req, &1, template, attrs))
   end
@@ -125,21 +137,24 @@ defmodule ReqDnsimple.TemplateRecord do
   The template may be a short name or integer ID. Attributes are sent as a
   flat JSON object; `name`, `type`, and `content` are required, while `ttl`
   and `priority` are optional. Empty apex names, literal placeholders, and
-  explicit zero values are preserved. This sends exactly one request.
+  explicit zero values are preserved. Known record types are validated
+  case-insensitively without rewriting their spelling. This sends exactly
+  one request.
   """
   @spec create(
           Req.Request.t(),
           ReqDnsimple.account_id(),
           binary() | integer(),
           keyword()
-        ) :: {:ok, t()} | {:error, term()}
+        ) :: ReqDnsimple.Response.result(t())
   def create(req, account_id, template, attrs) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
              [account_id: account_id, template: template],
              @create_path_schema
            ),
-         {:ok, validated_attrs} <- ReqDnsimple.validate_options(attrs, @create_schema) do
+         {:ok, validated_attrs} <- ReqDnsimple.validate_options(attrs, @create_schema),
+         :ok <- validate_record_type(validated_attrs[:type]) do
       req =
         Req.merge(req,
           method: :post,
@@ -153,7 +168,7 @@ defmodule ReqDnsimple.TemplateRecord do
       case Req.request(req) do
         {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
           case decode(data) do
-            {:ok, record} -> {:ok, record}
+            {:ok, record} -> ReqDnsimple.Response.ok(record, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -164,18 +179,21 @@ defmodule ReqDnsimple.TemplateRecord do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account with default options.
   See `list_page/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
   @spec list_page(
           Req.Request.t(),
           binary() | integer()
         ) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_page(req, template) do
     list_page(req, template, [])
   end
@@ -183,7 +201,9 @@ defmodule ReqDnsimple.TemplateRecord do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list_page/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
@@ -193,13 +213,13 @@ defmodule ReqDnsimple.TemplateRecord do
           binary() | integer(),
           keyword()
         ) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   @spec list_page(
           Req.Request.t(),
           ReqDnsimple.account_id(),
           binary() | integer()
         ) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_page(req, account_id, template)
       when is_integer(template) or is_binary(template) do
     list_page(req, account_id, template, [])
@@ -214,7 +234,7 @@ defmodule ReqDnsimple.TemplateRecord do
 
   The template may be a short name or integer ID. Supports ordered `:sort`
   terms for `:id`, `:name`, `:content`, and `:type`, plus `:page` and
-  `:per_page`. The returned pagination metadata retains its string keys.
+  `:per_page`. Pagination retains its string keys in `metadata.pagination`.
   """
   @spec list_page(
           Req.Request.t(),
@@ -222,7 +242,7 @@ defmodule ReqDnsimple.TemplateRecord do
           binary() | integer(),
           keyword()
         ) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_page(req, account_id, template, opts) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -234,10 +254,10 @@ defmodule ReqDnsimple.TemplateRecord do
         {:ok,
          %Req.Response{
            status: 200,
-           body: %{"data" => data, "pagination" => pagination}
+           body: %{"data" => data}
          } = response} ->
-          case decode_page(data, pagination) do
-            {:ok, result} -> {:ok, result}
+          case decode_many(data) do
+            {:ok, result} -> ReqDnsimple.Response.ok(result, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -248,15 +268,18 @@ defmodule ReqDnsimple.TemplateRecord do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account with default options.
   See `list/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
   @spec list(Req.Request.t(), binary() | integer()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list(req, template) do
     list(req, template, [])
   end
@@ -264,15 +287,17 @@ defmodule ReqDnsimple.TemplateRecord do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
   @spec list(Req.Request.t(), binary() | integer(), keyword()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list(req, account_id, template)
       when is_integer(template) or is_binary(template) do
     list(req, account_id, template, [])
@@ -289,17 +314,19 @@ defmodule ReqDnsimple.TemplateRecord do
   pages implicitly.
   """
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer(), keyword()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list(req, account_id, template, opts),
     do: list_page(req, account_id, template, opts)
 
   @doc """
   Uses the client's configured account with default options.
   See `list_all/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
   @spec list_all(Req.Request.t(), binary() | integer()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_all(req, template) do
     list_all(req, template, [])
   end
@@ -307,15 +334,17 @@ defmodule ReqDnsimple.TemplateRecord do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list_all/4` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
   @spec list_all(Req.Request.t(), binary() | integer(), keyword()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_all(req, account_id, template)
       when is_integer(template) or is_binary(template) do
     list_all(req, account_id, template, [])
@@ -330,23 +359,29 @@ defmodule ReqDnsimple.TemplateRecord do
 
   Enumeration always begins at page one, so an explicit `:page` option is
   rejected. Sorting and `:per_page` are retained for every request.
+
+  The returned metadata retains all responses in `metadata.pages`, in order,
+  and the latest rate-limit budget. Aggregate `status`, `pagination`,
+  `request_id`, and `etag` are `nil`. A later failure retains completed page
+  metadata in `error.metadata.pages`.
   """
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer(), keyword()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_all(req, account_id, template, opts) do
     ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, template, &1))
   end
 
   @doc """
   Uses the client's configured account. See `get/4` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
   @spec get(
           Req.Request.t(),
           binary() | integer(),
           integer()
-        ) :: {:ok, t()} | {:error, term()}
+        ) :: ReqDnsimple.Response.result(t())
   def get(req, template, record_id) do
     ReqDnsimple.Client.with_account(req, &get(req, &1, template, record_id))
   end
@@ -364,7 +399,7 @@ defmodule ReqDnsimple.TemplateRecord do
           ReqDnsimple.account_id(),
           binary() | integer(),
           integer()
-        ) :: {:ok, t()} | {:error, term()}
+        ) :: ReqDnsimple.Response.result(t())
   def get(req, account_id, template, record_id) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -386,7 +421,7 @@ defmodule ReqDnsimple.TemplateRecord do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode(data) do
-            {:ok, record} -> {:ok, record}
+            {:ok, record} -> ReqDnsimple.Response.ok(record, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -397,18 +432,20 @@ defmodule ReqDnsimple.TemplateRecord do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `delete/4` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
   @spec delete(
           Req.Request.t(),
           binary() | integer(),
           integer()
-        ) :: :ok | {:error, term()}
+        ) :: ReqDnsimple.Response.result(nil)
   def delete(req, template, record_id) do
     ReqDnsimple.Client.with_account(req, &delete(req, &1, template, record_id))
   end
@@ -417,14 +454,14 @@ defmodule ReqDnsimple.TemplateRecord do
   Deletes one record from a DNS template.
 
   The template may be a short name or integer ID. This sends exactly one
-  bodyless request and returns `:ok` only for HTTP 204.
+  bodyless request and returns `{:ok, {nil, metadata}}` only for HTTP 204.
   """
   @spec delete(
           Req.Request.t(),
           ReqDnsimple.account_id(),
           binary() | integer(),
           integer()
-        ) :: :ok | {:error, term()}
+        ) :: ReqDnsimple.Response.result(nil)
   def delete(req, account_id, template, record_id) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -445,8 +482,8 @@ defmodule ReqDnsimple.TemplateRecord do
         )
 
       case Req.request(req) do
-        {:ok, %Req.Response{status: 204}} ->
-          :ok
+        {:ok, %Req.Response{status: 204} = response} ->
+          ReqDnsimple.Response.ok(nil, response)
 
         {:ok, response} ->
           ReqDnsimple.response_error(response)
@@ -455,20 +492,10 @@ defmodule ReqDnsimple.TemplateRecord do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
-  defp decode_page(data, pagination) when is_list(data) do
-    with {:ok, records} <- decode_many(data),
-         true <- valid_pagination?(pagination) do
-      {:ok, {records, pagination}}
-    else
-      _error -> :error
-    end
-  end
-
-  defp decode_page(_data, _pagination), do: :error
-
-  defp decode_many(data) do
+  defp decode_many(data) when is_list(data) do
     Enum.reduce_while(data, {:ok, []}, fn item, {:ok, records} ->
       case decode(item) do
         {:ok, record} -> {:cont, {:ok, [record | records]}}
@@ -481,18 +508,7 @@ defmodule ReqDnsimple.TemplateRecord do
     end
   end
 
-  defp valid_pagination?(%{
-         "current_page" => current_page,
-         "per_page" => per_page,
-         "total_entries" => total_entries,
-         "total_pages" => total_pages
-       })
-       when is_integer(current_page) and current_page >= 0 and is_integer(per_page) and
-              per_page > 0 and is_integer(total_entries) and total_entries >= 0 and
-              is_integer(total_pages) and total_pages >= 0,
-       do: true
-
-  defp valid_pagination?(_pagination), do: false
+  defp decode_many(_data), do: :error
 
   defp request_list(req, account_id, template, opts) do
     params =
@@ -501,7 +517,7 @@ defmodule ReqDnsimple.TemplateRecord do
       |> Map.new()
 
     req
-    |> Req.merge(
+    |> ReqDnsimple.Helper.merge(
       method: :get,
       url: "/:account_id/templates/:template/records",
       path_params_style: :colon,
@@ -509,6 +525,19 @@ defmodule ReqDnsimple.TemplateRecord do
       params: params
     )
     |> Req.request()
+  end
+
+  defp validate_record_type(type) do
+    if String.upcase(type, :ascii) in @record_types do
+      :ok
+    else
+      {:error,
+       %NimbleOptions.ValidationError{
+         message: "expected :type to be a supported template record type (case-insensitive)",
+         key: :type,
+         value: type
+       }}
+    end
   end
 
   defp decode(%{

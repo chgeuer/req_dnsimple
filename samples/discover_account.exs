@@ -5,19 +5,19 @@ discovery = Samples.unscoped_client()
 
 client =
   case ReqDnsimple.whoami(discovery) do
-    {:account, %{"id" => id}} ->
+    {:ok, {{:account, %{"id" => id}}, _metadata}} ->
       ReqDnsimple.for_account(discovery, id)
 
-    {:user, _user} ->
+    {:ok, {{:user, _user}, _metadata}} ->
       raise ArgumentError,
             "whoami returned a user; run samples/discover_user.exs and select an account"
 
-    {:unknown_token, _body} ->
+    {:ok, {{:unknown_token, _body}, _metadata}} ->
       raise ArgumentError, "whoami did not identify exactly one account"
 
-    {:error, _reason} = error ->
+    {:error, %ReqDnsimple.Error{}} = error ->
       ReqDnsimple.unwrap!(error)
   end
 
-zones = ReqDnsimple.Zone.list!(client, per_page: 20)
+{zones, _metadata} = ReqDnsimple.Zone.list!(client, per_page: 20)
 IO.puts("Account discovered through whoami; first page contains #{length(zones)} zones")

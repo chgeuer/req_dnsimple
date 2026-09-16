@@ -16,10 +16,10 @@ client =
   )
   |> Req.merge(receive_timeout: 30_000)
 
-zones = ReqDnsimple.Zone.list!(client, per_page: 5)
+{zones, _metadata} = ReqDnsimple.Zone.list!(client, per_page: 5)
 IO.puts("First credential resolution: #{length(zones)} zones on the first page")
 
-{records, _pagination} =
+{records, _metadata} =
   client
   |> ReqDnsimple.ZoneRecord.list_page(zone, type: "A", per_page: 5)
   |> ReqDnsimple.unwrap!()

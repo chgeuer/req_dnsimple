@@ -1,16 +1,18 @@
 defmodule ReqDnsimple.Error do
   @moduledoc """
-  Exception raised when a bang function encounters a non-exception error result.
+  Failure returned by an HTTP operation or raised by its bang counterpart.
 
   The original error is available in `:reason`, including any HTTP status,
-  response body, and retry information. The exception message does not include
-  response bodies. Existing validation and transport exceptions are raised
-  unchanged instead of being wrapped.
+  response body, validation exception, or transport exception. Response metadata
+  is available in `:metadata`, or is `nil` when no HTTP response was received.
+  Enumeration failures retain metadata for earlier pages.
+
+  The exception message does not include response bodies or metadata values.
   """
 
-  defexception [:reason]
+  defexception [:reason, :metadata]
 
-  @type t :: %__MODULE__{reason: term()}
+  @type t :: %__MODULE__{reason: term(), metadata: ReqDnsimple.Metadata.t() | nil}
 
   @impl true
   def message(%__MODULE__{reason: :missing_account_id}),

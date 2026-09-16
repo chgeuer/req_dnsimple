@@ -2,6 +2,10 @@ defmodule ReqDnsimple.SecondaryZone do
   @moduledoc """
   DNSimple secondary-zone creation.
 
+  Successful HTTP operations return `{:ok, {data, %ReqDnsimple.Metadata{}}}`.
+  Failures return `{:error, %ReqDnsimple.Error{}}`, with metadata when an
+  HTTP response was received.
+
   ## Example
 
       ReqDnsimple.SecondaryZone.create(
@@ -9,7 +13,7 @@ defmodule ReqDnsimple.SecondaryZone do
         1010,
         name: "secondary.example.test"
       )
-      #=> {:ok, %ReqDnsimple.Zone{secondary: true}}
+      #=> {:ok, {%ReqDnsimple.Zone{secondary: true}, %ReqDnsimple.Metadata{}}}
 
   Creation sends one request and returns the existing `ReqDnsimple.Zone` type.
   DNSimple may require ownership verification and a subscription; this client
@@ -28,11 +32,11 @@ defmodule ReqDnsimple.SecondaryZone do
 
   @doc """
   Uses the client's configured account. See `create/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
-  @spec create(Req.Request.t(), keyword()) ::
-          {:ok, ReqDnsimple.Zone.t()} | {:error, term()}
+  @spec create(Req.Request.t(), keyword()) :: ReqDnsimple.Response.result(ReqDnsimple.Zone.t())
   def create(req, attrs) do
     ReqDnsimple.Client.with_account(req, &create(req, &1, attrs))
   end
@@ -44,7 +48,7 @@ defmodule ReqDnsimple.SecondaryZone do
   returned as HTTP errors without any preflight or follow-up request.
   """
   @spec create(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, ReqDnsimple.Zone.t()} | {:error, term()}
+          ReqDnsimple.Response.result(ReqDnsimple.Zone.t())
   def create(req, account_id, attrs) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate([account_id: account_id], @path_schema),
@@ -61,16 +65,20 @@ defmodule ReqDnsimple.SecondaryZone do
       case Req.request(req) do
         {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
           case ReqDnsimple.Zone.decode(data, :optional) do
-            {:ok, %ReqDnsimple.Zone{secondary: true} = zone} -> {:ok, zone}
-            _invalid -> ReqDnsimple.response_error(response)
+            {:ok, %ReqDnsimple.Zone{secondary: true} = zone} ->
+              ReqDnsimple.Response.ok(zone, response)
+
+            _invalid ->
+              ReqDnsimple.response_error(response)
           end
 
         {:ok, response} ->
           ReqDnsimple.response_error(response)
 
         {:error, error} ->
-          {:error, error}
+          ReqDnsimple.Response.error(error)
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 end

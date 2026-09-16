@@ -44,7 +44,9 @@ defmodule ReqDnsimpleTest do
             {"dnsimple_a_fake", %{"user" => %{"id" => 3}, "account" => nil},
              {:user, %{"id" => 3}}}
           ] do
-        assert ReqDnsimple.whoami(whoami_client(token, data)) == expected
+        assert {:ok, {^expected, %ReqDnsimple.Metadata{status: 200}}} =
+                 ReqDnsimple.whoami(whoami_client(token, data))
+
         assert_request(:get, "/v2/whoami")
       end
     end
@@ -59,7 +61,9 @@ defmodule ReqDnsimpleTest do
         end)
         |> with_whoami_response(%{"user" => %{"id" => 1}, "account" => nil})
 
-      assert {:user, %{"id" => 1}} = ReqDnsimple.whoami(client)
+      assert {:ok, {{:user, %{"id" => 1}}, %ReqDnsimple.Metadata{status: 200}}} =
+               ReqDnsimple.whoami(client)
+
       assert_receive :token_resolved
       refute_receive :token_resolved
       assert_request(:get, "/v2/whoami")
@@ -72,8 +76,9 @@ defmodule ReqDnsimpleTest do
           ] do
         body = %{"data" => data, "request_id" => "req-123"}
 
-        assert ReqDnsimple.whoami(whoami_client("dnsimple_u_fake", data, body)) ==
-                 {:unknown_token, body}
+        assert {:ok,
+                {{:unknown_token, ^body}, %ReqDnsimple.Metadata{status: 200, request_id: nil}}} =
+                 ReqDnsimple.whoami(whoami_client("dnsimple_u_fake", data, body))
 
         assert_request(:get, "/v2/whoami")
       end
@@ -84,7 +89,9 @@ defmodule ReqDnsimpleTest do
         Req.new(base_url: "https://api.dnsimple.com/v2", auth: {:basic, "user:password"})
         |> with_whoami_response(%{"user" => nil, "account" => %{"id" => 2}})
 
-      assert {:account, %{"id" => 2}} = ReqDnsimple.whoami(client)
+      assert {:ok, {{:account, %{"id" => 2}}, %ReqDnsimple.Metadata{status: 200}}} =
+               ReqDnsimple.whoami(client)
+
       assert_request(:get, "/v2/whoami")
     end
 
@@ -98,7 +105,11 @@ defmodule ReqDnsimpleTest do
           retry: false
         )
 
-      assert {:error, %Req.TransportError{reason: :econnrefused} = error} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: %Req.TransportError{reason: :econnrefused},
+                metadata: nil
+              } = error} =
                ReqDnsimple.whoami(client)
 
       refute inspect(error) =~ "opaque-secret"

@@ -1,8 +1,25 @@
 defmodule ReqDnsimple.RegistrantChange do
   @moduledoc """
-  Creates, lists, retrieves, and cancels registrar contact-change requests.
+  Checks requirements, creates, lists, retrieves, and cancels registrar
+  contact-change requests.
+
+  HTTP operations return `{:ok, {data, %ReqDnsimple.Metadata{}}}`; HTTP 204
+  responses use `nil` data. List data contains only the resources, while the
+  original string-key pagination map is nested in `metadata.pagination`.
+  Missing or malformed metadata never discards valid resource data; parse
+  failures are recorded in `metadata.parse_errors`.
+
+  Failures return `{:error, %ReqDnsimple.Error{}}`, with HTTP response metadata
+  when available and `nil` metadata for direct local or transport failures.
+  `list_all` retains metadata from completed pages when enumeration fails.
 
   ## Example
+
+      ReqDnsimple.RegistrantChange.check(req, 1010,
+        domain_id: "example.test",
+        contact_id: "11"
+      )
+      #=> {:ok, {%ReqDnsimple.RegistrantChange.CheckResult{}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.RegistrantChange.create(
         req,
@@ -13,10 +30,10 @@ defmodule ReqDnsimple.RegistrantChange do
           "x-fi-registrant-idnumber" => "fake-offline-id"
         }
       )
-      #=> {:ok, %ReqDnsimple.RegistrantChange{}}
+      #=> {:ok, {%ReqDnsimple.RegistrantChange{}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.RegistrantChange.get(req, 1010, 1)
-      #=> {:ok, %ReqDnsimple.RegistrantChange{}}
+      #=> {:ok, {%ReqDnsimple.RegistrantChange{}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.RegistrantChange.list_page(req, 1010,
         sort: [id: :asc],
@@ -26,13 +43,13 @@ defmodule ReqDnsimple.RegistrantChange do
         page: 2,
         per_page: 30
       )
-      #=> {:ok, {[%ReqDnsimple.RegistrantChange{}], %{"current_page" => 2}}}
+      #=> {:ok, {[%ReqDnsimple.RegistrantChange{}], %ReqDnsimple.Metadata{pagination: %{"current_page" => 2}}}}
 
       ReqDnsimple.RegistrantChange.list_all(req, 1010, state: "pending")
-      #=> {:ok, [%ReqDnsimple.RegistrantChange{}]}
+      #=> {:ok, {[%ReqDnsimple.RegistrantChange{}], %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.RegistrantChange.cancel(req, 1010, 1)
-      #=> {:ok, %ReqDnsimple.RegistrantChange{state: "cancelling"}}
+      #=> {:ok, {%ReqDnsimple.RegistrantChange{state: "cancelling"}, %ReqDnsimple.Metadata{}}}
   """
 
   @type state :: String.t()
@@ -63,6 +80,24 @@ defmodule ReqDnsimple.RegistrantChange do
     :updated_at
   ]
 
+  defmodule CheckResult do
+    @moduledoc """
+    Registrant-change requirements returned before starting a contact change.
+
+    Extended attribute definitions are preserved as a list of maps because
+    their contents depend on the domain's registry.
+    """
+
+    @type t :: %__MODULE__{
+            domain_id: integer(),
+            contact_id: integer(),
+            extended_attributes: [map()],
+            registry_owner_change: boolean()
+          }
+
+    defstruct [:domain_id, :contact_id, :extended_attributes, :registry_owner_change]
+  end
+
   @path_schema [
     account_id: [type: :integer, required: true],
     registrant_change_id: [type: :integer, required: true]
@@ -76,6 +111,11 @@ defmodule ReqDnsimple.RegistrantChange do
     domain_id: [type: {:or, [:string, :integer]}, required: true],
     contact_id: [type: {:or, [:string, :integer]}, required: true],
     extended_attributes: [type: :any]
+  ]
+
+  @check_schema [
+    domain_id: [type: {:or, [:string, :integer]}, required: true],
+    contact_id: [type: {:or, [:string, :integer]}, required: true]
   ]
 
   @states ~w(new pending cancelling cancelled completed)
@@ -93,12 +133,79 @@ defmodule ReqDnsimple.RegistrantChange do
   ]
 
   @doc """
+  Checks registrant-change requirements using the client's configured account.
+
+  See `check/3` for the required `:domain_id` and `:contact_id` attributes and
+  return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` before authentication
+  or HTTP when the client has no configured account.
+  """
+  @spec check(Req.Request.t(), keyword()) ::
+          ReqDnsimple.Response.result(CheckResult.t())
+  def check(req, attrs) do
+    ReqDnsimple.Client.with_account(req, &check(req, &1, attrs))
+  end
+
+  @doc """
+  Checks the requirements for changing a domain's registrant contact.
+
+  The required `:domain_id` accepts a domain name or integer ID, and the required
+  `:contact_id` accepts a string or integer ID. Both are sent in the root JSON
+  object. This sends exactly one POST request with retries disabled, without
+  creating a registrant change or performing any follow-up mutation.
+
+  Returns `{:ok, {result, %ReqDnsimple.Metadata{}}}` with a typed `CheckResult` on HTTP 200, preserving the
+  registry's extended-attribute definitions and owner-change flag. Validation
+  failures, malformed success bodies, other HTTP responses, and transport
+  failures return `{:error, %ReqDnsimple.Error{reason: reason}}`.
+
+  ## Example
+
+      ReqDnsimple.RegistrantChange.check(req, 1010,
+        domain_id: "example.com",
+        contact_id: "101"
+      )
+      #=> {:ok, {%ReqDnsimple.RegistrantChange.CheckResult{}, %ReqDnsimple.Metadata{}}}
+  """
+  @spec check(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
+          ReqDnsimple.Response.result(CheckResult.t())
+  def check(req, account_id, attrs) do
+    with {:ok, _validated_path} <-
+           NimbleOptions.validate([account_id: account_id], @create_path_schema),
+         {:ok, validated_attrs} <- ReqDnsimple.validate_options(attrs, @check_schema) do
+      req =
+        Req.merge(req,
+          method: :post,
+          url: "/:account_id/registrar/registrant_changes/check",
+          path_params_style: :colon,
+          path_params: [account_id: account_id],
+          json: Map.new(validated_attrs),
+          retry: false
+        )
+
+      case Req.request(req) do
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
+          case decode_check_result(data) do
+            {:ok, result} -> ReqDnsimple.Response.ok(result, response)
+            :error -> ReqDnsimple.response_error(response)
+          end
+
+        {:ok, response} ->
+          ReqDnsimple.response_error(response)
+
+        {:error, error} ->
+          {:error, error}
+      end
+    end
+    |> ReqDnsimple.Response.normalize_error()
+  end
+
+  @doc """
   Uses the client's configured account. See `create/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec create(Req.Request.t(), keyword()) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def create(req, attrs) do
     ReqDnsimple.Client.with_account(req, &create(req, &1, attrs))
   end
@@ -126,10 +233,10 @@ defmodule ReqDnsimple.RegistrantChange do
           "x-fi-registrant-idnumber" => "fake-offline-id"
         }
       )
-      #=> {:ok, %ReqDnsimple.RegistrantChange{}}
+      #=> {:ok, {%ReqDnsimple.RegistrantChange{}, %ReqDnsimple.Metadata{}}}
   """
   @spec create(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def create(req, account_id, attrs) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate([account_id: account_id], @create_path_schema),
@@ -147,7 +254,7 @@ defmodule ReqDnsimple.RegistrantChange do
         {:ok, %Req.Response{status: status, body: %{"data" => data}} = response}
         when status in [201, 202] ->
           case decode(data) do
-            {:ok, registrant_change} -> {:ok, registrant_change}
+            {:ok, registrant_change} -> ReqDnsimple.Response.ok(registrant_change, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -158,15 +265,16 @@ defmodule ReqDnsimple.RegistrantChange do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `get/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec get(Req.Request.t(), integer()) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def get(req, registrant_change_id) do
     ReqDnsimple.Client.with_account(req, &get(req, &1, registrant_change_id))
   end
@@ -179,7 +287,7 @@ defmodule ReqDnsimple.RegistrantChange do
   sends one bodyless request and performs no requirements check or mutation.
   """
   @spec get(Req.Request.t(), ReqDnsimple.account_id(), integer()) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def get(req, account_id, registrant_change_id) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -203,7 +311,7 @@ defmodule ReqDnsimple.RegistrantChange do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode(data) do
-            {:ok, registrant_change} -> {:ok, registrant_change}
+            {:ok, registrant_change} -> ReqDnsimple.Response.ok(registrant_change, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -214,15 +322,16 @@ defmodule ReqDnsimple.RegistrantChange do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account with default options.
   See `list_page/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` without making a request when the client is unscoped.
   """
   @spec list_page(Req.Request.t()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_page(req) do
     list_page(req, [])
   end
@@ -230,15 +339,15 @@ defmodule ReqDnsimple.RegistrantChange do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list_page/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` without making a request when the client is unscoped.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
   @spec list_page(Req.Request.t(), keyword()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   @spec list_page(Req.Request.t(), ReqDnsimple.account_id()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_page(req, account_id)
       when is_integer(account_id) or is_binary(account_id) do
     list_page(req, account_id, [])
@@ -267,16 +376,16 @@ defmodule ReqDnsimple.RegistrantChange do
         page: 2,
         per_page: 30
       )
-      #=> {:ok, {[%ReqDnsimple.RegistrantChange{}], %{"current_page" => 2}}}
+      #=> {:ok, {[%ReqDnsimple.RegistrantChange{}], %ReqDnsimple.Metadata{pagination: %{"current_page" => 2}}}}
   """
   @spec list_page(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_page(req, account_id, opts) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate([account_id: account_id], @create_path_schema),
          {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_schema) do
       req =
-        Req.merge(req,
+        ReqDnsimple.Helper.merge(req,
           method: :get,
           url: "/:account_id/registrar/registrant_changes",
           path_params_style: :colon,
@@ -288,10 +397,11 @@ defmodule ReqDnsimple.RegistrantChange do
         {:ok,
          %Req.Response{
            status: 200,
-           body: %{"data" => data, "pagination" => pagination}
-         } = response} ->
-          case decode_page(data, pagination) do
-            {:ok, result} -> {:ok, result}
+           body: %{"data" => data}
+         } = response}
+        when is_list(data) ->
+          case decode_many(data) do
+            {:ok, result} -> ReqDnsimple.Response.ok(result, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -302,15 +412,16 @@ defmodule ReqDnsimple.RegistrantChange do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account with default options.
   See `list/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` without making a request when the client is unscoped.
   """
   @spec list(Req.Request.t()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list(req) do
     list(req, [])
   end
@@ -318,15 +429,15 @@ defmodule ReqDnsimple.RegistrantChange do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` without making a request when the client is unscoped.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
   @spec list(Req.Request.t(), keyword()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   @spec list(Req.Request.t(), ReqDnsimple.account_id()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list(req, account_id)
       when is_integer(account_id) or is_binary(account_id) do
     list(req, account_id, [])
@@ -343,16 +454,16 @@ defmodule ReqDnsimple.RegistrantChange do
   additional pages.
   """
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list(req, account_id, opts), do: list_page(req, account_id, opts)
 
   @doc """
   Uses the client's configured account with default options.
   See `list_all/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` without making a request when the client is unscoped.
   """
   @spec list_all(Req.Request.t()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_all(req) do
     list_all(req, [])
   end
@@ -360,15 +471,15 @@ defmodule ReqDnsimple.RegistrantChange do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list_all/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}` without making a request when the client is unscoped.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
   @spec list_all(Req.Request.t(), keyword()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_all(req, account_id)
       when is_integer(account_id) or is_binary(account_id) do
     list_all(req, account_id, [])
@@ -383,20 +494,24 @@ defmodule ReqDnsimple.RegistrantChange do
 
   Enumeration begins at page one. An explicit `:page` option is rejected;
   filters, sorting, and `:per_page` are retained for every request.
+  Returns all resources with aggregate metadata whose `pages` retain each
+  response's metadata. Aggregate status, pagination, request ID, and ETag are
+  `nil`; rate-limit and Retry-After fields reflect the latest page. Enumeration
+  errors retain the metadata collected before the failure.
   """
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_all(req, account_id, opts) do
     ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, &1))
   end
 
   @doc """
   Uses the client's configured account. See `cancel/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
   without making a request when the client is unscoped.
   """
   @spec cancel(Req.Request.t(), integer()) ::
-          {:ok, t()} | :ok | {:error, term()}
+          ReqDnsimple.Response.result(t() | nil)
   def cancel(req, registrant_change_id) do
     ReqDnsimple.Client.with_account(req, &cancel(req, &1, registrant_change_id))
   end
@@ -404,12 +519,12 @@ defmodule ReqDnsimple.RegistrantChange do
   @doc """
   Cancels a registrar contact-change request.
 
-  Returns `{:ok, %ReqDnsimple.RegistrantChange{}}` for an asynchronous
-  cancellation (`202`) and `:ok` when cancellation completes immediately
+  Returns `{:ok, {%ReqDnsimple.RegistrantChange{}, %ReqDnsimple.Metadata{}}}` for an asynchronous
+  cancellation (`202`) and `{:ok, {nil, %ReqDnsimple.Metadata{status: 204}}}` when cancellation completes immediately
   (`204`). It sends one bodyless request and does not poll for completion.
   """
   @spec cancel(Req.Request.t(), ReqDnsimple.account_id(), integer()) ::
-          {:ok, t()} | :ok | {:error, term()}
+          ReqDnsimple.Response.result(t() | nil)
   def cancel(req, account_id, registrant_change_id) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -434,12 +549,12 @@ defmodule ReqDnsimple.RegistrantChange do
       case Req.request(req) do
         {:ok, %Req.Response{status: 202, body: %{"data" => data}} = response} ->
           case decode(data) do
-            {:ok, registrant_change} -> {:ok, registrant_change}
+            {:ok, registrant_change} -> ReqDnsimple.Response.ok(registrant_change, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
-        {:ok, %Req.Response{status: 204}} ->
-          :ok
+        {:ok, %Req.Response{status: 204} = response} ->
+          ReqDnsimple.Response.ok(nil, response)
 
         {:ok, response} ->
           ReqDnsimple.response_error(response)
@@ -448,7 +563,31 @@ defmodule ReqDnsimple.RegistrantChange do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
+
+  defp decode_check_result(%{
+         "domain_id" => domain_id,
+         "contact_id" => contact_id,
+         "extended_attributes" => extended_attributes,
+         "registry_owner_change" => registry_owner_change
+       })
+       when is_integer(domain_id) and is_integer(contact_id) and
+              is_list(extended_attributes) and is_boolean(registry_owner_change) do
+    if Enum.all?(extended_attributes, &(is_map(&1) and not is_struct(&1))) do
+      {:ok,
+       %CheckResult{
+         domain_id: domain_id,
+         contact_id: contact_id,
+         extended_attributes: extended_attributes,
+         registry_owner_change: registry_owner_change
+       }}
+    else
+      :error
+    end
+  end
+
+  defp decode_check_result(_data), do: :error
 
   defp decode(%{
          "id" => id,
@@ -492,17 +631,6 @@ defmodule ReqDnsimple.RegistrantChange do
 
   defp decode(_data), do: :error
 
-  defp decode_page(data, pagination) when is_list(data) do
-    with {:ok, registrant_changes} <- decode_many(data),
-         true <- valid_pagination?(pagination) do
-      {:ok, {registrant_changes, pagination}}
-    else
-      _error -> :error
-    end
-  end
-
-  defp decode_page(_data, _pagination), do: :error
-
   defp decode_many(data) do
     Enum.reduce_while(data, {:ok, []}, fn item, {:ok, registrant_changes} ->
       case decode(item) do
@@ -515,19 +643,6 @@ defmodule ReqDnsimple.RegistrantChange do
       :error -> :error
     end
   end
-
-  defp valid_pagination?(%{
-         "current_page" => current_page,
-         "per_page" => per_page,
-         "total_entries" => total_entries,
-         "total_pages" => total_pages
-       })
-       when is_integer(current_page) and current_page >= 0 and is_integer(per_page) and
-              per_page > 0 and is_integer(total_entries) and total_entries >= 0 and
-              is_integer(total_pages) and total_pages >= 0,
-       do: true
-
-  defp valid_pagination?(_pagination), do: false
 
   defp parse_optional_date(nil), do: {:ok, nil}
 

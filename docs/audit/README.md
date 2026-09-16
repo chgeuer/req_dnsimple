@@ -3,14 +3,57 @@
 Campaign epic: **bd-ogb**. Label: `api-parity`.
 Scope and execution policy were approved on 2026-09-12.
 
-This campaign fixes 13 existing contract/documentation findings, adds 90
-missing operations, and finishes with one independent verification gate.
-The target is 103 documented operations: 13 existing plus 90 additions.
-Eight other published operations are explicitly outside this campaign.
+The historical campaign scope comprised 13 existing contract/documentation
+findings, 90 missing operations, and one independent verification gate.
+Its target was 103 documented operations: 13 existing plus 90 additions.
+Eight other published operations were explicitly outside that campaign.
+
+The separately approved official Elixir SDK-parity extension on 2026-09-15
+adds seven of those operations. The current inventory therefore covers 110
+supported operations, including all 99 endpoints in DNSimple Elixir SDK
+v10.0.0 and 11 additional endpoints. Only `getDomainRestore` remains excluded.
+The campaign counts and tracker memberships below retain their original scope;
+the extension does not retrospectively add campaign issues.
 
 Counts below describe scope, not live status. `br` is the only progress
 authority; a process exit, an iteration cap, or zero ready items is not
 proof that implementation is complete.
+
+## Current HTTP result contract
+
+The separately approved breaking result contract applies uniformly to all 110
+supported operations: `{:ok, {data, %ReqDnsimple.Metadata{}}}` or
+`{:error, %ReqDnsimple.Error{reason: original_reason, metadata: metadata}}`.
+HTTP 204/bodyless successes have `nil` data; account listing and tagged
+`whoami` identities are no longer bare results. Bang helpers strip only `:ok`.
+`ReqDnsimple.Response.result(data)` is the shared type/formatter, not a returned
+struct.
+
+Single-response metadata retains status, nested string-keyed
+`metadata.pagination`, rate-limit fields, request ID, opaque ETag and
+Retry-After strings, and explicit `parse_errors` for malformed optional metadata.
+Missing optional values are `nil`; rate-limit reset is integer Unix seconds.
+Complete enumeration, including `ns_records`, returns aggregate metadata with
+each page in request order under `.pages`, even for empty or single-page
+collections. Aggregate budgets, Retry-After, and parse errors reflect the last
+page; aggregate status, pagination, request ID, and ETag remain `nil`.
+Later failures retain received page metadata without fabricating a transport
+response. This adds no automatic rate limiting, retries, or caching and retains
+no raw headers or bodies wholesale in metadata.
+
+Pure `OAuth.authorize_url/2,3` remains `{:ok, url}` or
+`{:error, %NimbleOptions.ValidationError{}}`; only token exchange performs HTTP.
+Local HTTP-operation validation/transport errors are structured `ReqDnsimple.Error`
+values with no response metadata of their own; constructors still raise
+`ArgumentError`.
+
+Inventory schema version 2 records metadata-bearing response types and replaces
+the old pagination-tuple flag with explicit metadata/pagination-location flags.
+Endpoint paths, operation IDs, provenance, arities, and historical tracker scope
+are unchanged: 111 published operations, only `getDomainRestore` excluded,
+102 account-path operations, and 144 scoped interface families. See the
+[current result guide](../../README.md#return-value-conventions), not historical
+success-preservation requirements, when consuming SDK results.
 
 ## Tracks
 
@@ -48,6 +91,9 @@ Baseline: req_dnsimple `41eb6f9`; official CLI `6cb5fc5`; dnsimple-go `v9.1.1`.
 Public OpenAPI: https://developer.dnsimple.com/v2/openapi.yml
 Reference SHA256: `426c0bd65e729b743e66c07036cc4e142de6c1a927c63f4290bf6595402d0b6f`.
 The complete downloaded reference is a local, ignored campaign artifact.
+The SDK-parity extension also uses `dnsimple/dnsimple-elixir` v10.0.0 at
+`16fc5fb` as a reference, with its implementation evidence recorded in the
+current operation inventory.
 
 ## Verification baseline
 

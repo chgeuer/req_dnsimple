@@ -20,6 +20,50 @@ defmodule ReqDnsimple.EmailForwardTest do
     "total_pages" => 1
   }
 
+  test "preserves HTTP headers on email-forward operations, page responses, and errors" do
+    headers = [
+      {"x-request-id", "email-response"},
+      {"x-ratelimit-remaining", "0"},
+      {"retry-after", "5"}
+    ]
+
+    for {operation, status, body, pagination} <- [
+          {&ReqDnsimple.EmailForward.create(&1, 1010, "example.test",
+             alias_name: "support",
+             destination_email: "recipient@example.test"
+           ), 201, %{"data" => @email_forward_data}, nil},
+          {&ReqDnsimple.EmailForward.get(&1, 1010, "example.test", 1), 200,
+           %{"data" => @email_forward_data}, nil},
+          {&ReqDnsimple.EmailForward.list_page(&1, 1010, "example.test"), 200,
+           %{"data" => [@email_forward_data], "pagination" => @pagination}, @pagination},
+          {&ReqDnsimple.EmailForward.delete(&1, 1010, "example.test", 1), 204, nil, nil}
+        ] do
+      metadata = %ReqDnsimple.Metadata{
+        status: status,
+        pagination: pagination,
+        request_id: "email-response",
+        rate_limit_remaining: 0,
+        retry_after: "5"
+      }
+
+      assert {:ok, {data, ^metadata}} = operation.(client(status, body, self(), headers))
+      if status == 204, do: assert(is_nil(data))
+      assert_received {:request, _request}
+
+      error_body = %{"message" => "retry later"}
+      error_metadata = %{metadata | status: 429, pagination: nil}
+
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: %{status: 429, response: ^error_body},
+                metadata: ^error_metadata
+              }} = operation.(client(429, error_body, self(), headers))
+
+      assert_received {:request, _request}
+      refute_received {:request, _request}
+    end
+  end
+
   describe "list_page/4 and list/4" do
     test "listEmailForwards sends ordered options once and returns typed data" do
       second =
@@ -47,7 +91,7 @@ defmodule ReqDnsimple.EmailForwardTest do
                    destination_email: "team@example.test",
                    active: true
                  }
-               ], ^pagination}} =
+               ], %ReqDnsimple.Metadata{pagination: ^pagination}}} =
                ReqDnsimple.EmailForward.list_page(
                  client(200, %{
                    "data" => [@email_forward_data, second],
@@ -78,7 +122,7 @@ defmodule ReqDnsimple.EmailForwardTest do
         "total_pages" => 0
       }
 
-      assert {:ok, {[], ^pagination}} =
+      assert {:ok, {[], %ReqDnsimple.Metadata{pagination: ^pagination}}} =
                ReqDnsimple.EmailForward.list(
                  client(200, %{"data" => [], "pagination" => pagination}),
                  0,
@@ -110,7 +154,8 @@ defmodule ReqDnsimple.EmailForwardTest do
       ]
 
       for {account_id, domain, opts} <- invalid_calls do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.EmailForward.list_page(request, account_id, domain, opts)
       end
 
@@ -124,7 +169,11 @@ defmodule ReqDnsimple.EmailForwardTest do
           "errors" => %{"domain" => ["is unavailable"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.EmailForward.list_page(
                    client(status, body),
                    1010,
@@ -135,7 +184,8 @@ defmodule ReqDnsimple.EmailForwardTest do
         refute_received {:request, _request}
       end
 
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.EmailForward.list_page(
                  transport_error_client(:timeout),
                  1010,
@@ -153,18 +203,15 @@ defmodule ReqDnsimple.EmailForwardTest do
         %{
           "data" => [Map.put(@email_forward_data, "created_at", "invalid")],
           "pagination" => @pagination
-        },
-        %{"data" => [@email_forward_data]},
-        %{"data" => [@email_forward_data], "pagination" => nil},
-        %{
-          "data" => [@email_forward_data],
-          "pagination" => Map.delete(@pagination, "total_entries")
-        },
-        %{"data" => [@email_forward_data], "pagination" => %{@pagination | "per_page" => 0}}
+        }
       ]
 
       for body <- malformed_bodies do
-        assert {:error, %{status: 200, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: 200, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: 200}
+                }} =
                  ReqDnsimple.EmailForward.list_page(
                    client(200, body),
                    1010,
@@ -174,6 +221,33 @@ defmodule ReqDnsimple.EmailForwardTest do
         assert_request(:get, "/v2/1010/domains/example.test/email_forwards", %{}, nil)
         refute_received {:request, _request}
       end
+    end
+  end
+
+  test "email-forward pages retain valid data and headers when pagination is absent or malformed" do
+    invalid = Map.delete(@pagination, "total_entries")
+    zero = %{@pagination | "per_page" => 0}
+
+    for {fields, pagination, errors} <- [
+          {%{}, nil, %{}},
+          {%{"pagination" => nil}, nil, %{}},
+          {%{"pagination" => invalid}, nil, %{pagination: {:invalid_pagination, invalid}}},
+          {%{"pagination" => zero}, zero, %{}}
+        ] do
+      body = Map.put(fields, "data", [@email_forward_data])
+      req = client(200, body, self(), [{"x-request-id", "email-page"}])
+
+      assert {:ok,
+              {[%ReqDnsimple.EmailForward{}],
+               %ReqDnsimple.Metadata{
+                 status: 200,
+                 request_id: "email-page",
+                 pagination: ^pagination,
+                 parse_errors: ^errors
+               }}} = ReqDnsimple.EmailForward.list_page(req, 1010, "example.test")
+
+      assert_request(:get, "/v2/1010/domains/example.test/email_forwards", %{}, nil)
+      refute_received {:request, _request}
     end
   end
 
@@ -195,10 +269,10 @@ defmodule ReqDnsimple.EmailForwardTest do
       }
 
       assert {:ok,
-              [
-                %ReqDnsimple.EmailForward{id: 1},
-                %ReqDnsimple.EmailForward{id: 2}
-              ]} =
+              {[
+                 %ReqDnsimple.EmailForward{id: 1},
+                 %ReqDnsimple.EmailForward{id: 2}
+               ], %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.EmailForward.list_all(
                  page_client(pages),
                  1010,
@@ -227,7 +301,7 @@ defmodule ReqDnsimple.EmailForwardTest do
     test "rejects explicit pages and malformed option containers before HTTP" do
       request = client(200, %{"data" => [], "pagination" => @pagination})
 
-      assert {:error, {:invalid_option, :page}} =
+      assert {:error, %ReqDnsimple.Error{reason: {:invalid_option, :page}, metadata: nil}} =
                ReqDnsimple.EmailForward.list_all(
                  request,
                  1010,
@@ -236,7 +310,8 @@ defmodule ReqDnsimple.EmailForwardTest do
                )
 
       for opts <- [[:invalid], [{:name}]] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.EmailForward.list_all(
                    request,
                    1010,
@@ -258,7 +333,11 @@ defmodule ReqDnsimple.EmailForwardTest do
           2 -> {503, %{"message" => "unavailable"}}
         end)
 
-      assert {:error, %{status: 503, response: %{"message" => "unavailable"}}} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: %{status: 503, response: %{"message" => "unavailable"}},
+                metadata: %ReqDnsimple.Metadata{status: 503}
+              }} =
                ReqDnsimple.EmailForward.list_all(http_client, 1010, "example.test")
 
       assert_request(:get, "/v2/1010/domains/example.test/email_forwards", %{"page" => 1})
@@ -266,7 +345,11 @@ defmodule ReqDnsimple.EmailForwardTest do
 
       repeated = %{@pagination | "current_page" => 1, "total_entries" => 2, "total_pages" => 2}
 
-      assert {:error, {:invalid_pagination, ^repeated}} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: {:invalid_pagination, ^repeated},
+                metadata: %ReqDnsimple.Metadata{}
+              }} =
                ReqDnsimple.EmailForward.list_all(
                  response_client(fn _page ->
                    {200, %{"data" => [@email_forward_data], "pagination" => repeated}}
@@ -289,15 +372,15 @@ defmodule ReqDnsimple.EmailForwardTest do
       ]
 
       assert {:ok,
-              %ReqDnsimple.EmailForward{
-                id: 1,
-                domain_id: 100,
-                alias_email: "support@example.test",
-                destination_email: "recipient@example.test",
-                created_at: ~U[2026-09-01 08:00:00Z],
-                updated_at: ~U[2026-09-01 08:30:00Z],
-                active: false
-              }} =
+              {%ReqDnsimple.EmailForward{
+                 id: 1,
+                 domain_id: 100,
+                 alias_email: "support@example.test",
+                 destination_email: "recipient@example.test",
+                 created_at: ~U[2026-09-01 08:00:00Z],
+                 updated_at: ~U[2026-09-01 08:30:00Z],
+                 active: false
+               }, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.EmailForward.create(
                  client(201, %{"data" => @email_forward_data}),
                  1010,
@@ -318,7 +401,7 @@ defmodule ReqDnsimple.EmailForwardTest do
     test "createEmailForward accepts integer and zero identifiers without altering empty strings" do
       data = Map.merge(@email_forward_data, %{"id" => 0, "domain_id" => 0})
 
-      assert {:ok, %ReqDnsimple.EmailForward{id: 0, domain_id: 0}} =
+      assert {:ok, {%ReqDnsimple.EmailForward{id: 0, domain_id: 0}, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.EmailForward.create(
                  client(201, %{"data" => data}),
                  0,
@@ -367,7 +450,8 @@ defmodule ReqDnsimple.EmailForwardTest do
             {1010, "example.test",
              alias_name: "support", destination_email: "recipient@example.test", active: true}
           ] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.EmailForward.create(request, account_id, domain, attrs)
       end
 
@@ -383,7 +467,11 @@ defmodule ReqDnsimple.EmailForwardTest do
           "errors" => %{"destination_email" => ["is invalid"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.EmailForward.create(
                    client(status, body),
                    1010,
@@ -415,7 +503,11 @@ defmodule ReqDnsimple.EmailForwardTest do
       ]
 
       for body <- malformed_payloads do
-        assert {:error, %{status: 201, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: 201, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: 201}
+                }} =
                  ReqDnsimple.EmailForward.create(
                    client(201, body),
                    1010,
@@ -435,7 +527,11 @@ defmodule ReqDnsimple.EmailForwardTest do
 
       body = %{"data" => @email_forward_data}
 
-      assert {:error, %{status: 200, response: ^body}} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: %{status: 200, response: ^body},
+                metadata: %ReqDnsimple.Metadata{status: 200}
+              }} =
                ReqDnsimple.EmailForward.create(
                  client(200, body),
                  1010,
@@ -454,7 +550,8 @@ defmodule ReqDnsimple.EmailForwardTest do
     end
 
     test "createEmailForward preserves transport failures" do
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.EmailForward.create(
                  transport_error_client(:timeout),
                  1010,
@@ -468,15 +565,15 @@ defmodule ReqDnsimple.EmailForwardTest do
   describe "get/4" do
     test "getEmailForward sends one bodyless request and returns a typed result" do
       assert {:ok,
-              %ReqDnsimple.EmailForward{
-                id: 1,
-                domain_id: 100,
-                alias_email: "support@example.test",
-                destination_email: "recipient@example.test",
-                created_at: ~U[2026-09-01 08:00:00Z],
-                updated_at: ~U[2026-09-01 08:30:00Z],
-                active: false
-              }} =
+              {%ReqDnsimple.EmailForward{
+                 id: 1,
+                 domain_id: 100,
+                 alias_email: "support@example.test",
+                 destination_email: "recipient@example.test",
+                 created_at: ~U[2026-09-01 08:00:00Z],
+                 updated_at: ~U[2026-09-01 08:30:00Z],
+                 active: false
+               }, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.EmailForward.get(
                  client(200, %{"data" => @email_forward_data}),
                  1010,
@@ -491,7 +588,9 @@ defmodule ReqDnsimple.EmailForwardTest do
     test "getEmailForward accepts integer and zero identifiers" do
       data = Map.merge(@email_forward_data, %{"id" => 0, "domain_id" => 0})
 
-      assert {:ok, %ReqDnsimple.EmailForward{id: 0, domain_id: 0, active: false}} =
+      assert {:ok,
+              {%ReqDnsimple.EmailForward{id: 0, domain_id: 0, active: false},
+               %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.EmailForward.get(client(200, %{"data" => data}), 0, 0, 0)
 
       assert_request(:get, "/v2/0/domains/0/email_forwards/0", %{}, nil)
@@ -510,7 +609,8 @@ defmodule ReqDnsimple.EmailForwardTest do
             {1010, "example.test", "1"},
             {1010, "example.test", nil}
           ] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.EmailForward.get(
                    request,
                    account_id,
@@ -529,7 +629,11 @@ defmodule ReqDnsimple.EmailForwardTest do
           "errors" => %{"email_forward" => ["is unavailable"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.EmailForward.get(
                    client(status, body),
                    1010,
@@ -553,7 +657,11 @@ defmodule ReqDnsimple.EmailForwardTest do
       ]
 
       for body <- malformed_payloads do
-        assert {:error, %{status: 200, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: 200, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: 200}
+                }} =
                  ReqDnsimple.EmailForward.get(
                    client(200, body),
                    1010,
@@ -566,7 +674,11 @@ defmodule ReqDnsimple.EmailForwardTest do
       end
 
       for {status, body} <- [{201, %{"data" => @email_forward_data}}, {204, nil}] do
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.EmailForward.get(
                    client(status, body),
                    1010,
@@ -580,7 +692,8 @@ defmodule ReqDnsimple.EmailForwardTest do
     end
 
     test "getEmailForward preserves transport failures" do
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.EmailForward.get(
                  transport_error_client(:timeout),
                  1010,
@@ -591,8 +704,8 @@ defmodule ReqDnsimple.EmailForwardTest do
   end
 
   describe "delete/4" do
-    test "deleteEmailForward sends one bodyless request and returns :ok" do
-      assert :ok =
+    test "deleteEmailForward sends one bodyless request and returns nil data with metadata" do
+      assert {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}} =
                ReqDnsimple.EmailForward.delete(
                  client(204, ""),
                  1010,
@@ -605,7 +718,8 @@ defmodule ReqDnsimple.EmailForwardTest do
     end
 
     test "deleteEmailForward accepts an integer domain ID" do
-      assert :ok = ReqDnsimple.EmailForward.delete(client(204, nil), 1010, 42, 1)
+      assert {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}} =
+               ReqDnsimple.EmailForward.delete(client(204, nil), 1010, 42, 1)
 
       assert_request(:delete, "/v2/1010/domains/42/email_forwards/1", %{}, nil)
       refute_received {:request, _request}
@@ -623,7 +737,8 @@ defmodule ReqDnsimple.EmailForwardTest do
             {1010, "example.test", "1"},
             {1010, "example.test", nil}
           ] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.EmailForward.delete(
                    request,
                    account_id,
@@ -636,7 +751,8 @@ defmodule ReqDnsimple.EmailForwardTest do
     end
 
     test "deleteEmailForward preserves explicit zero identifiers" do
-      assert :ok = ReqDnsimple.EmailForward.delete(client(204, nil), 0, 0, 0)
+      assert {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}} =
+               ReqDnsimple.EmailForward.delete(client(204, nil), 0, 0, 0)
 
       assert_request(:delete, "/v2/0/domains/0/email_forwards/0", %{}, nil)
       refute_received {:request, _request}
@@ -649,7 +765,11 @@ defmodule ReqDnsimple.EmailForwardTest do
           "errors" => %{"email_forward" => ["cannot be deleted"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.EmailForward.delete(
                    client(status, body),
                    1010,
@@ -664,7 +784,11 @@ defmodule ReqDnsimple.EmailForwardTest do
 
     test "deleteEmailForward rejects non-204 successful responses" do
       for {status, body} <- [{200, %{}}, {200, nil}, {201, %{"data" => %{}}}] do
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.EmailForward.delete(
                    client(status, body),
                    1010,
@@ -678,7 +802,8 @@ defmodule ReqDnsimple.EmailForwardTest do
     end
 
     test "deleteEmailForward preserves transport failures" do
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.EmailForward.delete(
                  transport_error_client(:timeout),
                  1010,

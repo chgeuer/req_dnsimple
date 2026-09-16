@@ -2,17 +2,23 @@ defmodule ReqDnsimple.Dnssec do
   @moduledoc """
   Operations for domain DNSSEC.
 
+  Successful HTTP operations return `{:ok, {data, %ReqDnsimple.Metadata{}}}`.
+  Failures return `{:error, %ReqDnsimple.Error{}}`, with metadata when an
+  HTTP response was received.
+  Bodyless HTTP 204 responses use `nil` data.
+
   Retrieve a domain's DNSSEC status:
 
-      {:ok, dnssec} = ReqDnsimple.Dnssec.get(client, 1010, "example.test")
+      {:ok, {dnssec, %ReqDnsimple.Metadata{}}} = ReqDnsimple.Dnssec.get(client, 1010, "example.test")
 
   Enable DNSSEC for a domain:
 
-      {:ok, dnssec} = ReqDnsimple.Dnssec.enable(client, 1010, "example.test")
+      {:ok, {dnssec, %ReqDnsimple.Metadata{}}} = ReqDnsimple.Dnssec.enable(client, 1010, "example.test")
 
   Disable DNSSEC for a domain:
 
-      :ok = ReqDnsimple.Dnssec.disable(client, 1010, "example.test")
+      {:ok, {nil, %ReqDnsimple.Metadata{}}} =
+        ReqDnsimple.Dnssec.disable(client, 1010, "example.test")
 
   For domains registered with DNSimple, DNSimple submits the delegation-signer
   records to the registry. Hosted-only domains require the caller to coordinate
@@ -38,11 +44,11 @@ defmodule ReqDnsimple.Dnssec do
 
   @doc """
   Uses the client's configured account. See `get/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
-  @spec get(Req.Request.t(), binary() | integer()) ::
-          {:ok, t()} | {:error, term()}
+  @spec get(Req.Request.t(), binary() | integer()) :: ReqDnsimple.Response.result(t())
   def get(req, domain) do
     ReqDnsimple.Client.with_account(req, &get(req, &1, domain))
   end
@@ -55,7 +61,7 @@ defmodule ReqDnsimple.Dnssec do
   API omits it.
   """
   @spec get(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer()) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def get(req, account_id, domain) do
     with {:ok, _validated_params} <-
            NimbleOptions.validate([account_id: account_id, domain: domain], @path_schema) do
@@ -70,7 +76,7 @@ defmodule ReqDnsimple.Dnssec do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode(data) do
-            {:ok, dnssec} -> {:ok, dnssec}
+            {:ok, dnssec} -> ReqDnsimple.Response.ok(dnssec, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -78,18 +84,19 @@ defmodule ReqDnsimple.Dnssec do
           ReqDnsimple.response_error(response)
 
         {:error, error} ->
-          {:error, error}
+          ReqDnsimple.Response.error(error)
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `enable/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
-  @spec enable(Req.Request.t(), binary() | integer()) ::
-          {:ok, t()} | {:error, term()}
+  @spec enable(Req.Request.t(), binary() | integer()) :: ReqDnsimple.Response.result(t())
   def enable(req, domain) do
     ReqDnsimple.Client.with_account(req, &enable(req, &1, domain))
   end
@@ -102,7 +109,7 @@ defmodule ReqDnsimple.Dnssec do
   submission. Hosted-only domains require caller-managed registrar coordination.
   """
   @spec enable(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer()) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def enable(req, account_id, domain) do
     with {:ok, _validated_params} <-
            NimbleOptions.validate([account_id: account_id, domain: domain], @path_schema) do
@@ -117,7 +124,7 @@ defmodule ReqDnsimple.Dnssec do
       case Req.request(req) do
         {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
           case decode(data) do
-            {:ok, dnssec} -> {:ok, dnssec}
+            {:ok, dnssec} -> ReqDnsimple.Response.ok(dnssec, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -125,18 +132,19 @@ defmodule ReqDnsimple.Dnssec do
           ReqDnsimple.response_error(response)
 
         {:error, error} ->
-          {:error, error}
+          ReqDnsimple.Response.error(error)
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `disable/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
-  @spec disable(Req.Request.t(), binary() | integer()) ::
-          :ok | {:error, term()}
+  @spec disable(Req.Request.t(), binary() | integer()) :: ReqDnsimple.Response.result(nil)
   def disable(req, domain) do
     ReqDnsimple.Client.with_account(req, &disable(req, &1, domain))
   end
@@ -144,12 +152,12 @@ defmodule ReqDnsimple.Dnssec do
   @doc """
   Disables DNSSEC for a domain.
 
-  Returns `:ok` only for the API's empty HTTP 204 response. HTTP 428 when DNSSEC
+  Returns `{:ok, {nil, %ReqDnsimple.Metadata{}}}` only for the API's empty HTTP 204 response. HTTP 428 when DNSSEC
   is not currently enabled, other HTTP responses, and transport failures are
   returned as explicit error tuples.
   """
   @spec disable(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer()) ::
-          :ok | {:error, term()}
+          ReqDnsimple.Response.result(nil)
   def disable(req, account_id, domain) do
     with {:ok, _validated_params} <-
            NimbleOptions.validate(
@@ -165,16 +173,17 @@ defmodule ReqDnsimple.Dnssec do
         )
 
       case Req.request(req) do
-        {:ok, %Req.Response{status: 204}} ->
-          :ok
+        {:ok, %Req.Response{status: 204} = response} ->
+          ReqDnsimple.Response.ok(nil, response)
 
         {:ok, response} ->
           ReqDnsimple.response_error(response)
 
         {:error, error} ->
-          {:error, error}
+          ReqDnsimple.Response.error(error)
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   defp decode(

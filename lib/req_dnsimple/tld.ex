@@ -2,22 +2,30 @@ defmodule ReqDnsimple.Tld do
   @moduledoc """
   Supported top-level domain capabilities.
 
+  HTTP operations return `{:ok, {data, %ReqDnsimple.Metadata{}}}` or
+  `{:error, %ReqDnsimple.Error{}}`. HTTP 204 successes have `nil` data.
+  Errors preserve their original reason in `error.reason`. When no response
+  has been received, `error.metadata` is `nil`.
+  Collection pagination is nested in `metadata.pagination`. Complete
+  enumeration retains ordered page metadata in `metadata.pages` and the
+  latest rate-limit budget at the top level.
+
   Retrieve capabilities for a TLD or compound suffix:
 
-      {:ok, tld} = ReqDnsimple.Tld.get(client, "com.au")
+      {:ok, {tld, metadata}} = ReqDnsimple.Tld.get(client, "com.au")
 
   List one page of supported TLDs:
 
-      {:ok, {tlds, pagination}} =
+      {:ok, {tlds, metadata}} =
         ReqDnsimple.Tld.list_page(client, sort: [tld: :asc], per_page: 30)
 
   Explicitly enumerate every supported TLD:
 
-      {:ok, tlds} = ReqDnsimple.Tld.list_all(client, sort: [tld: :asc])
+      {:ok, {tlds, metadata}} = ReqDnsimple.Tld.list_all(client, sort: [tld: :asc])
 
   Retrieve the registry's typed extended-attribute definitions:
 
-      {:ok, attributes} = ReqDnsimple.Tld.list_extended_attributes(client, "co.uk")
+      {:ok, {attributes, metadata}} = ReqDnsimple.Tld.list_extended_attributes(client, "co.uk")
 
   Name-server bounds are normalized to integers when DNSimple returns numeric
   strings. A bound omitted by the registry remains `nil`. Extended attributes
@@ -108,7 +116,7 @@ defmodule ReqDnsimple.Tld do
 
   The suffix is sent unchanged, including compound suffixes such as `com.au`.
   """
-  @spec get(Req.Request.t(), binary()) :: {:ok, t()} | {:error, term()}
+  @spec get(Req.Request.t(), binary()) :: ReqDnsimple.Response.result(t())
   def get(req, tld) do
     with {:ok, _validated_path} <- NimbleOptions.validate([tld: tld], @path_schema) do
       req =
@@ -122,7 +130,7 @@ defmodule ReqDnsimple.Tld do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode(data) do
-            {:ok, tld} -> {:ok, tld}
+            {:ok, tld} -> ReqDnsimple.Response.ok(tld, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -133,14 +141,14 @@ defmodule ReqDnsimple.Tld do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Lists one page of supported TLDs and their capabilities.
 
   Supports ordered `:sort` terms for `:tld`, plus `:page` and `:per_page`.
-  Omitted options remain omitted so DNSimple applies its server defaults. The
-  returned pagination metadata retains its string keys.
+  Omitted options remain omitted so DNSimple applies its server defaults. Pagination retains its string keys in `metadata.pagination`.
 
   ## Example
 
@@ -150,20 +158,20 @@ defmodule ReqDnsimple.Tld do
         page: 2,
         per_page: 30
       )
-      #=> {:ok, {[%ReqDnsimple.Tld{}], %{"current_page" => 2}}}
+      #=> {:ok, {[%ReqDnsimple.Tld{}], %ReqDnsimple.Metadata{}}}
   """
   @spec list_page(Req.Request.t(), keyword()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_page(req, opts \\ []) do
     with {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_schema) do
       case request_tlds(req, validated_opts) do
         {:ok,
          %Req.Response{
            status: 200,
-           body: %{"data" => data, "pagination" => pagination}
+           body: %{"data" => data}
          } = response} ->
-          case decode_page(data, pagination) do
-            {:ok, result} -> {:ok, result}
+          case decode_many(data) do
+            {:ok, result} -> ReqDnsimple.Response.ok(result, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -174,6 +182,7 @@ defmodule ReqDnsimple.Tld do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
@@ -183,7 +192,7 @@ defmodule ReqDnsimple.Tld do
   additional pages implicitly.
   """
   @spec list(Req.Request.t(), keyword()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list(req, opts \\ []), do: list_page(req, opts)
 
   @doc """
@@ -191,8 +200,13 @@ defmodule ReqDnsimple.Tld do
 
   Enumeration always begins at page one, so an explicit `:page` option is
   rejected. Sorting and `:per_page` are retained for every request.
+
+  The returned metadata retains all responses in `metadata.pages`, in order,
+  and the latest rate-limit budget. Aggregate `status`, `pagination`,
+  `request_id`, and `etag` are `nil`. A later failure retains completed page
+  metadata in `error.metadata.pages`.
   """
-  @spec list_all(Req.Request.t(), keyword()) :: {:ok, [t()]} | {:error, term()}
+  @spec list_all(Req.Request.t(), keyword()) :: ReqDnsimple.Response.result([t()])
   def list_all(req, opts \\ []) do
     ReqDnsimple.Pagination.all(opts, &list_page(req, &1))
   end
@@ -204,7 +218,7 @@ defmodule ReqDnsimple.Tld do
   as strings. An omitted attribute title is returned as `nil`.
   """
   @spec list_extended_attributes(Req.Request.t(), binary()) ::
-          {:ok, [ExtendedAttribute.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([ExtendedAttribute.t()])
   def list_extended_attributes(req, tld) do
     with {:ok, _validated_path} <- NimbleOptions.validate([tld: tld], @path_schema) do
       req =
@@ -219,7 +233,7 @@ defmodule ReqDnsimple.Tld do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response}
         when is_list(data) ->
           case decode_extended_attributes(data) do
-            {:ok, attributes} -> {:ok, attributes}
+            {:ok, attributes} -> ReqDnsimple.Response.ok(attributes, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -230,6 +244,7 @@ defmodule ReqDnsimple.Tld do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   defp decode(
@@ -298,18 +313,7 @@ defmodule ReqDnsimple.Tld do
 
   defp decode_bound(_value), do: :error
 
-  defp decode_page(data, pagination) when is_list(data) do
-    with {:ok, tlds} <- decode_many(data),
-         true <- valid_pagination?(pagination) do
-      {:ok, {tlds, pagination}}
-    else
-      _error -> :error
-    end
-  end
-
-  defp decode_page(_data, _pagination), do: :error
-
-  defp decode_many(data) do
+  defp decode_many(data) when is_list(data) do
     Enum.reduce_while(data, {:ok, []}, fn item, {:ok, tlds} ->
       case decode(item) do
         {:ok, tld} -> {:cont, {:ok, [tld | tlds]}}
@@ -322,18 +326,7 @@ defmodule ReqDnsimple.Tld do
     end
   end
 
-  defp valid_pagination?(%{
-         "current_page" => current_page,
-         "per_page" => per_page,
-         "total_entries" => total_entries,
-         "total_pages" => total_pages
-       })
-       when is_integer(current_page) and current_page >= 0 and is_integer(per_page) and
-              per_page > 0 and is_integer(total_entries) and total_entries >= 0 and
-              is_integer(total_pages) and total_pages >= 0,
-       do: true
-
-  defp valid_pagination?(_pagination), do: false
+  defp decode_many(_data), do: :error
 
   defp request_tlds(req, opts) do
     params =
@@ -342,7 +335,7 @@ defmodule ReqDnsimple.Tld do
       |> Map.new()
 
     req
-    |> Req.merge(method: :get, url: "/tlds", params: params)
+    |> ReqDnsimple.Helper.merge(method: :get, url: "/tlds", params: params)
     |> Req.request()
   end
 

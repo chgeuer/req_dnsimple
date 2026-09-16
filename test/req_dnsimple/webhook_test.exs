@@ -9,6 +9,61 @@ defmodule ReqDnsimple.WebhookTest do
     "suppressed_at" => nil
   }
 
+  test "webhook data, bodyless successes, and HTTP errors retain response headers" do
+    headers = [
+      {"x-ratelimit-remaining", "0"},
+      {"x-request-id", "webhook-response"},
+      {"retry-after", "120"}
+    ]
+
+    assert {:ok,
+            {%ReqDnsimple.Webhook{id: 1},
+             %ReqDnsimple.Metadata{
+               status: 200,
+               rate_limit_remaining: 0,
+               request_id: "webhook-response"
+             }}} =
+             ReqDnsimple.Webhook.get(
+               client(200, %{"data" => @webhook_data}, self(), headers),
+               1010,
+               1
+             )
+
+    assert_request(:get, "/v2/1010/webhooks/1")
+
+    assert {:ok,
+            {nil,
+             %ReqDnsimple.Metadata{
+               status: 204,
+               rate_limit_remaining: 0,
+               request_id: "webhook-response"
+             }}} =
+             ReqDnsimple.Webhook.delete(client(204, nil, self(), headers), 1010, 1)
+
+    assert_request(:delete, "/v2/1010/webhooks/1")
+
+    assert {:error,
+            %ReqDnsimple.Error{
+              reason: reason,
+              metadata: %ReqDnsimple.Metadata{
+                status: 429,
+                rate_limit_remaining: 0,
+                request_id: "webhook-response",
+                retry_after: "120"
+              }
+            }} =
+             ReqDnsimple.Webhook.get(
+               client(429, %{"message" => "rate limited"}, self(), headers),
+               1010,
+               1
+             )
+
+    assert reason.status == 429
+    refute Map.has_key?(reason, :retry_after)
+    assert_request(:get, "/v2/1010/webhooks/1")
+    refute_received {:request, _request}
+  end
+
   describe "list/3" do
     test "listWebhooks sends ordered id sorting once and returns typed webhooks" do
       suppressed =
@@ -18,18 +73,18 @@ defmodule ReqDnsimple.WebhookTest do
         |> Map.put("suppressed_at", "2026-09-01T10:00:00+02:00")
 
       assert {:ok,
-              [
-                %ReqDnsimple.Webhook{
-                  id: 1,
-                  url: "https://receiver.example.test/events",
-                  suppressed_at: nil
-                },
-                %ReqDnsimple.Webhook{
-                  id: 2,
-                  url: "https://receiver.example.test/suppressed",
-                  suppressed_at: ~U[2026-09-01 08:00:00Z]
-                }
-              ]} =
+              {[
+                 %ReqDnsimple.Webhook{
+                   id: 1,
+                   url: "https://receiver.example.test/events",
+                   suppressed_at: nil
+                 },
+                 %ReqDnsimple.Webhook{
+                   id: 2,
+                   url: "https://receiver.example.test/suppressed",
+                   suppressed_at: ~U[2026-09-01 08:00:00Z]
+                 }
+               ], %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.Webhook.list(
                  client(200, %{"data" => [@webhook_data, suppressed]}),
                  1010,
@@ -47,7 +102,7 @@ defmodule ReqDnsimple.WebhookTest do
     end
 
     test "listWebhooks preserves an empty collection and omitted options" do
-      assert {:ok, []} =
+      assert {:ok, {[], %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.Webhook.list(client(200, %{"data" => []}), 0)
 
       assert_request(:get, "/v2/0/webhooks", %{}, nil)
@@ -67,7 +122,8 @@ defmodule ReqDnsimple.WebhookTest do
             {1010, [sort: [name: :asc]]},
             {1010, [sort: [id: :sideways]]}
           ] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.Webhook.list(request, account_id, opts)
       end
 
@@ -81,7 +137,11 @@ defmodule ReqDnsimple.WebhookTest do
           "errors" => %{"account" => ["is unavailable"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.Webhook.list(client(status, body), 1010)
 
         assert_request(:get, "/v2/1010/webhooks", %{}, nil)
@@ -103,7 +163,11 @@ defmodule ReqDnsimple.WebhookTest do
       ]
 
       for body <- malformed_payloads do
-        assert {:error, %{status: 200, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: 200, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: 200}
+                }} =
                  ReqDnsimple.Webhook.list(client(200, body), 1010)
 
         assert_request(:get, "/v2/1010/webhooks", %{}, nil)
@@ -114,12 +178,17 @@ defmodule ReqDnsimple.WebhookTest do
     test "listWebhooks rejects unexpected success statuses and preserves transport failures" do
       body = %{"data" => [@webhook_data]}
 
-      assert {:error, %{status: 201, response: ^body}} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: %{status: 201, response: ^body},
+                metadata: %ReqDnsimple.Metadata{status: 201}
+              }} =
                ReqDnsimple.Webhook.list(client(201, body), 1010)
 
       assert_request(:get, "/v2/1010/webhooks", %{}, nil)
 
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.Webhook.list(transport_error_client(:timeout), 1010)
     end
   end
@@ -130,11 +199,11 @@ defmodule ReqDnsimple.WebhookTest do
       data = Map.put(@webhook_data, "url", url)
 
       assert {:ok,
-              %ReqDnsimple.Webhook{
-                id: 1,
-                url: ^url,
-                suppressed_at: nil
-              }} =
+              {%ReqDnsimple.Webhook{
+                 id: 1,
+                 url: ^url,
+                 suppressed_at: nil
+               }, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.Webhook.create(
                  client(201, %{"data" => data}),
                  1010,
@@ -149,9 +218,9 @@ defmodule ReqDnsimple.WebhookTest do
       data = Map.put(@webhook_data, "suppressed_at", "2026-09-01T10:00:00+02:00")
 
       assert {:ok,
-              %ReqDnsimple.Webhook{
-                suppressed_at: ~U[2026-09-01 08:00:00Z]
-              }} =
+              {%ReqDnsimple.Webhook{
+                 suppressed_at: ~U[2026-09-01 08:00:00Z]
+               }, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.Webhook.create(
                  client(201, %{"data" => data}),
                  0,
@@ -184,7 +253,8 @@ defmodule ReqDnsimple.WebhookTest do
             {1010, [url: "not a URI"]},
             {1010, [url: "https://receiver.example.test/events", unknown: true]}
           ] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.Webhook.create(request, account_id, attrs)
       end
 
@@ -200,7 +270,11 @@ defmodule ReqDnsimple.WebhookTest do
           "errors" => %{"url" => ["is unavailable"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.Webhook.create(client(status, body), 1010, url: url)
 
         assert_request(:post, "/v2/1010/webhooks", %{}, %{"url" => url})
@@ -221,7 +295,11 @@ defmodule ReqDnsimple.WebhookTest do
       ]
 
       for body <- malformed_payloads do
-        assert {:error, %{status: 201, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: 201, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: 201}
+                }} =
                  ReqDnsimple.Webhook.create(
                    client(201, body),
                    1010,
@@ -242,7 +320,11 @@ defmodule ReqDnsimple.WebhookTest do
     test "createWebhook rejects an unexpected success status" do
       body = %{"data" => @webhook_data}
 
-      assert {:error, %{status: 200, response: ^body}} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: %{status: 200, response: ^body},
+                metadata: %ReqDnsimple.Metadata{status: 200}
+              }} =
                ReqDnsimple.Webhook.create(
                  client(200, body),
                  1010,
@@ -258,7 +340,8 @@ defmodule ReqDnsimple.WebhookTest do
     end
 
     test "createWebhook preserves transport failures" do
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.Webhook.create(
                  transport_error_client(:timeout),
                  1010,
@@ -270,12 +353,12 @@ defmodule ReqDnsimple.WebhookTest do
   describe "get/3" do
     test "getWebhook sends one bodyless request and returns an unsuppressed webhook" do
       assert {:ok,
-              %{
-                __struct__: ReqDnsimple.Webhook,
-                id: 1,
-                url: "https://receiver.example.test/events",
-                suppressed_at: nil
-              }} =
+              {%{
+                 __struct__: ReqDnsimple.Webhook,
+                 id: 1,
+                 url: "https://receiver.example.test/events",
+                 suppressed_at: nil
+               }, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.Webhook.get(
                  client(200, %{"data" => @webhook_data}),
                  1010,
@@ -290,10 +373,11 @@ defmodule ReqDnsimple.WebhookTest do
       data = Map.put(@webhook_data, "suppressed_at", "2026-09-01T10:00:00+02:00")
 
       assert {:ok,
-              %{
-                __struct__: ReqDnsimple.Webhook,
-                suppressed_at: ~U[2026-09-01 08:00:00Z]
-              }} = ReqDnsimple.Webhook.get(client(200, %{"data" => data}), 1010, "0042")
+              {%{
+                 __struct__: ReqDnsimple.Webhook,
+                 suppressed_at: ~U[2026-09-01 08:00:00Z]
+               }, %ReqDnsimple.Metadata{}}} =
+               ReqDnsimple.Webhook.get(client(200, %{"data" => data}), 1010, "0042")
 
       assert_request(:get, "/v2/1010/webhooks/0042", %{}, nil)
       refute_received {:request, _request}
@@ -302,7 +386,7 @@ defmodule ReqDnsimple.WebhookTest do
     test "getWebhook preserves explicit zero identifiers" do
       data = Map.put(@webhook_data, "id", 0)
 
-      assert {:ok, %{__struct__: ReqDnsimple.Webhook, id: 0}} =
+      assert {:ok, {%{__struct__: ReqDnsimple.Webhook, id: 0}, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.Webhook.get(client(200, %{"data" => data}), 0, 0)
 
       assert_request(:get, "/v2/0/webhooks/0", %{}, nil)
@@ -318,7 +402,8 @@ defmodule ReqDnsimple.WebhookTest do
             {1010, 1.5},
             {1010, []}
           ] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.Webhook.get(request, account_id, webhook_id)
       end
 
@@ -332,7 +417,11 @@ defmodule ReqDnsimple.WebhookTest do
           "errors" => %{"webhook" => ["is unavailable"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.Webhook.get(client(status, body), 1010, 1)
 
         assert_request(:get, "/v2/1010/webhooks/1", %{}, nil)
@@ -353,7 +442,11 @@ defmodule ReqDnsimple.WebhookTest do
       ]
 
       for body <- malformed_payloads do
-        assert {:error, %{status: 200, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: 200, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: 200}
+                }} =
                  ReqDnsimple.Webhook.get(client(200, body), 1010, 1)
 
         assert_request(:get, "/v2/1010/webhooks/1", %{}, nil)
@@ -362,14 +455,16 @@ defmodule ReqDnsimple.WebhookTest do
     end
 
     test "getWebhook preserves transport failures" do
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.Webhook.get(transport_error_client(:timeout), 1010, 1)
     end
   end
 
   describe "delete/3" do
-    test "deleteWebhook sends one bodyless request and returns :ok" do
-      assert :ok = ReqDnsimple.Webhook.delete(client(204, nil), 1010, 1)
+    test "deleteWebhook sends one bodyless request and returns nil data with metadata" do
+      assert {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}} =
+               ReqDnsimple.Webhook.delete(client(204, nil), 1010, 1)
 
       assert_request(:delete, "/v2/1010/webhooks/1", %{}, nil)
       refute_received {:request, _request}
@@ -377,7 +472,8 @@ defmodule ReqDnsimple.WebhookTest do
 
     test "deleteWebhook preserves integer, zero, and numeric-string webhook identifiers" do
       for {account_id, webhook_id} <- [{1010, 42}, {0, 0}, {1010, "0042"}] do
-        assert :ok = ReqDnsimple.Webhook.delete(client(204, ""), account_id, webhook_id)
+        assert {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}} =
+                 ReqDnsimple.Webhook.delete(client(204, ""), account_id, webhook_id)
 
         assert_request(:delete, "/v2/#{account_id}/webhooks/#{webhook_id}", %{}, nil)
         refute_received {:request, _request}
@@ -394,7 +490,8 @@ defmodule ReqDnsimple.WebhookTest do
             {1010, 1.5},
             {1010, []}
           ] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.Webhook.delete(request, account_id, webhook_id)
       end
 
@@ -408,7 +505,11 @@ defmodule ReqDnsimple.WebhookTest do
           "errors" => %{"webhook" => ["cannot be deleted"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.Webhook.delete(client(status, body), 1010, 1)
 
         assert_request(:delete, "/v2/1010/webhooks/1", %{}, nil)
@@ -418,7 +519,11 @@ defmodule ReqDnsimple.WebhookTest do
 
     test "deleteWebhook rejects non-204 successful responses" do
       for {status, body} <- [{200, %{}}, {200, nil}, {201, %{"data" => %{}}}] do
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.Webhook.delete(client(status, body), 1010, 1)
 
         assert_request(:delete, "/v2/1010/webhooks/1", %{}, nil)
@@ -427,7 +532,8 @@ defmodule ReqDnsimple.WebhookTest do
     end
 
     test "deleteWebhook preserves transport failures" do
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.Webhook.delete(transport_error_client(:timeout), 1010, 1)
     end
   end

@@ -92,7 +92,7 @@ defmodule ReqDnsimple.SampleContractTest do
     end
   end
 
-  test "basic scoped reads use the existing bang and bare-list interfaces offline" do
+  test "basic scoped reads keep metadata from bang helpers and apex enumeration offline" do
     install_adapter(fn
       %{method: :get, path: "/v2/11/zones", query: query} ->
         {200, page([@zone], query)}
@@ -110,7 +110,16 @@ defmodule ReqDnsimple.SampleContractTest do
         {200, page([record], query)}
     end)
 
-    output = run_sample("basic_reads.exs")
+    output =
+      run_sample("basic_reads.exs", fn bindings ->
+        assert %ReqDnsimple.Metadata{status: nil, pagination: nil, etag: nil, pages: [page]} =
+                 bindings[:metadata]
+
+        assert page.status == 200
+        assert page.pagination["current_page"] == 1
+        assert page.request_id == "sample-get-1"
+      end)
+
     assert output =~ "First page: 1 zones"
     assert output =~ "Zone sample.example.test: active=true"
     assert output =~ "Apex NS records: 1"
@@ -131,9 +140,29 @@ defmodule ReqDnsimple.SampleContractTest do
         {200, page([record], query, 2)}
     end)
 
-    output = run_sample("records.exs")
+    output =
+      run_sample("records.exs", fn bindings ->
+        assert %ReqDnsimple.Metadata{status: 200, pages: []} = metadata = bindings[:metadata]
+        assert metadata.pagination["current_page"] == 1
+        assert metadata.pagination["total_pages"] == 2
+
+        assert %ReqDnsimple.Metadata{
+                 status: nil,
+                 pagination: nil,
+                 request_id: nil,
+                 etag: nil,
+                 pages: [first, second]
+               } = aggregate = bindings[:all_metadata]
+
+        assert Enum.map([first, second], & &1.request_id) == ["sample-get-1", "sample-get-2"]
+        assert Enum.map([first, second], & &1.pagination["current_page"]) == [1, 2]
+        assert aggregate.rate_limit_remaining == second.rate_limit_remaining
+        assert aggregate.rate_limit_remaining == 2398
+      end)
+
     assert output =~ "Page 1/2: 1 matching records"
     assert output =~ "All pages: 2 matching records"
+    assert output =~ "Response pages: 2"
     refute output =~ @record["content"]
 
     for current_page <- ["1", "1", "2"] do
@@ -149,6 +178,62 @@ defmodule ReqDnsimple.SampleContractTest do
                       }}
     end
 
+    refute_receive {:sample_request, _}
+  end
+
+  test "record samples keep optional and malformed response metadata without losing records" do
+    for headers <- [
+          [],
+          [{"x-ratelimit-remaining", "invalid"}, {"x-ratelimit-reset", "-1"}]
+        ] do
+      install_adapter(fn %{method: :get, query: query} ->
+        {200, page([@record], query), headers}
+      end)
+
+      output =
+        run_sample("records.exs", fn bindings ->
+          metadata = bindings[:metadata]
+          aggregate = bindings[:all_metadata]
+          assert metadata.pagination["current_page"] == 1
+          assert metadata.rate_limit_remaining == nil
+          assert metadata.rate_limit_reset == nil
+          assert metadata.request_id == nil
+          assert metadata.etag == nil
+          assert [metadata] == aggregate.pages
+          assert aggregate.parse_errors == metadata.parse_errors
+
+          if headers == [] do
+            assert metadata.parse_errors == %{}
+          else
+            assert Map.has_key?(metadata.parse_errors, :rate_limit_remaining)
+            assert Map.has_key?(metadata.parse_errors, :rate_limit_reset)
+          end
+        end)
+
+      assert output =~ "Page 1/1: 1 matching records"
+      assert output =~ "All pages: 1 matching records"
+      assert output =~ "Response pages: 1"
+      assert_receive {:sample_request, %{method: :get}}
+      assert_receive {:sample_request, %{method: :get}}
+      refute_receive {:sample_request, _}
+    end
+  end
+
+  test "empty record enumeration still exposes its response page" do
+    install_adapter(fn %{method: :get, query: query} ->
+      {200, page([], query)}
+    end)
+
+    output =
+      run_sample("records.exs", fn bindings ->
+        assert [] == bindings[:all_records]
+        assert [%ReqDnsimple.Metadata{status: 200}] = bindings[:all_metadata].pages
+      end)
+
+    assert output =~ "All pages: 0 matching records"
+    assert output =~ "Response pages: 1"
+    assert_receive {:sample_request, %{method: :get}}
+    assert_receive {:sample_request, %{method: :get}}
     refute_receive {:sample_request, _}
   end
 
@@ -178,6 +263,50 @@ defmodule ReqDnsimple.SampleContractTest do
 
     assert_receive {:sample_request, %{path: "/v2/whoami"}}
     refute_receive {:sample_request, _}
+  end
+
+  test "account discovery rejects an unknown identity inside the uniform result envelope" do
+    install_adapter(fn %{method: :get, path: "/v2/whoami"} ->
+      {200, %{"data" => %{"account" => nil, "user" => nil}}}
+    end)
+
+    assert_raise ArgumentError, ~r/did not identify exactly one account/, fn ->
+      run_sample("discover_account.exs")
+    end
+
+    assert_receive {:sample_request, %{path: "/v2/whoami"}}
+    refute_receive {:sample_request, _}
+  end
+
+  test "discovery failures raise structured errors with opaque retry and response metadata" do
+    retry_after = "Tue, 15 Sep 2026 22:00:00 GMT"
+    body = %{"message" => "offline rate limit"}
+
+    for {sample, path} <- [
+          {"discover_account.exs", "/v2/whoami"},
+          {"discover_user.exs", "/v2/accounts"}
+        ] do
+      install_adapter(fn %{method: :get, path: ^path} ->
+        {429, body,
+         [
+           {"retry-after", retry_after},
+           {"etag", ~s(W/"discovery")},
+           {"x-ratelimit-remaining", "0"},
+           {"x-request-id", "discovery-failed"}
+         ]}
+      end)
+
+      error = assert_raise ReqDnsimple.Error, fn -> run_sample(sample) end
+      assert error.reason == %{status: 429, response: body}
+      assert error.metadata.status == 429
+      assert error.metadata.retry_after == retry_after
+      assert error.metadata.etag == ~s(W/"discovery")
+      assert error.metadata.rate_limit_remaining == 0
+      assert error.metadata.request_id == "discovery-failed"
+      refute Exception.message(error) =~ @token
+      assert_receive {:sample_request, %{path: ^path}}
+      refute_receive {:sample_request, _}
+    end
   end
 
   test "user discovery respects explicit selection rather than choosing the first account" do
@@ -297,7 +426,18 @@ defmodule ReqDnsimple.SampleContractTest do
     allow_mutations()
     install_lifecycle_adapter(200, 204)
 
-    output = run_sample("record_lifecycle.exs")
+    output =
+      run_sample("record_lifecycle.exs", fn bindings ->
+        assert {:ok, {%ReqDnsimple.ZoneRecord{id: 901}, update_metadata}} =
+                 bindings[:update_result]
+
+        assert {:ok, {nil, cleanup_metadata}} = bindings[:cleanup_result]
+        assert update_metadata.status == 200
+        assert update_metadata.request_id == "sample-patch-1"
+        assert cleanup_metadata.status == 204
+        assert cleanup_metadata.request_id == "sample-delete-1"
+      end)
+
     assert output =~ "Updated and deleted only the newly created sample record 901"
 
     assert_receive {:sample_request,
@@ -326,6 +466,8 @@ defmodule ReqDnsimple.SampleContractTest do
       capture_io(:stderr, fn ->
         error = assert_raise ReqDnsimple.Error, fn -> run_sample("record_lifecycle.exs") end
         assert error.reason == :not_found
+        assert error.metadata.status == 404
+        assert error.metadata.request_id == "sample-patch-1"
       end)
 
     assert stderr =~ "Update failed; the newly created sample record was deleted"
@@ -350,13 +492,79 @@ defmodule ReqDnsimple.SampleContractTest do
                 %{
                   record_id: 901,
                   zone: "sample.example.test",
-                  operation_result: {:error, :not_found},
-                  cleanup_reason: %{status: 500}
+                  operation_result:
+                    {:error,
+                     %ReqDnsimple.Error{
+                       reason: :not_found,
+                       metadata: %ReqDnsimple.Metadata{status: 404, request_id: "sample-patch-1"}
+                     }},
+                  cleanup_result:
+                    {:error,
+                     %ReqDnsimple.Error{
+                       reason: %{status: 500},
+                       metadata: %ReqDnsimple.Metadata{status: 500, request_id: "sample-delete-1"}
+                     }}
                 }} = error.reason
+
+        assert error.metadata.status == 500
+        assert error.metadata.request_id == "sample-delete-1"
       end)
 
     assert stderr =~ "Cleanup failed: check sample record 901"
     refute stderr =~ @token
+    assert_receive {:sample_request, %{method: :post}}
+    assert_receive {:sample_request, %{method: :patch}}
+    assert_receive {:sample_request, %{method: :delete}}
+    refute_receive {:sample_request, _}
+  end
+
+  test "cleanup failure retains a successful update's data and metadata" do
+    allow_mutations()
+    install_lifecycle_adapter(200, 500)
+
+    capture_io(:stderr, fn ->
+      error = assert_raise ReqDnsimple.Error, fn -> run_sample("record_lifecycle.exs") end
+
+      assert {:sample_cleanup_failed,
+              %{
+                operation_result:
+                  {:ok,
+                   {%ReqDnsimple.ZoneRecord{id: 901},
+                    %ReqDnsimple.Metadata{status: 200, request_id: "sample-patch-1"}}},
+                cleanup_result:
+                  {:error, %ReqDnsimple.Error{metadata: %ReqDnsimple.Metadata{status: 500}}}
+              }} = error.reason
+
+      assert error.metadata.status == 500
+    end)
+
+    assert_receive {:sample_request, %{method: :post}}
+    assert_receive {:sample_request, %{method: :patch}}
+    assert_receive {:sample_request, %{method: :delete}}
+    refute_receive {:sample_request, _}
+  end
+
+  test "record lifecycle cleans up after a transport failure without fabricating HTTP metadata" do
+    allow_mutations()
+    transport_error = %Req.TransportError{reason: :timeout}
+
+    install_adapter(fn
+      %{method: :post, body: attrs} ->
+        {201, %{"data" => Map.merge(@record, attrs)}}
+
+      %{method: :patch} ->
+        {:error, transport_error}
+
+      %{method: :delete, path: "/v2/11/zones/sample.example.test/records/901"} ->
+        {204, ""}
+    end)
+
+    capture_io(:stderr, fn ->
+      error = assert_raise ReqDnsimple.Error, fn -> run_sample("record_lifecycle.exs") end
+      assert error.reason == transport_error
+      assert error.metadata == nil
+    end)
+
     assert_receive {:sample_request, %{method: :post}}
     assert_receive {:sample_request, %{method: :patch}}
     assert_receive {:sample_request, %{method: :delete}}
@@ -372,6 +580,8 @@ defmodule ReqDnsimple.SampleContractTest do
 
     error = assert_raise ReqDnsimple.Error, fn -> run_sample("record_lifecycle.exs") end
     assert error.reason.status == 500
+    assert error.metadata.status == 500
+    assert error.metadata.request_id == "sample-post-1"
     assert_receive {:sample_request, %{method: :post}}
     refute_receive {:sample_request, _}
   end
@@ -394,7 +604,13 @@ defmodule ReqDnsimple.SampleContractTest do
 
     output =
       capture_io(fn ->
-        Code.eval_string(Enum.join(cells, "\n\n"), [], file: "samples/discover.livemd")
+        {result, bindings} =
+          Code.eval_string(Enum.join(cells, "\n\n"), [], file: "samples/discover.livemd")
+
+        assert result == %{matching_records: 1, response_pages: 1}
+        assert %ReqDnsimple.Metadata{status: 200} = bindings[:metadata]
+        assert bindings[:metadata].pagination["current_page"] == 1
+        assert [%ReqDnsimple.Metadata{status: 200}] = bindings[:all_metadata].pages
         :ok
       end)
 
@@ -407,10 +623,59 @@ defmodule ReqDnsimple.SampleContractTest do
     refute_receive {:sample_request, _}
   end
 
-  defp run_sample(name) do
+  test "local notebook read cells use fake credentials and offline metadata without installation" do
+    file = Path.join(@samples, "1.livemd")
+
+    if File.regular?(file) do
+      cells = file |> File.read!() |> notebook_cells() |> Enum.filter(&read_only_notebook_cell?/1)
+      assert length(cells) == 7
+      refute Enum.any?(cells, &String.contains?(&1, "Mix.install"))
+
+      install_adapter(fn
+        %{method: :get, path: "/v2/whoami"} ->
+          {200, %{"data" => %{"account" => %{"id" => 11}, "user" => nil}}}
+
+        %{method: :get, path: "/v2/11/zones", query: query} ->
+          {200, page([@zone], query)}
+
+        %{method: :get, path: "/v2/11/zones/" <> _zone_path, query: query} ->
+          {200, page([@record], query)}
+      end)
+
+      output =
+        capture_io(fn ->
+          {_result, bindings} =
+            Code.eval_string(
+              Enum.join(cells, "\n\n"),
+              [proxy: "https://proxy.example.test/v2", token: @token],
+              file: "offline-local-notebook"
+            )
+
+          assert bindings[:account_id] == 11
+          assert bindings[:zone] == @zone["name"]
+          assert %ReqDnsimple.Metadata{status: 200, pages: []} = bindings[:metadata]
+          assert [%ReqDnsimple.ZoneRecord{id: 901}] = bindings[:all_records]
+          assert bindings[:record_id] == 901
+          :ok
+        end)
+
+      refute output =~ @token
+      refute output =~ "%Req.Request"
+
+      for _ <- 1..7 do
+        assert_receive {:sample_request,
+                        %{method: :get, host: "proxy.example.test", authorized?: true}}
+      end
+
+      refute_receive {:sample_request, _}
+    end
+  end
+
+  defp run_sample(name, assert_bindings \\ fn _bindings -> :ok end) do
     output =
       capture_io(fn ->
-        Code.eval_file(Path.join(@samples, name))
+        {_result, bindings} = Code.eval_file(Path.join(@samples, name))
+        assert_bindings.(bindings)
         :ok
       end)
 
@@ -438,11 +703,33 @@ defmodule ReqDnsimple.SampleContractTest do
         }
 
         send(test_pid, {:sample_request, observation})
-        {status, body} = responder.(observation)
-        {request, %Req.Response{status: status, body: body}}
+
+        case responder.(observation) do
+          {:error, error} ->
+            {request, error}
+
+          {status, body} ->
+            {request,
+             Req.Response.new(status: status, body: body, headers: response_headers(observation))}
+
+          {status, body, headers} ->
+            {request, Req.Response.new(status: status, body: body, headers: headers)}
+        end
       end,
       retry: false
     )
+  end
+
+  defp response_headers(observation) do
+    page = String.to_integer(observation.query["page"] || "1")
+
+    [
+      {"x-ratelimit-limit", "2400"},
+      {"x-ratelimit-remaining", Integer.to_string(2400 - page)},
+      {"x-ratelimit-reset", "1800000000"},
+      {"x-request-id", "sample-#{observation.method}-#{page}"},
+      {"etag", ~s(W/"sample-#{observation.method}-#{page}")}
+    ]
   end
 
   defp install_lifecycle_adapter(update_status, delete_status) do
@@ -480,5 +767,31 @@ defmodule ReqDnsimple.SampleContractTest do
   defp notebook_cells(notebook) do
     Regex.scan(~r/```elixir\n(.*?)```/s, notebook, capture: :all_but_first)
     |> List.flatten()
+  end
+
+  defp read_only_notebook_cell?(code) do
+    {_ast, calls} =
+      code
+      |> Code.string_to_quoted!()
+      |> Macro.prewalk([], fn
+        {{:., _, [{:__aliases__, _, [:ReqDnsimple | _]}, function]}, _, _} = node, calls ->
+          {node, [function | calls]}
+
+        node, calls ->
+          {node, calls}
+      end)
+
+    calls != [] and
+      Enum.all?(calls, fn function ->
+        function in [
+          :new_client,
+          :new_unscoped_client,
+          :whoami,
+          :list_zones!,
+          :list_page,
+          :list_all,
+          :unwrap!
+        ]
+      end)
   end
 end

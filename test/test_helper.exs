@@ -9,10 +9,10 @@ Req.default_options(
 defmodule ReqDnsimple.TestSupport do
   import ExUnit.Assertions
 
-  def client(status, body, test_pid \\ self()) do
+  def client(status, body, test_pid \\ self(), headers \\ []) do
     adapter = fn request ->
       send(test_pid, {:request, request})
-      {request, %Req.Response{status: status, body: body}}
+      {request, Req.Response.new(status: status, body: body, headers: headers)}
     end
 
     ReqDnsimple.new_client("dnsimple_u_fake-token")

@@ -15,20 +15,59 @@ defmodule ReqDnsimple.SecondaryZoneTest do
     "updated_at" => "2026-09-01T10:30:00+02:00"
   }
 
+  test "preserves HTTP headers on secondary-zone creation and errors" do
+    headers = [
+      {"x-request-id", "secondary-response"},
+      {"x-ratelimit-remaining", "0"},
+      {"retry-after", "5"}
+    ]
+
+    metadata = %ReqDnsimple.Metadata{
+      status: 201,
+      request_id: "secondary-response",
+      rate_limit_remaining: 0,
+      retry_after: "5"
+    }
+
+    assert {:ok, {%ReqDnsimple.Zone{secondary: true}, ^metadata}} =
+             ReqDnsimple.SecondaryZone.create(
+               client(201, %{"data" => @zone_data}, self(), headers),
+               1010,
+               name: "secondary.example.test"
+             )
+
+    assert_received {:request, _request}
+
+    error_body = %{"message" => "retry later"}
+    error_metadata = %{metadata | status: 429}
+
+    assert {:error,
+            %ReqDnsimple.Error{
+              reason: %{status: 429, response: ^error_body},
+              metadata: ^error_metadata
+            }} =
+             ReqDnsimple.SecondaryZone.create(client(429, error_body, self(), headers), 1010,
+               name: "secondary.example.test"
+             )
+
+    assert_received {:request, _request}
+    refute_received {:request, _request}
+  end
+
   describe "create/3" do
     test "createSecondaryZone sends the name once and returns the typed zone" do
       assert {:ok,
-              %ReqDnsimple.Zone{
-                id: 1,
-                account_id: 1010,
-                name: "secondary.example.test",
-                reverse: false,
-                secondary: true,
-                last_transferred_at: nil,
-                active: true,
-                created_at: ~U[2026-09-01 08:00:00Z],
-                updated_at: ~U[2026-09-01 08:30:00Z]
-              }} =
+              {%ReqDnsimple.Zone{
+                 id: 1,
+                 account_id: 1010,
+                 name: "secondary.example.test",
+                 reverse: false,
+                 secondary: true,
+                 last_transferred_at: nil,
+                 active: true,
+                 created_at: ~U[2026-09-01 08:00:00Z],
+                 updated_at: ~U[2026-09-01 08:30:00Z]
+               }, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.SecondaryZone.create(
                  client(201, %{"data" => @zone_data}),
                  1010,
@@ -48,7 +87,7 @@ defmodule ReqDnsimple.SecondaryZoneTest do
     test "createSecondaryZone tolerates an omitted active field without fabricating it" do
       data = Map.delete(@zone_data, "active")
 
-      assert {:ok, %ReqDnsimple.Zone{active: nil, secondary: true}} =
+      assert {:ok, {%ReqDnsimple.Zone{active: nil, secondary: true}, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.SecondaryZone.create(
                  client(201, %{"data" => data}),
                  1010,
@@ -68,7 +107,7 @@ defmodule ReqDnsimple.SecondaryZoneTest do
     test "createSecondaryZone preserves an explicit false active field" do
       data = Map.put(@zone_data, "active", false)
 
-      assert {:ok, %ReqDnsimple.Zone{active: false, secondary: true}} =
+      assert {:ok, {%ReqDnsimple.Zone{active: false, secondary: true}, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.SecondaryZone.create(
                  client(201, %{"data" => data}),
                  1010,
@@ -86,7 +125,7 @@ defmodule ReqDnsimple.SecondaryZoneTest do
     end
 
     test "createSecondaryZone preserves zero account identifiers and an empty name" do
-      assert {:ok, %ReqDnsimple.Zone{}} =
+      assert {:ok, {%ReqDnsimple.Zone{}, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.SecondaryZone.create(
                  client(201, %{"data" => @zone_data}),
                  0,
@@ -111,7 +150,8 @@ defmodule ReqDnsimple.SecondaryZoneTest do
             {1010, [name: []]},
             {1010, [name: "secondary.example.test", unknown: true]}
           ] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.SecondaryZone.create(request, account_id, attrs)
       end
 
@@ -125,7 +165,11 @@ defmodule ReqDnsimple.SecondaryZoneTest do
           "errors" => %{"name" => ["cannot be verified"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.SecondaryZone.create(
                    client(status, body),
                    1010,
@@ -156,7 +200,11 @@ defmodule ReqDnsimple.SecondaryZoneTest do
       ]
 
       for body <- malformed_bodies do
-        assert {:error, %{status: 201, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: 201, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: 201}
+                }} =
                  ReqDnsimple.SecondaryZone.create(
                    client(201, body),
                    1010,
@@ -173,7 +221,11 @@ defmodule ReqDnsimple.SecondaryZoneTest do
         refute_received {:request, _request}
       end
 
-      assert {:error, %{status: 200, response: %{"data" => @zone_data}}} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: %{status: 200, response: %{"data" => @zone_data}},
+                metadata: %ReqDnsimple.Metadata{status: 200}
+              }} =
                ReqDnsimple.SecondaryZone.create(
                  client(200, %{"data" => @zone_data}),
                  1010,
@@ -191,7 +243,8 @@ defmodule ReqDnsimple.SecondaryZoneTest do
     end
 
     test "createSecondaryZone preserves transport failures" do
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.SecondaryZone.create(
                  transport_error_client(:timeout),
                  1010,

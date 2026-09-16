@@ -3,6 +3,8 @@ defmodule ReqDnsimple.AccountScopeOperationsTest do
 
   import ReqDnsimple.TestSupport
 
+  alias ReqDnsimple.{Error, Metadata}
+
   @inventory_path Path.expand("../docs/audit/operation-inventory.json", __DIR__)
   @external_resource @inventory_path
   @inventory @inventory_path |> File.read!() |> Jason.decode!()
@@ -12,6 +14,23 @@ defmodule ReqDnsimple.AccountScopeOperationsTest do
               )
   @interfaces Enum.flat_map(@operations, & &1["scoped_interfaces"])
   @error_body %{"message" => "offline account scope probe"}
+  @response_headers [
+    {"x-ratelimit-limit", "1200"},
+    {"x-ratelimit-remaining", "1170"},
+    {"x-ratelimit-reset", "1790000000"},
+    {"x-request-id", "account-scope-probe"},
+    {"etag", ~s("scope-probe")},
+    {"retry-after", "60"}
+  ]
+  @error_metadata %Metadata{
+    status: 418,
+    rate_limit: 1200,
+    rate_limit_remaining: 1170,
+    rate_limit_reset: 1_790_000_000,
+    request_id: "account-scope-probe",
+    etag: ~s("scope-probe"),
+    retry_after: "60"
+  }
   @record_attrs [name: "www", type: "A", content: "192.0.2.1", ttl: 0]
 
   @attrs %{
@@ -46,11 +65,15 @@ defmodule ReqDnsimple.AccountScopeOperationsTest do
     {"ReqDnsimple.PrimaryServer", "link"} => [zone: "example.test"],
     {"ReqDnsimple.PrimaryServer", "unlink"} => [zone: "example.test"],
     {"ReqDnsimple.RegistrantChange", "create"} => [domain_id: 42, contact_id: 43],
+    {"ReqDnsimple.RegistrantChange", "check"} => [domain_id: 42, contact_id: 43],
     {"ReqDnsimple.Registrar", "renew"} => [period: 1],
     {"ReqDnsimple.Registrar", "register"} => [registrant_id: 42, auto_renew: false],
     {"ReqDnsimple.Registrar", "transfer"} => [registrant_id: 42, auth_code: "offline-code"],
     {"ReqDnsimple.Registrar", "restore"} => [premium_price: "10.00"],
     {"ReqDnsimple.Registrar", "change_delegation"} => [name_servers: ["ns1.example.test"]],
+    {"ReqDnsimple.Registrar", "change_delegation_to_vanity"} => [
+      name_servers: ["ns1.example.test"]
+    ],
     {"ReqDnsimple.SecondaryZone", "create"} => [name: "example.test"],
     {"ReqDnsimple.Service", "apply"} => [settings: %{"app" => "offline"}],
     {"ReqDnsimple.Template", "create"} => [sid: "scope-template", name: "Scope template"],
@@ -68,8 +91,10 @@ defmodule ReqDnsimple.AccountScopeOperationsTest do
     {"ReqDnsimple", "create_zone_record"} => @record_attrs
   }
 
-  test "all 95 account-path operations declare documented, typed scoped interfaces" do
-    assert length(@operations) == 95
+  test "all 102 account-path operations declare documented, typed scoped interfaces" do
+    assert Enum.count(@inventory["operations"], & &1["in_scope"]) == 110
+    assert length(@operations) == 102
+    assert length(@interfaces) == 144
 
     for operation <- @operations do
       assert operation["scoped_interfaces"] != []
@@ -105,12 +130,12 @@ defmodule ReqDnsimple.AccountScopeOperationsTest do
     for interface <- @interfaces, arity <- interface["arities"] do
       label = "#{interface["module"]}.#{interface["function"]}/#{arity}"
 
-      test "#{label} preserves the explicit-account request and result" do
+      test "#{label} preserves the explicit-account request, error reason, and HTTP metadata" do
         interface = unquote(Macro.escape(interface))
         args = arguments(interface) |> Enum.take(unquote(arity) - 1)
 
         req =
-          client(418, @error_body)
+          client(418, @error_body, self(), @response_headers)
           |> Req.merge(
             base_url: "https://proxy.example/gateway/v2",
             receive_timeout: 4321,
@@ -122,6 +147,19 @@ defmodule ReqDnsimple.AccountScopeOperationsTest do
 
         expected = invoke(interface, [legacy, 1010 | args])
         assert_receive {:request, explicit_request}
+
+        assert {outcome, %Error{reason: reason, metadata: metadata}} = expected
+
+        assert outcome ==
+                 if(String.ends_with?(interface["function"], "!"), do: :raised, else: :error)
+
+        assert reason == %{status: 418, response: @error_body}
+
+        if interface["function"] in ["list_all", "list_all_applied", "ns_records"] do
+          assert metadata == %Metadata{@error_metadata | pages: [@error_metadata]}
+        else
+          assert metadata == @error_metadata
+        end
 
         assert invoke(interface, [scoped | args]) == expected
         assert_receive {:request, scoped_request}
@@ -154,8 +192,10 @@ defmodule ReqDnsimple.AccountScopeOperationsTest do
             end
 
           assert error.reason == :missing_account_id
+          assert error.metadata == nil
         else
-          assert invoke(interface, [req | args]) == {:error, :missing_account_id}
+          assert invoke(interface, [req | args]) ==
+                   {:error, %Error{reason: :missing_account_id, metadata: nil}}
         end
 
         refute_received {:request, _request}
@@ -173,7 +213,7 @@ defmodule ReqDnsimple.AccountScopeOperationsTest do
           apply(module, function, args)
         end
 
-      {:raised, error.reason}
+      {:raised, error}
     else
       apply(module, function, args)
     end
@@ -218,8 +258,10 @@ defmodule ReqDnsimple.AccountScopeOperationsTest do
               "primary_server_id",
               "push_id",
               "record_id",
+              "registration_id",
               "registrant_change_id",
               "renewal_id",
+              "transfer_id",
               "webhook_id"
             ],
        do: 42

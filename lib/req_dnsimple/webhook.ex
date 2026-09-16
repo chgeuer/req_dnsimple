@@ -2,9 +2,14 @@ defmodule ReqDnsimple.Webhook do
   @moduledoc """
   DNSimple webhook operations.
 
+  HTTP operations return `{:ok, {data, %ReqDnsimple.Metadata{}}}` or
+  `{:error, %ReqDnsimple.Error{}}`. HTTP 204 successes have `nil` data.
+  Errors preserve their original reason in `error.reason`. When no response
+  has been received, `error.metadata` is `nil`.
+
   Register an HTTPS webhook endpoint:
 
-      {:ok, webhook} =
+      {:ok, {webhook, metadata}} =
         ReqDnsimple.Webhook.create(
           client,
           1010,
@@ -13,16 +18,16 @@ defmodule ReqDnsimple.Webhook do
 
   Retrieve a registered webhook endpoint:
 
-      {:ok, webhook} = ReqDnsimple.Webhook.get(client, 1010, 1)
+      {:ok, {webhook, metadata}} = ReqDnsimple.Webhook.get(client, 1010, 1)
 
   List registered webhook endpoints:
 
-      {:ok, webhooks} =
+      {:ok, {webhooks, metadata}} =
         ReqDnsimple.Webhook.list(client, 1010, sort: [id: :asc])
 
   Deregister a webhook endpoint by numeric ID:
 
-      :ok = ReqDnsimple.Webhook.delete(client, 1010, 1)
+      {:ok, {nil, metadata}} = ReqDnsimple.Webhook.delete(client, 1010, 1)
 
   These operations do not contact the callback URL, inspect deliveries, or
   perform hidden follow-up requests.
@@ -59,10 +64,12 @@ defmodule ReqDnsimple.Webhook do
   @doc """
   Uses the client's configured account with default options.
   See `list/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
   @spec list(Req.Request.t()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list(req) do
     list(req, [])
   end
@@ -70,15 +77,17 @@ defmodule ReqDnsimple.Webhook do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
   @spec list(Req.Request.t(), keyword()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   @spec list(Req.Request.t(), ReqDnsimple.account_id()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list(req, account_id)
       when is_integer(account_id) or is_binary(account_id) do
     list(req, account_id, [])
@@ -97,16 +106,16 @@ defmodule ReqDnsimple.Webhook do
   ## Example
 
       ReqDnsimple.Webhook.list(req, 1010, sort: [id: :asc])
-      #=> {:ok, [%ReqDnsimple.Webhook{}]}
+      #=> {:ok, {[%ReqDnsimple.Webhook{}], %ReqDnsimple.Metadata{}}}
   """
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list(req, account_id, opts) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate([account_id: account_id], @create_path_schema),
          {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_schema) do
       req =
-        Req.merge(req,
+        ReqDnsimple.Helper.merge(req,
           method: :get,
           url: "/:account_id/webhooks",
           path_params_style: :colon,
@@ -117,7 +126,7 @@ defmodule ReqDnsimple.Webhook do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode_list(data) do
-            {:ok, webhooks} -> {:ok, webhooks}
+            {:ok, webhooks} -> ReqDnsimple.Response.ok(webhooks, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -128,15 +137,17 @@ defmodule ReqDnsimple.Webhook do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `create/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
   @spec create(Req.Request.t(), keyword()) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def create(req, attrs) do
     ReqDnsimple.Client.with_account(req, &create(req, &1, attrs))
   end
@@ -148,7 +159,7 @@ defmodule ReqDnsimple.Webhook do
   The callback URL is not contacted or probed.
   """
   @spec create(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def create(req, account_id, attrs) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate([account_id: account_id], @create_path_schema),
@@ -167,7 +178,7 @@ defmodule ReqDnsimple.Webhook do
       case Req.request(req) do
         {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
           case decode(data) do
-            {:ok, webhook} -> {:ok, webhook}
+            {:ok, webhook} -> ReqDnsimple.Response.ok(webhook, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -178,15 +189,17 @@ defmodule ReqDnsimple.Webhook do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `get/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
   @spec get(Req.Request.t(), integer() | binary()) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def get(req, webhook_id) do
     ReqDnsimple.Client.with_account(req, &get(req, &1, webhook_id))
   end
@@ -198,7 +211,7 @@ defmodule ReqDnsimple.Webhook do
   suppressed.
   """
   @spec get(Req.Request.t(), ReqDnsimple.account_id(), integer() | binary()) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def get(req, account_id, webhook_id) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -216,7 +229,7 @@ defmodule ReqDnsimple.Webhook do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode(data) do
-            {:ok, webhook} -> {:ok, webhook}
+            {:ok, webhook} -> ReqDnsimple.Response.ok(webhook, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -227,15 +240,17 @@ defmodule ReqDnsimple.Webhook do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `delete/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
   @spec delete(Req.Request.t(), integer() | binary()) ::
-          :ok | {:error, term()}
+          ReqDnsimple.Response.result(nil)
   def delete(req, webhook_id) do
     ReqDnsimple.Client.with_account(req, &delete(req, &1, webhook_id))
   end
@@ -243,10 +258,10 @@ defmodule ReqDnsimple.Webhook do
   @doc """
   Deregisters a webhook endpoint by integer or numeric-string ID.
 
-  Returns `:ok` only for HTTP 204.
+  Returns `{:ok, {nil, metadata}}` only for HTTP 204.
   """
   @spec delete(Req.Request.t(), ReqDnsimple.account_id(), integer() | binary()) ::
-          :ok | {:error, term()}
+          ReqDnsimple.Response.result(nil)
   def delete(req, account_id, webhook_id) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -263,8 +278,8 @@ defmodule ReqDnsimple.Webhook do
         )
 
       case Req.request(req) do
-        {:ok, %Req.Response{status: 204}} ->
-          :ok
+        {:ok, %Req.Response{status: 204} = response} ->
+          ReqDnsimple.Response.ok(nil, response)
 
         {:ok, response} ->
           ReqDnsimple.response_error(response)
@@ -273,6 +288,7 @@ defmodule ReqDnsimple.Webhook do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   defp decode(%{"id" => id, "url" => url, "suppressed_at" => suppressed_at})

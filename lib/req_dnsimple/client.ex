@@ -43,12 +43,12 @@ defmodule ReqDnsimple.Client do
   end
 
   @spec with_account(Req.Request.t(), (pos_integer() -> result)) ::
-          result | {:error, :missing_account_id}
+          result | {:error, ReqDnsimple.Error.t()}
         when result: term()
   def with_account(%Req.Request{} = req, fun) when is_function(fun, 1) do
     case Req.Request.get_private(req, @account_key) do
       nil ->
-        {:error, :missing_account_id}
+        ReqDnsimple.Response.error(:missing_account_id)
 
       account_id when is_integer(account_id) and account_id > 0 ->
         fun.(account_id)
@@ -60,7 +60,7 @@ defmodule ReqDnsimple.Client do
 
   defp build(token, opts) when is_binary(token) do
     Req.new(base_url: @base_url, auth: {:bearer, token})
-    |> Req.merge(opts)
+    |> ReqDnsimple.Helper.merge(opts)
   end
 
   defp build(token_fun, opts) when is_function(token_fun, 0) do
@@ -73,7 +73,7 @@ defmodule ReqDnsimple.Client do
         end
       end
     )
-    |> Req.merge(opts)
+    |> ReqDnsimple.Helper.merge(opts)
   end
 
   defp build(_token, _opts) do

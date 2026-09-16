@@ -8,7 +8,7 @@ defmodule ReqDnsimple.DomainResearch do
   ## Example
 
       ReqDnsimple.DomainResearch.get_status(req, 1010, domain: "example.test")
-      #=> {:ok, %ReqDnsimple.DomainResearch{}}
+      #=> {:ok, {%ReqDnsimple.DomainResearch{}, %ReqDnsimple.Metadata{}}}
   """
 
   # https://developer.dnsimple.com/v2/domains/research/#getDomainsResearchStatus
@@ -34,11 +34,11 @@ defmodule ReqDnsimple.DomainResearch do
 
   @doc """
   Uses the client's configured account. See `get_status/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
+  operation options and return values. Returns a missing-account `ReqDnsimple.Error`
   without making a request when the client is unscoped.
   """
   @spec get_status(Req.Request.t(), keyword()) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def get_status(req, opts) do
     ReqDnsimple.Client.with_account(req, &get_status(req, &1, opts))
   end
@@ -51,13 +51,13 @@ defmodule ReqDnsimple.DomainResearch do
   request requires the `domain_research_read` OAuth scope.
   """
   @spec get_status(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def get_status(req, account_id, opts) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate([account_id: account_id], @path_schema),
          {:ok, validated_opts} <- NimbleOptions.validate(opts, @schema) do
       req =
-        Req.merge(req,
+        ReqDnsimple.Helper.merge(req,
           method: :get,
           url: "/:account_id/domains/research/status",
           path_params_style: :colon,
@@ -69,7 +69,7 @@ defmodule ReqDnsimple.DomainResearch do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode(data) do
-            {:ok, research} -> {:ok, research}
+            {:ok, research} -> ReqDnsimple.Response.ok(research, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -77,9 +77,10 @@ defmodule ReqDnsimple.DomainResearch do
           ReqDnsimple.response_error(response)
 
         {:error, error} ->
-          {:error, error}
+          ReqDnsimple.Response.error(error)
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   defp decode(%{

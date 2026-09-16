@@ -3,6 +3,8 @@ defmodule ReqDnsimple.ClientScopeTest do
 
   import ReqDnsimple.TestSupport
 
+  alias ReqDnsimple.{Error, Metadata}
+
   @tokens ["dnsimple_a_fake-token", "dnsimple_u_fake-token", "opaque-fake-token"]
   @record %{
     "id" => 42,
@@ -28,7 +30,7 @@ defmodule ReqDnsimple.ClientScopeTest do
         )
 
       assert %Req.Request{} = req
-      assert {:ok, []} = ReqDnsimple.Zone.list(req)
+      assert {:ok, {[], %Metadata{status: 200}}} = ReqDnsimple.Zone.list(req)
       assert_request(:get, "/v2/1010/zones")
     end
   end
@@ -93,9 +95,11 @@ defmodule ReqDnsimple.ClientScopeTest do
         ReqDnsimple.new_client(token)
         |> Req.merge(adapter: empty_zone_adapter(self()))
 
-      assert {:error, :missing_account_id} = ReqDnsimple.Zone.list(req)
+      assert {:error, %Error{reason: :missing_account_id, metadata: nil}} =
+               ReqDnsimple.Zone.list(req)
+
       refute_received {:request, _request}
-      assert {:ok, []} = ReqDnsimple.Zone.list(req, "1010")
+      assert {:ok, {[], %Metadata{status: 200}}} = ReqDnsimple.Zone.list(req, "1010")
       assert_request(:get, "/v2/1010/zones")
     end
   end
@@ -130,12 +134,12 @@ defmodule ReqDnsimple.ClientScopeTest do
     other = ReqDnsimple.for_account(req, 2020)
     assert Agent.get(agent, & &1) == tokens
 
-    assert {:ok, []} = ReqDnsimple.Zone.list(req)
+    assert {:ok, {[], %Metadata{status: 200}}} = ReqDnsimple.Zone.list(req)
     assert_receive {:request, first}
     assert first.url.path == "/v2/1010/zones"
     assert Req.Request.get_header(first, "authorization") == ["Bearer first-token"]
 
-    assert {:ok, []} = ReqDnsimple.Zone.list(other)
+    assert {:ok, {[], %Metadata{status: 200}}} = ReqDnsimple.Zone.list(other)
     assert_receive {:request, second}
     assert second.url.path == "/v2/2020/zones"
     assert Req.Request.get_header(second, "authorization") == ["Bearer second-token"]
@@ -158,7 +162,7 @@ defmodule ReqDnsimple.ClientScopeTest do
     other = ReqDnsimple.for_account(original, "2020")
 
     for {req, account_id} <- [{original, 1010}, {other, 2020}, {original, 1010}] do
-      assert {:ok, []} = ReqDnsimple.Zone.list(req)
+      assert {:ok, {[], %Metadata{status: 200}}} = ReqDnsimple.Zone.list(req)
       assert_receive {:request, request}
       assert request.url.host == "proxy.example"
       assert request.url.path == "/gateway/v2/#{account_id}/zones"
@@ -179,36 +183,45 @@ defmodule ReqDnsimple.ClientScopeTest do
       assert_raise ArgumentError, fn -> ReqDnsimple.for_account(original, invalid) end
     end
 
-    assert {:ok, []} = ReqDnsimple.Zone.list(original)
+    assert {:ok, {[], %Metadata{status: 200}}} = ReqDnsimple.Zone.list(original)
     assert_request(:get, "/v2/1010/zones")
   end
 
   test "explicit-account overloads take precedence for only that call" do
     req = client(200, %{"data" => []}) |> ReqDnsimple.for_account(1010)
 
-    assert {:ok, []} = ReqDnsimple.Zone.list(req, "2020")
+    assert {:ok, {[], %Metadata{status: 200}}} = ReqDnsimple.Zone.list(req, "2020")
     assert_request(:get, "/v2/2020/zones")
-    assert [] = ReqDnsimple.list_zones!(req, "3030")
+    assert {[], %Metadata{status: 200}} = ReqDnsimple.list_zones!(req, "3030")
     assert_request(:get, "/v2/3030/zones")
-    assert {:ok, []} = ReqDnsimple.list_zones(req, 4040, name_like: "example")
+
+    assert {:ok, {[], %Metadata{status: 200}}} =
+             ReqDnsimple.list_zones(req, 4040, name_like: "example")
+
     assert_request(:get, "/v2/4040/zones", %{"name_like" => "example"})
-    assert {:ok, []} = ReqDnsimple.Zone.list(req)
+    assert {:ok, {[], %Metadata{status: 200}}} = ReqDnsimple.Zone.list(req)
     assert_request(:get, "/v2/1010/zones")
   end
 
   test "root shortcuts accept the same scoped filters and pagination options" do
     req = client(200, %{"data" => []}) |> ReqDnsimple.for_account(1010)
 
-    assert {:ok, []} = ReqDnsimple.list_zones(req, name_like: "example", per_page: 7)
+    assert {:ok, {[], %Metadata{status: 200}}} =
+             ReqDnsimple.list_zones(req, name_like: "example", per_page: 7)
+
     assert_request(:get, "/v2/1010/zones", %{"name_like" => "example", "per_page" => "7"})
 
-    assert [] = ReqDnsimple.list_zones!(req, sort: [:name])
+    assert {[], %Metadata{status: 200}} = ReqDnsimple.list_zones!(req, sort: [:name])
     assert_request(:get, "/v2/1010/zones", %{"sort" => "name:asc"})
 
-    assert {:ok, []} = ReqDnsimple.list_contacts(req, sort: [label: :desc])
+    assert {:ok, {[], %Metadata{status: 200}}} =
+             ReqDnsimple.list_contacts(req, sort: [label: :desc])
+
     assert_request(:get, "/v2/1010/contacts", %{"sort" => "label:desc"})
 
-    assert {:ok, []} = ReqDnsimple.list_billing_charges(req, sort: [invoiced: :desc])
+    assert {:ok, {[], %Metadata{status: 200}}} =
+             ReqDnsimple.list_billing_charges(req, sort: [invoiced: :desc])
+
     assert_request(:get, "/v2/1010/billing/charges", %{"sort" => "invoiced:desc"})
   end
 
@@ -228,8 +241,11 @@ defmodule ReqDnsimple.ClientScopeTest do
           &ReqDnsimple.Service.apply(req, "example.test", "service", &1)
         ],
         invalid <- [nil, %{}, [:bad], [{:bad}]] do
-      assert {:error, %NimbleOptions.ValidationError{}} = operation.(invalid)
+      assert {:error, %Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
+               operation.(invalid)
     end
+
+    refute_received {:request, _request}
   end
 
   test "scoped record mutations retain typed successes, explicit zeroes, and bodyless deletion" do
@@ -251,7 +267,7 @@ defmodule ReqDnsimple.ClientScopeTest do
         end
       )
 
-    assert {:ok, %ReqDnsimple.ZoneRecord{id: 42, ttl: 0}} =
+    assert {:ok, {%ReqDnsimple.ZoneRecord{id: 42, ttl: 0}, %Metadata{status: 201}}} =
              ReqDnsimple.create_zone_record(req, "example.test",
                name: "www",
                type: "A",
@@ -266,12 +282,12 @@ defmodule ReqDnsimple.ClientScopeTest do
       ttl: 0
     })
 
-    assert {:ok, %ReqDnsimple.ZoneRecord{id: 42}} =
+    assert {:ok, {%ReqDnsimple.ZoneRecord{id: 42}, %Metadata{status: 200}}} =
              ReqDnsimple.get_zone_record(req, "example.test", 42)
 
     assert_request(:get, "/v2/1010/zones/example.test/records/42")
 
-    assert {:ok, %ReqDnsimple.ZoneRecord{id: 42}} =
+    assert {:ok, {%ReqDnsimple.ZoneRecord{id: 42}, %Metadata{status: 200}}} =
              ReqDnsimple.ZoneRecord.update(req, "example.test", 42,
                ttl: 0,
                integrated_zones: []
@@ -282,20 +298,25 @@ defmodule ReqDnsimple.ClientScopeTest do
       integrated_zones: []
     })
 
-    assert :ok = ReqDnsimple.delete_zone_record(req, "example.test", 42)
+    assert {:ok, {nil, %Metadata{status: 204}}} =
+             ReqDnsimple.delete_zone_record(req, "example.test", 42)
+
     assert_request(:delete, "/v2/1010/zones/example.test/records/42")
   end
 
   test "overlapping optional-attribute forms distinguish integer resource IDs from options" do
     req = client(204, nil) |> ReqDnsimple.for_account(1010)
 
-    assert :ok = ReqDnsimple.Service.apply(req, 500, 600)
+    assert {:ok, {nil, %Metadata{status: 204}}} = ReqDnsimple.Service.apply(req, 500, 600)
     assert_request(:post, "/v2/1010/domains/500/services/600")
 
-    assert :ok = ReqDnsimple.Service.apply(req, 2020, 500, 600)
+    assert {:ok, {nil, %Metadata{status: 204}}} =
+             ReqDnsimple.Service.apply(req, 2020, 500, 600)
+
     assert_request(:post, "/v2/2020/domains/500/services/600")
 
-    assert :ok = ReqDnsimple.Service.apply(req, 500, 600, settings: %{"app" => "offline"})
+    assert {:ok, {nil, %Metadata{status: 204}}} =
+             ReqDnsimple.Service.apply(req, 500, 600, settings: %{"app" => "offline"})
 
     assert_request(:post, "/v2/1010/domains/500/services/600", %{}, %{
       settings: %{"app" => "offline"}
@@ -310,6 +331,7 @@ defmodule ReqDnsimple.ClientScopeTest do
         assert_raise ReqDnsimple.Error, ~r/account_id is required/, fn -> operation.(req) end
 
       assert error.reason == :missing_account_id
+      assert error.metadata == nil
     end
   end
 
@@ -318,7 +340,9 @@ defmodule ReqDnsimple.ClientScopeTest do
       client(200, %{"data" => %{"user" => nil, "account" => %{"id" => 1010}}})
       |> Req.merge(auth: {:bearer, "dnsimple_a_fake-token"})
 
-    assert {:account, %{"id" => id}} = ReqDnsimple.whoami(discovery)
+    assert {:ok, {{:account, %{"id" => id}}, %Metadata{status: 200}}} =
+             ReqDnsimple.whoami(discovery)
+
     assert_request(:get, "/v2/whoami")
 
     selected =
@@ -326,13 +350,22 @@ defmodule ReqDnsimple.ClientScopeTest do
       |> ReqDnsimple.for_account(id)
       |> Req.merge(adapter: empty_zone_adapter(self()))
 
-    assert {:ok, []} = ReqDnsimple.Zone.list(selected)
+    assert {:ok, {[], %Metadata{status: 200}}} = ReqDnsimple.Zone.list(selected)
     assert_request(:get, "/v2/1010/zones")
-    assert {:error, :missing_account_id} = ReqDnsimple.Zone.list(discovery)
+
+    assert {:error, %Error{reason: :missing_account_id, metadata: nil}} =
+             ReqDnsimple.Zone.list(discovery)
   end
 
   test "global identity and catalog operations ignore selected account scope" do
-    req = client(418, %{"message" => "offline global request"}) |> ReqDnsimple.for_account(1010)
+    body = %{"message" => "offline global request"}
+
+    req =
+      client(418, body, self(), [
+        {"x-request-id", "global-scope-probe"},
+        {"retry-after", "30"}
+      ])
+      |> ReqDnsimple.for_account(1010)
 
     for {operation, path} <- [
           {&ReqDnsimple.whoami/1, "/v2/whoami"},
@@ -344,7 +377,17 @@ defmodule ReqDnsimple.ClientScopeTest do
           {&ReqDnsimple.Service.get(&1, "service"), "/v2/services/service"},
           {&ReqDnsimple.Service.list_page/1, "/v2/services"}
         ] do
-      assert {:error, _reason} = operation.(req)
+      assert {:error,
+              %Error{
+                reason: %{status: 418, response: ^body},
+                metadata: %Metadata{
+                  status: 418,
+                  request_id: "global-scope-probe",
+                  retry_after: "30",
+                  pages: []
+                }
+              }} = operation.(req)
+
       assert_request(:get, path)
     end
   end
@@ -356,11 +399,21 @@ defmodule ReqDnsimple.ClientScopeTest do
         account_id: 1010,
         adapter: fn request ->
           send(self(), {:request, request})
-          {request, %Req.Response{status: 400, body: %{"error" => "invalid_grant"}}}
+
+          {request,
+           Req.Response.new(
+             status: 400,
+             body: %{"error" => "invalid_grant"},
+             headers: [{"x-request-id", "oauth-scope-probe"}]
+           )}
         end
       )
 
-    assert {:error, _reason} =
+    assert {:error,
+            %Error{
+              reason: %{status: 400, response: %{"error" => "invalid_grant"}},
+              metadata: %Metadata{status: 400, request_id: "oauth-scope-probe"}
+            }} =
              ReqDnsimple.OAuth.exchange_code(req,
                client_id: "offline-client",
                code: "offline-code",
@@ -393,16 +446,46 @@ defmodule ReqDnsimple.ClientScopeTest do
             }
           }
 
-          {request, %Req.Response{status: 200, body: body}}
+          {request,
+           Req.Response.new(
+             status: 200,
+             body: body,
+             headers: [
+               {"x-request-id", "scoped-page-#{page}"},
+               {"etag", ~s("scoped-page-#{page}")},
+               {"x-ratelimit-remaining", to_string(10 - page)}
+             ]
+           )}
         end
       )
 
-    assert {:ok, [%ReqDnsimple.ZoneRecord{id: 1}, %ReqDnsimple.ZoneRecord{id: 2}]} =
+    assert {:ok,
+            {[%ReqDnsimple.ZoneRecord{id: 1}, %ReqDnsimple.ZoneRecord{id: 2}],
+             %Metadata{} = metadata}} =
              ReqDnsimple.ZoneRecord.list_all(req, "example.test",
                type: "A",
                sort: [:name],
                per_page: 1
              )
+
+    assert metadata == %Metadata{
+             rate_limit_remaining: 8,
+             pages:
+               for page <- 1..2 do
+                 %Metadata{
+                   status: 200,
+                   pagination: %{
+                     "current_page" => page,
+                     "per_page" => 1,
+                     "total_entries" => 2,
+                     "total_pages" => 2
+                   },
+                   request_id: "scoped-page-#{page}",
+                   etag: ~s("scoped-page-#{page}"),
+                   rate_limit_remaining: 10 - page
+                 }
+               end
+           }
 
     for page <- 1..2 do
       assert_request(:get, "/v2/1010/zones/example.test/records", %{

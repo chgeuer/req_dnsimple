@@ -3,6 +3,14 @@ defmodule ReqDnsimple.Contact do
   DNSimple Contact API functionality.
   Provides contact management operations.
 
+  HTTP operations return `{:ok, {data, %ReqDnsimple.Metadata{}}}` or
+  `{:error, %ReqDnsimple.Error{}}`. HTTP 204 successes have `nil` data.
+  Errors preserve their original reason in `error.reason`. When no response
+  has been received, `error.metadata` is `nil`.
+  Collection pagination is nested in `metadata.pagination`. Complete
+  enumeration retains ordered page metadata in `metadata.pages` and the
+  latest rate-limit budget at the top level.
+
   ## Example
 
       ReqDnsimple.Contact.create(req, 1010,
@@ -16,17 +24,17 @@ defmodule ReqDnsimple.Contact do
         postal_code: "00100",
         country: "IT"
       )
-      #=> {:ok, %ReqDnsimple.Contact{}}
+      #=> {:ok, {%ReqDnsimple.Contact{}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Contact.update(req, 1010, 1,
         label: "",
         address2: nil,
         fax: nil
       )
-      #=> {:ok, %ReqDnsimple.Contact{}}
+      #=> {:ok, {%ReqDnsimple.Contact{}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Contact.delete(req, 1010, 1)
-      #=> :ok
+      #=> {:ok, {nil, %ReqDnsimple.Metadata{}}}
   """
 
   # https://developer.dnsimple.com/v2/contacts/
@@ -103,11 +111,12 @@ defmodule ReqDnsimple.Contact do
 
   @doc """
   Uses the client's configured account. See `create/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
   @spec create(Req.Request.t(), keyword()) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def create(req, attrs) do
     ReqDnsimple.Client.with_account(req, &create(req, &1, attrs))
   end
@@ -133,10 +142,10 @@ defmodule ReqDnsimple.Contact do
         postal_code: "00100",
         country: "IT"
       )
-      #=> {:ok, %ReqDnsimple.Contact{}}
+      #=> {:ok, {%ReqDnsimple.Contact{}, %ReqDnsimple.Metadata{}}}
   """
   @spec create(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def create(req, account_id, attrs) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate([account_id: account_id], @create_path_schema),
@@ -154,7 +163,7 @@ defmodule ReqDnsimple.Contact do
       case Req.request(req) do
         {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
           case decode(data) do
-            {:ok, contact} -> {:ok, contact}
+            {:ok, contact} -> ReqDnsimple.Response.ok(contact, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -165,18 +174,20 @@ defmodule ReqDnsimple.Contact do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `update/4` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
   @spec update(
           Req.Request.t(),
           ReqDnsimple.contact_id(),
           keyword()
-        ) :: {:ok, t()} | {:error, term()}
+        ) :: ReqDnsimple.Response.result(t())
   def update(req, contact_id, attrs) do
     ReqDnsimple.Client.with_account(req, &update(req, &1, contact_id, attrs))
   end
@@ -197,14 +208,14 @@ defmodule ReqDnsimple.Contact do
         address2: nil,
         fax: nil
       )
-      #=> {:ok, %ReqDnsimple.Contact{}}
+      #=> {:ok, {%ReqDnsimple.Contact{}, %ReqDnsimple.Metadata{}}}
   """
   @spec update(
           Req.Request.t(),
           ReqDnsimple.account_id(),
           ReqDnsimple.contact_id(),
           keyword()
-        ) :: {:ok, t()} | {:error, term()}
+        ) :: ReqDnsimple.Response.result(t())
   def update(req, account_id, contact_id, attrs) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate(
@@ -228,7 +239,7 @@ defmodule ReqDnsimple.Contact do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode(data) do
-            {:ok, contact} -> {:ok, contact}
+            {:ok, contact} -> ReqDnsimple.Response.ok(contact, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -239,6 +250,7 @@ defmodule ReqDnsimple.Contact do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc false
@@ -268,17 +280,24 @@ defmodule ReqDnsimple.Contact do
 
   @doc """
   Uses the client's configured account. See `get/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
   @spec get(Req.Request.t(), ReqDnsimple.contact_id()) ::
-          {:ok, __MODULE__.t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def get(req, contact_id) do
     ReqDnsimple.Client.with_account(req, &get(req, &1, contact_id))
   end
 
+  @doc """
+  Fetches one contact as `{:ok, {contact, metadata}}`.
+
+  HTTP 404 returns a `ReqDnsimple.Error` with `reason: :not_found` and the
+  actual response metadata.
+  """
   @spec get(Req.Request.t(), ReqDnsimple.account_id(), ReqDnsimple.contact_id()) ::
-          {:ok, __MODULE__.t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def get(req, account_id, contact_id) do
     # https://developer.dnsimple.com/v2/contacts/#getContact
 
@@ -294,11 +313,11 @@ defmodule ReqDnsimple.Contact do
       )
 
     case Req.request(req) do
-      {:ok, %Req.Response{status: 200, body: %{"data" => data}}} ->
-        {:ok, from_json(data)}
+      {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
+        ReqDnsimple.Response.ok(from_json(data), response)
 
-      {:ok, %Req.Response{status: 404}} ->
-        {:error, :not_found}
+      {:ok, %Req.Response{status: 404} = response} ->
+        ReqDnsimple.Response.error(:not_found, response)
 
       {:ok, response} ->
         ReqDnsimple.response_error(response)
@@ -306,15 +325,17 @@ defmodule ReqDnsimple.Contact do
       {:error, e} ->
         {:error, e}
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `delete/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
   @spec delete(Req.Request.t(), ReqDnsimple.contact_id()) ::
-          :ok | {:error, term()}
+          ReqDnsimple.Response.result(nil)
   def delete(req, contact_id) do
     ReqDnsimple.Client.with_account(req, &delete(req, &1, contact_id))
   end
@@ -322,10 +343,11 @@ defmodule ReqDnsimple.Contact do
   @doc """
   Deletes one contact.
 
+  HTTP 204 returns `{:ok, {nil, metadata}}`.
   Contacts that are in use remain unchanged and return the API's HTTP error.
   """
   @spec delete(Req.Request.t(), ReqDnsimple.account_id(), ReqDnsimple.contact_id()) ::
-          :ok | {:error, term()}
+          ReqDnsimple.Response.result(nil)
   def delete(req, account_id, contact_id) do
     with {:ok, _validated_params} <-
            NimbleOptions.validate(
@@ -344,8 +366,8 @@ defmodule ReqDnsimple.Contact do
         )
 
       case Req.request(req) do
-        {:ok, %Req.Response{status: 204}} ->
-          :ok
+        {:ok, %Req.Response{status: 204} = response} ->
+          ReqDnsimple.Response.ok(nil, response)
 
         {:ok, response} ->
           ReqDnsimple.response_error(response)
@@ -354,6 +376,7 @@ defmodule ReqDnsimple.Contact do
           {:error, error}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @list_contacts_schema [
@@ -368,10 +391,12 @@ defmodule ReqDnsimple.Contact do
   @doc """
   Uses the client's configured account with default options.
   See `list/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
   @spec list(Req.Request.t()) ::
-          {:ok, [__MODULE__.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list(req) do
     list(req, [])
   end
@@ -379,15 +404,17 @@ defmodule ReqDnsimple.Contact do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
   @spec list(Req.Request.t(), keyword()) ::
-          {:ok, [__MODULE__.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   @spec list(Req.Request.t(), ReqDnsimple.account_id()) ::
-          {:ok, [__MODULE__.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list(req, account_id)
       when is_integer(account_id) or is_binary(account_id) do
     list(req, account_id, [])
@@ -397,27 +424,24 @@ defmodule ReqDnsimple.Contact do
     ReqDnsimple.Client.with_account(req, &list(req, &1, opts))
   end
 
+  @doc """
+  Alias for `list_page/3`, including its `{:ok, {contacts, metadata}}` result.
+  """
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, [__MODULE__.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list(req, account_id, opts) do
-    with {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_contacts_schema),
-         {:ok, %Req.Response{status: 200, body: %{"data" => data}}} <-
-           request_list(req, account_id, validated_opts) do
-      {:ok, Enum.map(data, &from_json/1)}
-    else
-      {:ok, %Req.Response{status: 404}} -> {:error, :not_found}
-      {:ok, response} -> ReqDnsimple.response_error(response)
-      {:error, error} -> {:error, error}
-    end
+    list_page(req, account_id, opts)
   end
 
   @doc """
   Uses the client's configured account with default options.
   See `list_page/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
   @spec list_page(Req.Request.t()) ::
-          {:ok, {[__MODULE__.t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_page(req) do
     list_page(req, [])
   end
@@ -425,15 +449,17 @@ defmodule ReqDnsimple.Contact do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list_page/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
   @spec list_page(Req.Request.t(), keyword()) ::
-          {:ok, {[__MODULE__.t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   @spec list_page(Req.Request.t(), ReqDnsimple.account_id()) ::
-          {:ok, {[__MODULE__.t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_page(req, account_id)
       when is_integer(account_id) or is_binary(account_id) do
     list_page(req, account_id, [])
@@ -443,16 +469,23 @@ defmodule ReqDnsimple.Contact do
     ReqDnsimple.Client.with_account(req, &list_page(req, &1, opts))
   end
 
+  @doc """
+  Lists one page of contacts as `{:ok, {contacts, metadata}}`.
+
+  Supports optional `:sort`, `:page`, and `:per_page` values. Pagination is
+  nested in `metadata.pagination` and retains its string keys. HTTP 404
+  returns a `ReqDnsimple.Error` with `reason: :not_found` and response metadata.
+  """
   @spec list_page(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, {[__MODULE__.t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_page(req, account_id, opts) do
     with {:ok, validated_opts} <- ReqDnsimple.validate_options(opts, @list_contacts_schema) do
       case request_list(req, account_id, validated_opts) do
-        {:ok, %Req.Response{status: 200, body: %{"data" => data, "pagination" => pagination}}} ->
-          {:ok, {Enum.map(data, &from_json/1), pagination}}
+        {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
+          ReqDnsimple.Response.ok(Enum.map(data, &from_json/1), response)
 
-        {:ok, %Req.Response{status: 404}} ->
-          {:error, :not_found}
+        {:ok, %Req.Response{status: 404} = response} ->
+          ReqDnsimple.Response.error(:not_found, response)
 
         {:ok, response} ->
           ReqDnsimple.response_error(response)
@@ -461,15 +494,18 @@ defmodule ReqDnsimple.Contact do
           {:error, e}
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account with default options.
   See `list_all/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
   @spec list_all(Req.Request.t()) ::
-          {:ok, [__MODULE__.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_all(req) do
     list_all(req, [])
   end
@@ -477,15 +513,17 @@ defmodule ReqDnsimple.Contact do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list_all/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
   @spec list_all(Req.Request.t(), keyword()) ::
-          {:ok, [__MODULE__.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id()) ::
-          {:ok, [__MODULE__.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_all(req, account_id)
       when is_integer(account_id) or is_binary(account_id) do
     list_all(req, account_id, [])
@@ -495,8 +533,19 @@ defmodule ReqDnsimple.Contact do
     ReqDnsimple.Client.with_account(req, &list_all(req, &1, opts))
   end
 
+  @doc """
+  Enumerates every page of contacts as `{:ok, {contacts, metadata}}`.
+
+  Enumeration begins at page one and rejects an explicit `:page` option.
+  Sorting and `:per_page` are retained for every request.
+
+  Metadata retains all responses in `metadata.pages`, in order, and the
+  latest rate-limit budget. Aggregate `status`, `pagination`, `request_id`,
+  and `etag` are `nil`. A later failure retains completed page metadata in
+  `error.metadata.pages`.
+  """
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, [__MODULE__.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_all(req, account_id, opts) do
     ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, &1))
   end
@@ -508,7 +557,7 @@ defmodule ReqDnsimple.Contact do
       |> Map.new()
 
     req
-    |> Req.merge(
+    |> ReqDnsimple.Helper.merge(
       method: :get,
       url: "/:account_id/contacts",
       path_params_style: :colon,

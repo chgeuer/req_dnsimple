@@ -3,6 +3,8 @@ defmodule ReqDnsimple.SortTest do
 
   import ReqDnsimple.TestSupport
 
+  alias ReqDnsimple.{Error, Metadata}
+
   test "sort conversion preserves keyword ordering and supports atom shorthand" do
     assert ReqDnsimple.convert_sort_to_string(sort: [name: :desc, id: :asc]) ==
              [sort: "name:desc,id:asc"]
@@ -17,7 +19,8 @@ defmodule ReqDnsimple.SortTest do
     for {_name, {allowed_fields, operation, response, path}} <- list_operations() do
       sort = [hd(allowed_fields), {List.last(allowed_fields), :desc}]
 
-      assert {:ok, _result} = operation.(client(200, response), sort: sort)
+      assert {:ok, {[], %Metadata{status: 200}}} =
+               operation.(client(200, response), sort: sort)
 
       expected_sort =
         "#{hd(allowed_fields)}:asc,#{List.last(allowed_fields)}:desc"
@@ -39,7 +42,7 @@ defmodule ReqDnsimple.SortTest do
 
     for {_name, {_allowed_fields, operation, _response, _path}} <- list_operations(),
         sort <- invalid_sorts do
-      assert {:error, %NimbleOptions.ValidationError{key: :sort}} =
+      assert {:error, %Error{reason: %NimbleOptions.ValidationError{key: :sort}, metadata: nil}} =
                operation.(ReqDnsimple.new_client("dnsimple_u_fake-token"), sort: sort)
 
       refute_receive {:request, _}
@@ -53,7 +56,7 @@ defmodule ReqDnsimple.SortTest do
           field not in allowed_fields
         end)
 
-      assert {:error, %NimbleOptions.ValidationError{key: :sort}} =
+      assert {:error, %Error{reason: %NimbleOptions.ValidationError{key: :sort}, metadata: nil}} =
                operation.(
                  ReqDnsimple.new_client("dnsimple_u_fake-token"),
                  sort: [{unsupported_field, :asc}]

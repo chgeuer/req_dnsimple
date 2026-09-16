@@ -49,10 +49,9 @@ defmodule ReqDnsimple.Samples do
   end
 
   def accounts!(client) do
-    case ReqDnsimple.Account.list(client) do
-      accounts when is_list(accounts) -> accounts
-      {:error, _reason} = error -> ReqDnsimple.unwrap!(error)
-    end
+    client
+    |> ReqDnsimple.Account.list()
+    |> ReqDnsimple.unwrap!()
   end
 
   def select_account!(accounts, selected_id) do

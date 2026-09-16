@@ -8,7 +8,7 @@ name = "_req-dnsimple-sample-" <> Base.encode16(:crypto.strong_rand_bytes(8), ca
 
 IO.puts("Creating #{name} in test zone #{zone}; keep this name if the create response is lost")
 
-created =
+{created, _metadata} =
   client
   |> ReqDnsimple.ZoneRecord.create(zone,
     name: name,
@@ -30,14 +30,14 @@ update_result =
 cleanup_result = ReqDnsimple.ZoneRecord.delete(client, zone, created.id)
 
 case {update_result, cleanup_result} do
-  {{:ok, _updated}, :ok} ->
+  {{:ok, {_updated, _update_metadata}}, {:ok, {nil, _cleanup_metadata}}} ->
     IO.puts("Updated and deleted only the newly created sample record #{created.id}")
 
-  {{:error, _reason} = error, :ok} ->
+  {{:error, %ReqDnsimple.Error{}} = error, {:ok, {nil, _cleanup_metadata}}} ->
     IO.puts(:stderr, "Update failed; the newly created sample record was deleted")
     ReqDnsimple.unwrap!(error)
 
-  {operation_result, {:error, cleanup_reason}} ->
+  {operation_result, {:error, %ReqDnsimple.Error{} = cleanup_error} = cleanup_result} ->
     IO.puts(
       :stderr,
       "Cleanup failed: check sample record #{created.id} (#{name}) in test zone #{zone}. " <>
@@ -46,12 +46,16 @@ case {update_result, cleanup_result} do
 
     ReqDnsimple.unwrap!(
       {:error,
-       {:sample_cleanup_failed,
-        %{
-          zone: zone,
-          record_id: created.id,
-          operation_result: operation_result,
-          cleanup_reason: cleanup_reason
-        }}}
+       %ReqDnsimple.Error{
+         reason:
+           {:sample_cleanup_failed,
+            %{
+              zone: zone,
+              record_id: created.id,
+              operation_result: operation_result,
+              cleanup_result: cleanup_result
+            }},
+         metadata: cleanup_error.metadata
+       }}
     )
 end

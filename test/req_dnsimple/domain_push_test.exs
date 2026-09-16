@@ -20,18 +20,60 @@ defmodule ReqDnsimple.DomainPushTest do
     "total_pages" => 1
   }
 
+  test "preserves HTTP headers on push operations, page responses, and errors" do
+    headers = [
+      {"x-request-id", "push-response"},
+      {"x-ratelimit-remaining", "0"},
+      {"retry-after", "5"}
+    ]
+
+    for {operation, status, body, pagination} <- [
+          {&ReqDnsimple.DomainPush.initiate(&1, 1010, "example.test",
+             new_account_email: "recipient@example.test"
+           ), 201, %{"data" => @push_data}, nil},
+          {&ReqDnsimple.DomainPush.list_page(&1, 2020), 200,
+           %{"data" => [@push_data], "pagination" => @pagination}, @pagination},
+          {&ReqDnsimple.DomainPush.accept(&1, 2020, 1, contact_id: 11), 204, nil, nil},
+          {&ReqDnsimple.DomainPush.reject(&1, 2020, 1), 204, nil, nil}
+        ] do
+      metadata = %ReqDnsimple.Metadata{
+        status: status,
+        pagination: pagination,
+        request_id: "push-response",
+        rate_limit_remaining: 0,
+        retry_after: "5"
+      }
+
+      assert {:ok, {data, ^metadata}} = operation.(client(status, body, self(), headers))
+      if status == 204, do: assert(is_nil(data))
+      assert_received {:request, _request}
+
+      error_body = %{"message" => "retry later"}
+      error_metadata = %{metadata | status: 429, pagination: nil}
+
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: %{status: 429, response: ^error_body},
+                metadata: ^error_metadata
+              }} = operation.(client(429, error_body, self(), headers))
+
+      assert_received {:request, _request}
+      refute_received {:request, _request}
+    end
+  end
+
   describe "initiate/4" do
     test "initiateDomainPush sends one request and returns the typed pending push" do
       assert {:ok,
-              %ReqDnsimple.DomainPush{
-                id: 1,
-                domain_id: 100,
-                contact_id: nil,
-                account_id: 2020,
-                created_at: ~U[2026-09-01 08:00:00Z],
-                updated_at: ~U[2026-09-01 08:30:00Z],
-                accepted_at: nil
-              }} =
+              {%ReqDnsimple.DomainPush{
+                 id: 1,
+                 domain_id: 100,
+                 contact_id: nil,
+                 account_id: 2020,
+                 created_at: ~U[2026-09-01 08:00:00Z],
+                 updated_at: ~U[2026-09-01 08:30:00Z],
+                 accepted_at: nil
+               }, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.DomainPush.initiate(
                  client(201, %{"data" => @push_data}),
                  1010,
@@ -50,7 +92,7 @@ defmodule ReqDnsimple.DomainPushTest do
     end
 
     test "initiateDomainPush supports the deprecated email target and numeric domain IDs" do
-      assert {:ok, %ReqDnsimple.DomainPush{}} =
+      assert {:ok, {%ReqDnsimple.DomainPush{}, %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.DomainPush.initiate(
                  client(201, %{"data" => @push_data}),
                  0,
@@ -95,7 +137,8 @@ defmodule ReqDnsimple.DomainPushTest do
       ]
 
       for {account_id, domain, attrs} <- invalid_arguments do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.DomainPush.initiate(request, account_id, domain, attrs)
       end
 
@@ -109,7 +152,11 @@ defmodule ReqDnsimple.DomainPushTest do
           "errors" => %{"new_account_identifier" => ["is not eligible"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.DomainPush.initiate(
                    client(status, body),
                    1010,
@@ -138,7 +185,11 @@ defmodule ReqDnsimple.DomainPushTest do
       ]
 
       for body <- malformed_bodies do
-        assert {:error, %{status: 201, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: 201, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: 201}
+                }} =
                  ReqDnsimple.DomainPush.initiate(
                    client(201, body),
                    1010,
@@ -158,7 +209,8 @@ defmodule ReqDnsimple.DomainPushTest do
     end
 
     test "initiateDomainPush preserves transport failures" do
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.DomainPush.initiate(
                  transport_error_client(:timeout),
                  1010,
@@ -183,7 +235,7 @@ defmodule ReqDnsimple.DomainPushTest do
                    updated_at: ~U[2026-09-01 08:30:00Z],
                    accepted_at: nil
                  }
-               ], ^pagination}} =
+               ], %ReqDnsimple.Metadata{pagination: ^pagination}}} =
                ReqDnsimple.DomainPush.list_page(
                  client(200, %{"data" => [@push_data], "pagination" => pagination}),
                  2020,
@@ -199,7 +251,8 @@ defmodule ReqDnsimple.DomainPushTest do
       accepted = Map.put(@push_data, "accepted_at", "2026-09-02T10:00:00+02:00")
 
       assert {:ok,
-              {[%ReqDnsimple.DomainPush{accepted_at: ~U[2026-09-02 08:00:00Z]}], @pagination}} =
+              {[%ReqDnsimple.DomainPush{accepted_at: ~U[2026-09-02 08:00:00Z]}],
+               %ReqDnsimple.Metadata{pagination: @pagination}}} =
                ReqDnsimple.DomainPush.list(
                  client(200, %{"data" => [accepted], "pagination" => @pagination}),
                  0
@@ -210,7 +263,7 @@ defmodule ReqDnsimple.DomainPushTest do
 
       empty_pagination = %{@pagination | "total_entries" => 0, "total_pages" => 0}
 
-      assert {:ok, {[], ^empty_pagination}} =
+      assert {:ok, {[], %ReqDnsimple.Metadata{pagination: ^empty_pagination}}} =
                ReqDnsimple.DomainPush.list_page(
                  client(200, %{"data" => [], "pagination" => empty_pagination}),
                  2020
@@ -230,7 +283,8 @@ defmodule ReqDnsimple.DomainPushTest do
             {2020, [per_page: 0]},
             {2020, [per_page: 101]}
           ] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.DomainPush.list_page(request, account_id, opts)
       end
 
@@ -244,14 +298,19 @@ defmodule ReqDnsimple.DomainPushTest do
           "errors" => %{"account" => ["is unavailable"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.DomainPush.list_page(client(status, body), 2020)
 
         assert_request(:get, "/v2/2020/pushes", %{}, nil)
         refute_received {:request, _request}
       end
 
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.DomainPush.list_page(transport_error_client(:timeout), 2020)
     end
 
@@ -262,15 +321,15 @@ defmodule ReqDnsimple.DomainPushTest do
         %{"data" => [Map.delete(@push_data, "contact_id")], "pagination" => @pagination},
         %{"data" => [Map.delete(@push_data, "accepted_at")], "pagination" => @pagination},
         %{"data" => [Map.put(@push_data, "contact_id", "11")], "pagination" => @pagination},
-        %{"data" => [Map.put(@push_data, "created_at", "invalid")], "pagination" => @pagination},
-        %{"data" => [@push_data]},
-        %{"data" => [@push_data], "pagination" => nil},
-        %{"data" => [@push_data], "pagination" => Map.delete(@pagination, "total_entries")},
-        %{"data" => [@push_data], "pagination" => %{@pagination | "per_page" => 0}}
+        %{"data" => [Map.put(@push_data, "created_at", "invalid")], "pagination" => @pagination}
       ]
 
       for body <- malformed_bodies do
-        assert {:error, %{status: 200, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: 200, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: 200}
+                }} =
                  ReqDnsimple.DomainPush.list_page(client(200, body), 2020)
 
         assert_request(:get, "/v2/2020/pushes", %{}, nil)
@@ -279,11 +338,38 @@ defmodule ReqDnsimple.DomainPushTest do
     end
   end
 
+  test "push pages retain valid data and headers when pagination is absent or malformed" do
+    invalid = Map.delete(@pagination, "total_entries")
+    zero = %{@pagination | "per_page" => 0}
+
+    for {fields, pagination, errors} <- [
+          {%{}, nil, %{}},
+          {%{"pagination" => nil}, nil, %{}},
+          {%{"pagination" => invalid}, nil, %{pagination: {:invalid_pagination, invalid}}},
+          {%{"pagination" => zero}, zero, %{}}
+        ] do
+      body = Map.put(fields, "data", [@push_data])
+      req = client(200, body, self(), [{"x-request-id", "push-page"}])
+
+      assert {:ok,
+              {[%ReqDnsimple.DomainPush{}],
+               %ReqDnsimple.Metadata{
+                 status: 200,
+                 request_id: "push-page",
+                 pagination: ^pagination,
+                 parse_errors: ^errors
+               }}} = ReqDnsimple.DomainPush.list_page(req, 2020)
+
+      assert_request(:get, "/v2/2020/pushes", %{}, nil)
+      refute_received {:request, _request}
+    end
+  end
+
   describe "list_all/3" do
     test "returns empty and one-page collections without extra requests" do
       empty_pagination = %{@pagination | "total_entries" => 0, "total_pages" => 0}
 
-      assert {:ok, []} =
+      assert {:ok, {[], %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.DomainPush.list_all(
                  client(200, %{"data" => [], "pagination" => empty_pagination}),
                  2020
@@ -292,7 +378,7 @@ defmodule ReqDnsimple.DomainPushTest do
       assert_request(:get, "/v2/2020/pushes", %{"page" => 1})
       refute_received {:request, _request}
 
-      assert {:ok, [%ReqDnsimple.DomainPush{id: 1}]} =
+      assert {:ok, {[%ReqDnsimple.DomainPush{id: 1}], %ReqDnsimple.Metadata{}}} =
                ReqDnsimple.DomainPush.list_all(
                  client(200, %{"data" => [@push_data], "pagination" => @pagination}),
                  2020
@@ -315,10 +401,11 @@ defmodule ReqDnsimple.DomainPushTest do
       }
 
       assert {:ok,
-              [
-                %ReqDnsimple.DomainPush{id: 1, domain_id: 100},
-                %ReqDnsimple.DomainPush{id: 2, domain_id: 200}
-              ]} = ReqDnsimple.DomainPush.list_all(page_client(pages), 2020, per_page: 1)
+              {[
+                 %ReqDnsimple.DomainPush{id: 1, domain_id: 100},
+                 %ReqDnsimple.DomainPush{id: 2, domain_id: 200}
+               ], %ReqDnsimple.Metadata{}}} =
+               ReqDnsimple.DomainPush.list_all(page_client(pages), 2020, per_page: 1)
 
       assert_request(:get, "/v2/2020/pushes", %{"page" => 1, "per_page" => 1})
       assert_request(:get, "/v2/2020/pushes", %{"page" => 2, "per_page" => 1})
@@ -328,11 +415,12 @@ defmodule ReqDnsimple.DomainPushTest do
     test "rejects explicit pages and malformed option containers before HTTP" do
       request = client(200, %{"data" => [], "pagination" => @pagination})
 
-      assert {:error, {:invalid_option, :page}} =
+      assert {:error, %ReqDnsimple.Error{reason: {:invalid_option, :page}, metadata: nil}} =
                ReqDnsimple.DomainPush.list_all(request, 2020, page: 2)
 
       for opts <- [[:invalid], [{:name}]] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.DomainPush.list_all(request, 2020, opts)
       end
 
@@ -343,7 +431,11 @@ defmodule ReqDnsimple.DomainPushTest do
       first_page =
         %{@pagination | "current_page" => 1, "total_entries" => 2, "total_pages" => 2}
 
-      assert {:error, %{status: 503, response: %{"message" => "unavailable"}}} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: %{status: 503, response: %{"message" => "unavailable"}},
+                metadata: %ReqDnsimple.Metadata{status: 503}
+              }} =
                ReqDnsimple.DomainPush.list_all(
                  response_client(fn
                    1 -> {200, %{"data" => [@push_data], "pagination" => first_page}}
@@ -357,7 +449,11 @@ defmodule ReqDnsimple.DomainPushTest do
 
       repeated = %{@pagination | "current_page" => 1, "total_entries" => 2, "total_pages" => 2}
 
-      assert {:error, {:invalid_pagination, ^repeated}} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: {:invalid_pagination, ^repeated},
+                metadata: %ReqDnsimple.Metadata{}
+              }} =
                ReqDnsimple.DomainPush.list_all(
                  response_client(fn _page ->
                    {200, %{"data" => [@push_data], "pagination" => repeated}}
@@ -372,8 +468,8 @@ defmodule ReqDnsimple.DomainPushTest do
   end
 
   describe "accept/4" do
-    test "acceptPush sends one request with the selected contact and returns :ok" do
-      assert :ok =
+    test "acceptPush sends one request with the selected contact and returns nil data with metadata" do
+      assert {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}} =
                ReqDnsimple.DomainPush.accept(
                  client(204, ""),
                  2020,
@@ -386,7 +482,7 @@ defmodule ReqDnsimple.DomainPushTest do
     end
 
     test "acceptPush preserves explicit zero identifiers" do
-      assert :ok =
+      assert {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}} =
                ReqDnsimple.DomainPush.accept(
                  client(204, nil),
                  0,
@@ -420,7 +516,8 @@ defmodule ReqDnsimple.DomainPushTest do
       ]
 
       for {account_id, push_id, attrs} <- invalid_arguments do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.DomainPush.accept(request, account_id, push_id, attrs)
       end
 
@@ -434,7 +531,11 @@ defmodule ReqDnsimple.DomainPushTest do
           "errors" => %{"contact_id" => ["is not eligible"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.DomainPush.accept(
                    client(status, body),
                    2020,
@@ -449,7 +550,11 @@ defmodule ReqDnsimple.DomainPushTest do
 
     test "acceptPush rejects non-204 successful responses" do
       for {status, body} <- [{200, %{}}, {200, nil}, {201, %{"data" => %{}}}] do
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.DomainPush.accept(
                    client(status, body),
                    2020,
@@ -463,7 +568,8 @@ defmodule ReqDnsimple.DomainPushTest do
     end
 
     test "acceptPush preserves transport failures" do
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.DomainPush.accept(
                  transport_error_client(:timeout),
                  2020,
@@ -474,15 +580,17 @@ defmodule ReqDnsimple.DomainPushTest do
   end
 
   describe "reject/3" do
-    test "rejectPush sends one bodyless request and returns :ok" do
-      assert :ok = ReqDnsimple.DomainPush.reject(client(204, ""), 2020, 1)
+    test "rejectPush sends one bodyless request and returns nil data with metadata" do
+      assert {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}} =
+               ReqDnsimple.DomainPush.reject(client(204, ""), 2020, 1)
 
       assert_request(:delete, "/v2/2020/pushes/1", %{}, nil)
       refute_received {:request, _request}
     end
 
     test "rejectPush preserves explicit zero identifiers" do
-      assert :ok = ReqDnsimple.DomainPush.reject(client(204, nil), 0, 0)
+      assert {:ok, {nil, %ReqDnsimple.Metadata{status: 204}}} =
+               ReqDnsimple.DomainPush.reject(client(204, nil), 0, 0)
 
       assert_request(:delete, "/v2/0/pushes/0", %{}, nil)
       refute_received {:request, _request}
@@ -497,7 +605,8 @@ defmodule ReqDnsimple.DomainPushTest do
             {2020, "1"},
             {2020, nil}
           ] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.DomainPush.reject(request, account_id, push_id)
       end
 
@@ -511,7 +620,11 @@ defmodule ReqDnsimple.DomainPushTest do
           "errors" => %{"push" => ["cannot be rejected"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.DomainPush.reject(client(status, body), 2020, 1)
 
         assert_request(:delete, "/v2/2020/pushes/1", %{}, nil)
@@ -521,7 +634,11 @@ defmodule ReqDnsimple.DomainPushTest do
 
     test "rejectPush rejects non-204 successful responses" do
       for {status, body} <- [{200, %{}}, {200, nil}, {201, %{"data" => %{}}}] do
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.DomainPush.reject(client(status, body), 2020, 1)
 
         assert_request(:delete, "/v2/2020/pushes/1", %{}, nil)
@@ -530,7 +647,8 @@ defmodule ReqDnsimple.DomainPushTest do
     end
 
     test "rejectPush preserves transport failures" do
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{reason: %Req.TransportError{reason: :timeout}, metadata: nil}} =
                ReqDnsimple.DomainPush.reject(transport_error_client(:timeout), 2020, 1)
     end
   end

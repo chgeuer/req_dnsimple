@@ -13,14 +13,22 @@ defmodule ReqDnsimple.DomainResearchTest do
   describe "get_status/3" do
     test "getDomainsResearchStatus sends one bodyless request and returns a typed result" do
       assert {:ok,
-              %ReqDnsimple.DomainResearch{
-                request_id: "00000000-0000-4000-8000-000000000001",
-                domain: "example.test",
-                availability: "unknown",
-                errors: ["Fake offline research limitation"]
-              }} =
+              {%ReqDnsimple.DomainResearch{
+                 request_id: "00000000-0000-4000-8000-000000000001",
+                 domain: "example.test",
+                 availability: "unknown",
+                 errors: ["Fake offline research limitation"]
+               },
+               %ReqDnsimple.Metadata{
+                 status: 200,
+                 request_id: "http-research-request",
+                 rate_limit_remaining: 9
+               }}} =
                ReqDnsimple.DomainResearch.get_status(
-                 client(200, %{"data" => @research_data}),
+                 client(200, %{"data" => @research_data}, self(), [
+                   {"x-request-id", "http-research-request"},
+                   {"x-ratelimit-remaining", "9"}
+                 ]),
                  1010,
                  domain: "example.test"
                )
@@ -44,10 +52,10 @@ defmodule ReqDnsimple.DomainResearchTest do
         data = Map.merge(@research_data, %{"availability" => availability, "errors" => errors})
 
         assert {:ok,
-                %ReqDnsimple.DomainResearch{
-                  availability: ^availability,
-                  errors: ^errors
-                }} =
+                {%ReqDnsimple.DomainResearch{
+                   availability: ^availability,
+                   errors: ^errors
+                 }, %ReqDnsimple.Metadata{status: 200}}} =
                  ReqDnsimple.DomainResearch.get_status(
                    client(200, %{"data" => data}),
                    1010,
@@ -65,7 +73,7 @@ defmodule ReqDnsimple.DomainResearchTest do
     test "getDomainsResearchStatus preserves an explicit empty domain query" do
       data = Map.put(@research_data, "domain", "")
 
-      assert {:ok, %ReqDnsimple.DomainResearch{domain: ""}} =
+      assert {:ok, {%ReqDnsimple.DomainResearch{domain: ""}, %ReqDnsimple.Metadata{status: 200}}} =
                ReqDnsimple.DomainResearch.get_status(
                  client(200, %{"data" => data}),
                  0,
@@ -86,7 +94,8 @@ defmodule ReqDnsimple.DomainResearchTest do
             {1010, [domain: 0]},
             {1010, [domain: "example.test", unsupported: true]}
           ] do
-        assert {:error, %NimbleOptions.ValidationError{}} =
+        assert {:error,
+                %ReqDnsimple.Error{reason: %NimbleOptions.ValidationError{}, metadata: nil}} =
                  ReqDnsimple.DomainResearch.get_status(request, account_id, opts)
       end
 
@@ -100,7 +109,11 @@ defmodule ReqDnsimple.DomainResearchTest do
           "errors" => %{"domain" => ["is unavailable"]}
         }
 
-        assert {:error, %{status: ^status, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: ^status, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: ^status}
+                }} =
                  ReqDnsimple.DomainResearch.get_status(
                    client(status, body),
                    1010,
@@ -118,7 +131,11 @@ defmodule ReqDnsimple.DomainResearchTest do
     test "getDomainsResearchStatus preserves monthly-cap Retry-After without retrying" do
       body = %{"message" => "Fake monthly research cap reached"}
 
-      assert {:error, %{status: 429, response: ^body, retry_after: "3600"}} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: %{status: 429, response: ^body},
+                metadata: %ReqDnsimple.Metadata{status: 429, retry_after: "3600"}
+              }} =
                ReqDnsimple.DomainResearch.get_status(
                  client_with_headers(429, body, [{"retry-after", "3600"}]),
                  1010,
@@ -150,7 +167,11 @@ defmodule ReqDnsimple.DomainResearchTest do
         ReqDnsimple.new_client("dnsimple_u_fake-token")
         |> Req.merge(adapter: adapter)
 
-      assert {:error, %{status: 429, response: ^body, retry_after: "0"}} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: %{status: 429, response: ^body},
+                metadata: %ReqDnsimple.Metadata{status: 429, retry_after: "0"}
+              }} =
                ReqDnsimple.DomainResearch.get_status(
                  request,
                  1010,
@@ -175,7 +196,11 @@ defmodule ReqDnsimple.DomainResearchTest do
       ]
 
       for body <- malformed_payloads do
-        assert {:error, %{status: 200, response: ^body}} =
+        assert {:error,
+                %ReqDnsimple.Error{
+                  reason: %{status: 200, response: ^body},
+                  metadata: %ReqDnsimple.Metadata{status: 200}
+                }} =
                  ReqDnsimple.DomainResearch.get_status(
                    client(200, body),
                    1010,
@@ -191,7 +216,11 @@ defmodule ReqDnsimple.DomainResearchTest do
     end
 
     test "getDomainsResearchStatus preserves transport failures" do
-      assert {:error, %Req.TransportError{reason: :timeout}} =
+      assert {:error,
+              %ReqDnsimple.Error{
+                reason: %Req.TransportError{reason: :timeout},
+                metadata: nil
+              }} =
                ReqDnsimple.DomainResearch.get_status(
                  transport_error_client(:timeout),
                  1010,

@@ -1,5 +1,7 @@
 # Scoped DNSimple reads, optionally through a proxy
 
+## Section
+
 This notebook is read-only. Start with
 [DNSimple sandbox](https://developer.dnsimple.com/sandbox/), whose account IDs
 and credentials are separate from production. It makes real requests only when
@@ -11,13 +13,13 @@ Create Livebook secrets with these names (Livebook exposes them as `LB_...`
 environment variables), or set the corresponding ordinary environment variables
 in the Livebook runtime:
 
-| Secret / ordinary environment variable | Required | Meaning |
-| --- | --- | --- |
-| `REQ_DNSIMPLE_PATH` | Yes | Absolute path to your local checkout of this repository. |
-| `DNSIMPLE_TOKEN` | Yes, on each request | Sandbox account or user token; never paste it into a code cell. |
-| `DNSIMPLE_ACCOUNT_ID` | Yes | Your selected positive account ID, not a user ID. |
-| `DNSIMPLE_ZONE` | For record reads | An existing zone selected by you. |
-| `DNSIMPLE_BASE_URL` | No | Defaults to `https://api.sandbox.dnsimple.com/v2`; may point to a trusted HTTPS API-compatible reverse proxy, including `/v2`. |
+| Secret / ordinary environment variable | Required             | Meaning                                                                                                                        |
+| -------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `REQ_DNSIMPLE_PATH`                    | Yes                  | Absolute path to your local checkout of this repository.                                                                       |
+| `DNSIMPLE_TOKEN`                       | Yes, on each request | Sandbox account or user token; never paste it into a code cell.                                                                |
+| `DNSIMPLE_ACCOUNT_ID`                  | Yes                  | Your selected positive account ID, not a user ID.                                                                              |
+| `DNSIMPLE_ZONE`                        | For record reads     | An existing zone selected by you.                                                                                              |
+| `DNSIMPLE_BASE_URL`                    | No                   | Defaults to `https://api.sandbox.dnsimple.com/v2`; may point to a trusted HTTPS API-compatible reverse proxy, including `/v2`. |
 
 A reverse proxy receives your bearer token: use only infrastructure you trust.
 No account IDs, tokens, proxy hostnames, or local home-directory paths are
@@ -70,11 +72,12 @@ client =
 
 ## Read zones with the existing bang helper
 
-`list_zones!` returns a bare list and fetches just one page, with the same filter
-and pagination options as `Zone.list!`.
+`list_zones!` returns `{zones, metadata}` and fetches just one page, with the same
+filter and pagination options as `Zone.list!`. Bang helpers remove only `:ok`;
+response metadata remains a `ReqDnsimple.Metadata` struct.
 
 ```elixir
-zones = ReqDnsimple.list_zones!(client, sort: [name: :asc], per_page: 20)
+{zones, _metadata} = ReqDnsimple.list_zones!(client, sort: [name: :asc], per_page: 20)
 Enum.map(zones, & &1.name)
 ```
 
@@ -90,24 +93,25 @@ zone =
 
 filters = [type: "A", name_like: "www", sort: [name: :asc, id: :asc], per_page: 25]
 
-{records, pagination} =
+{records, metadata} =
   ReqDnsimple.ZoneRecord.list_page(client, zone, filters ++ [page: 1])
   |> ReqDnsimple.unwrap!()
 
-%{record_names: Enum.map(records, & &1.name), pagination: pagination}
+%{record_names: Enum.map(records, & &1.name), pagination: metadata.pagination}
 ```
 
 ## Deliberately enumerate every matching page
 
 `list_all` retains filters, sorting, and page size. It starts at page one and
-rejects a `page:` option. This cell can send multiple requests.
+rejects a `page:` option. This cell can send multiple requests; `metadata.pages`
+keeps each response's metadata in request order, even for a single empty page.
 
 ```elixir
-all_records =
+{all_records, all_metadata} =
   ReqDnsimple.ZoneRecord.list_all(client, zone, filters)
   |> ReqDnsimple.unwrap!()
 
-%{matching_records: length(all_records)}
+%{matching_records: length(all_records), response_pages: length(all_metadata.pages)}
 ```
 
 ## Discovery, multiple accounts, and safe mutations

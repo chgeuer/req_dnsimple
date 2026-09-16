@@ -2,9 +2,51 @@
 
 These findings came from the source/offline comparison on 2026-09-11/12.
 Reconfirm the selected finding against current source before changing it.
-The tracker issue and its Agent Brief provide the complete acceptance contract.
+The tracker issue and its Agent Brief record the original acceptance contract.
 
-## Correctness and compatibility
+## Current result-contract override
+
+The approved breaking HTTP contract supersedes the historical
+success-preservation requirements in CORE-002, CORE-006, CORE-008, CORE-010,
+CORE-003, CORE-012, and CORE-013 below. Every supported HTTP operation now
+returns `{:ok, {data, %ReqDnsimple.Metadata{}}}` or a structured
+`{:error, %ReqDnsimple.Error{reason: original_reason, metadata: metadata}}`.
+Bodyless success data is `nil`. Account lists and tagged identities are wrapped
+uniformly; `ns_records` returns records with aggregate metadata. Bang helpers
+return `{data, metadata}` and raise the structured error without stripping it.
+`ReqDnsimple.Response.result(data)` describes results; `Response` is not a
+returned struct.
+
+Pagination is nested in `metadata.pagination`. Status, rate-limit fields,
+request ID, opaque ETag and Retry-After strings, and explicit metadata
+`parse_errors` are available for every response. Missing optional values are
+`nil`; reset values are integer Unix seconds. Invalid optional metadata does
+not invalidate otherwise valid resource data.
+
+Complete enumeration keeps each response in request order under
+`metadata.pages`, including empty/single-page collections. Aggregate rate-limit,
+Retry-After, and parse-error fields reflect the last page; top-level status,
+pagination, request ID, and ETag remain `nil`. Later HTTP failures retain the
+failed response fields plus completed/failed page metadata. Transport failures
+retain prior page metadata without inventing an HTTP response. Local validation
+and transport errors have no HTTP metadata of their own. Metadata adds no
+automatic rate limiting, retries, or caching and stores no raw headers/bodies
+wholesale.
+
+Pure helpers retain their old behavior: `OAuth.authorize_url/2,3` still returns
+`{:ok, url}` or `{:error, %NimbleOptions.ValidationError{}}`; only
+`OAuth.exchange_code/2` performs HTTP. Constructors still raise `ArgumentError`.
+See the [current guide](../../README.md#return-value-conventions) and schema
+version 2 [operation inventory](operation-inventory.json).
+
+The findings and gate below are historical, not current return-shape guidance
+or live tracker progress. The original campaign covered 103 operations; the
+current supported boundary is 110 of 111 published operations, excluding only
+`getDomainRestore`. Account scope still covers 102 account-path operations and
+144 interface families. No endpoint, arity, provenance, or tracker membership
+changes result from this response-contract migration.
+
+## Historical correctness and compatibility findings
 
 ### CORE-001 - Preserve Bearer authentication for dynamic token callbacks
 
@@ -310,7 +352,7 @@ Tracker: `bd-2tb`.
 - Point readers to the versioned operation inventory, clearly distinguishing implemented, campaign-pending, and explicitly out-of-scope operations.
 - Preserve the library's lightweight Req/NimbleOptions positioning; do not describe CLI confirmations or browser UI as library features.
 
-## Missing operations in scope
+## Historical missing operations in scope
 
 Each row is one independently complete API issue. Base URL includes `/v2`.
 Counts exclude command aliases, convenience delegates, and local CLI UI.
@@ -410,8 +452,9 @@ Counts exclude command aliases, convenience delegates, and local CLI UI.
 
 ## Explicitly outside this campaign
 
-The maintainer chose the listed audit scope rather than full public API
-coverage. These additional published operations are recorded, not silently added:
+The maintainer originally chose the listed audit scope rather than full public
+API coverage. These additional published operations were excluded from that
+campaign:
 
 - `cancelDomainTransfer`
 - `changeDomainDelegationFromVanity`
@@ -422,7 +465,13 @@ coverage. These additional published operations are recorded, not silently added
 - `getDomainRestore`
 - `getDomainTransfer`
 
-## Completion gate
+The separately approved official Elixir SDK-parity extension on 2026-09-15
+implements seven of these operations; only `getDomainRestore` remains
+`out-of-scope`. The current [operation inventory](operation-inventory.json)
+therefore records 110 supported operations. The historical campaign gate below
+retains its original scope.
+
+## Historical completion gate
 
 `bd-26j` (VERIFY-001) waits for all 103 implementation
 issues and verifies actual HTTP contracts, compatibility, documentation, and

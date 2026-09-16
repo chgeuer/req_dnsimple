@@ -13,7 +13,10 @@ defmodule ReqDnsimple do
   `Req.merge/2`. Use `new_unscoped_client/2` for identity and account discovery,
   then `for_account/2` to select an account without changing credentials.
 
-  Existing explicit-account calls and their return shapes remain supported.
+  HTTP operations return `{:ok, {data, %ReqDnsimple.Metadata{}}}` or
+  `{:error, %ReqDnsimple.Error{}}` in both scoped and explicit-account forms.
+  Metadata includes pagination, rate-limit information, request IDs, ETags,
+  and Retry-After. Complete enumeration retains each page's metadata.
   """
 
   @type account_id :: integer()
@@ -21,9 +24,9 @@ defmodule ReqDnsimple do
   @type contact_id :: integer()
   @type http_error :: %{
           required(:status) => non_neg_integer(),
-          required(:response) => any(),
-          optional(:retry_after) => binary()
+          required(:response) => any()
         }
+  @type identity :: {:account, term()} | {:user, term()} | {:unknown_token, map()}
   @type record_id :: integer()
   @type sort :: [atom() | {atom(), :asc | :desc}]
   @type token_callback :: (-> binary() | {:bearer, binary()})
@@ -141,12 +144,12 @@ defmodule ReqDnsimple do
   Returns the authenticated identity reported by DNSimple.
 
   A response containing exactly one non-null user or account returns the
-  corresponding `{:user, user}` or `{:account, account}` tuple. If both
-  identities are present or absent, the full response body is returned as
-  `{:unknown_token, body}`.
+  corresponding `{:user, user}` or `{:account, account}` tuple as data,
+  alongside HTTP metadata. If both identities are present or absent, data is
+  `{:unknown_token, body}` with the full response body.
   """
   @spec whoami(Req.Request.t()) ::
-          {:account, any()} | {:unknown_token, map()} | {:user, any()} | {:error, term()}
+          ReqDnsimple.Response.result(identity())
   def whoami(req) do
     req
     |> Req.merge(
@@ -159,40 +162,47 @@ defmodule ReqDnsimple do
        %Req.Response{
          status: 200,
          body: body = %{"data" => %{"user" => user, "account" => account}}
-       }} ->
-        case {user, account} do
-          {user, nil} when not is_nil(user) -> {:user, user}
-          {nil, account} when not is_nil(account) -> {:account, account}
-          _ -> {:unknown_token, body}
-        end
+       } = response} ->
+        identity =
+          case {user, account} do
+            {user, nil} when not is_nil(user) -> {:user, user}
+            {nil, account} when not is_nil(account) -> {:account, account}
+            _ -> {:unknown_token, body}
+          end
+
+        ReqDnsimple.Response.ok(identity, response)
 
       {:ok, response} ->
         response_error(response)
 
       {:error, e} ->
-        {:error, e}
+        ReqDnsimple.Response.error(e)
     end
   end
 
   @doc """
   Lists all apex NS records using the client's configured account.
 
-  Returns a bare list of `ReqDnsimple.NsRecord` structs, preserving the legacy
-  success shape, or `{:error, reason}`. An unscoped client returns
-  `{:error, :missing_account_id}` without making a request.
+  Returns typed `ReqDnsimple.NsRecord` structs and aggregate metadata.
+  An unscoped client returns a `ReqDnsimple.Error` with reason
+  `:missing_account_id` and no HTTP metadata, without making a request.
   """
-  @spec ns_records(Req.Request.t(), binary()) :: [ReqDnsimple.NsRecord.t()] | {:error, term()}
+  @spec ns_records(Req.Request.t(), binary()) ::
+          ReqDnsimple.Response.result([ReqDnsimple.NsRecord.t()])
   def ns_records(req, zone_id) do
     ReqDnsimple.Client.with_account(req, &ns_records(req, &1, zone_id))
   end
 
   @doc "Lists all apex NS records using an explicit account for this call."
   @spec ns_records(Req.Request.t(), ReqDnsimple.account_id(), binary()) ::
-          [ReqDnsimple.NsRecord.t()] | {:error, term()}
+          ReqDnsimple.Response.result([ReqDnsimple.NsRecord.t()])
   def ns_records(req, account_id, zone_id) do
     case ReqDnsimple.ZoneRecord.list_all(req, account_id, zone_id, name: "", type: "NS") do
-      {:ok, records} ->
-        Enum.map(records, &struct(ReqDnsimple.NsRecord, Map.from_struct(&1)))
+      {:ok, {records, metadata}} ->
+        ReqDnsimple.Response.ok(
+          Enum.map(records, &struct(ReqDnsimple.NsRecord, Map.from_struct(&1))),
+          metadata
+        )
 
       {:error, reason} ->
         {:error, reason}
@@ -200,7 +210,7 @@ defmodule ReqDnsimple do
   end
 
   @doc "Lists one page of zones using the client's configured account."
-  @spec list_zones(Req.Request.t()) :: {:ok, [ReqDnsimple.Zone.t()]} | {:error, term()}
+  @spec list_zones(Req.Request.t()) :: ReqDnsimple.Response.result([ReqDnsimple.Zone.t()])
   defdelegate list_zones(req), to: ReqDnsimple.Zone, as: :list
 
   @doc """
@@ -210,77 +220,76 @@ defmodule ReqDnsimple do
   string selects an explicit account for this call. See `ReqDnsimple.Zone.list/3`.
   """
   @spec list_zones(Req.Request.t(), account_id() | binary() | keyword()) ::
-          {:ok, [ReqDnsimple.Zone.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([ReqDnsimple.Zone.t()])
   defdelegate list_zones(req, account_or_opts), to: ReqDnsimple.Zone, as: :list
 
   @doc "Lists one page of zones using an explicit account and options."
   @spec list_zones(Req.Request.t(), account_id(), keyword()) ::
-          {:ok, [ReqDnsimple.Zone.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([ReqDnsimple.Zone.t()])
   defdelegate list_zones(req, account_id, opts), to: ReqDnsimple.Zone, as: :list
 
   @doc """
-  Lists one page of zones from the configured account and returns the list directly.
+  Lists one page of zones from the configured account and returns `{zones, metadata}`.
 
-  Raises `ReqDnsimple.Error` for API errors or missing account scope; existing
-  validation and transport exceptions are raised unchanged.
+  Raises `ReqDnsimple.Error`, retaining its reason and available metadata.
   """
-  @spec list_zones!(Req.Request.t()) :: [ReqDnsimple.Zone.t()]
+  @spec list_zones!(Req.Request.t()) :: {[ReqDnsimple.Zone.t()], ReqDnsimple.Metadata.t()}
   defdelegate list_zones!(req), to: ReqDnsimple.Zone, as: :list!
 
   @doc """
-  Lists one page of zones and returns the zone list directly.
+  Lists one page of zones and returns `{zones, metadata}`.
 
   This is the raising counterpart of `list_zones/2`. Raises `ReqDnsimple.Error`
-  for API error results; existing validation and transport exceptions are
-  raised unchanged. The original API error is available in the exception's
-  `:reason` field.
+  for error results. The original reason and HTTP metadata are available in
+  the exception's `:reason` and `:metadata` fields.
 
   A keyword-list second argument supplies filtering, sorting, or pagination
   options for the configured account. An integer or string selects an explicit
   account with default options for this call.
   """
   @spec list_zones!(Req.Request.t(), account_id() | binary() | keyword()) ::
-          [ReqDnsimple.Zone.t()]
+          {[ReqDnsimple.Zone.t()], ReqDnsimple.Metadata.t()}
   defdelegate list_zones!(req, account_or_opts), to: ReqDnsimple.Zone, as: :list!
 
-  @doc "Lists zones directly using an explicit account and options. Raises on errors."
-  @spec list_zones!(Req.Request.t(), account_id(), keyword()) :: [ReqDnsimple.Zone.t()]
+  @doc "Lists zones and metadata using an explicit account and options. Raises on errors."
+  @spec list_zones!(Req.Request.t(), account_id(), keyword()) ::
+          {[ReqDnsimple.Zone.t()], ReqDnsimple.Metadata.t()}
   defdelegate list_zones!(req, account_id, opts), to: ReqDnsimple.Zone, as: :list!
 
   @doc "Lists one page of contacts using the client's configured account."
-  @spec list_contacts(Req.Request.t()) :: {:ok, [ReqDnsimple.Contact.t()]} | {:error, term()}
+  @spec list_contacts(Req.Request.t()) :: ReqDnsimple.Response.result([ReqDnsimple.Contact.t()])
   defdelegate list_contacts(req), to: ReqDnsimple.Contact, as: :list
 
   @doc "Lists contacts with scoped options, or an explicit account with default options."
   @spec list_contacts(Req.Request.t(), account_id() | binary() | keyword()) ::
-          {:ok, [ReqDnsimple.Contact.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([ReqDnsimple.Contact.t()])
   defdelegate list_contacts(req, account_or_opts), to: ReqDnsimple.Contact, as: :list
 
   @doc "Lists contacts using an explicit account and options."
   @spec list_contacts(Req.Request.t(), account_id(), keyword()) ::
-          {:ok, [ReqDnsimple.Contact.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([ReqDnsimple.Contact.t()])
   defdelegate list_contacts(req, account_id, opts), to: ReqDnsimple.Contact, as: :list
 
   @doc "Lists one page of billing charges using the client's configured account."
   @spec list_billing_charges(Req.Request.t()) ::
-          {:ok, [ReqDnsimple.BillingCharge.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([ReqDnsimple.BillingCharge.t()])
   defdelegate list_billing_charges(req), to: ReqDnsimple.BillingCharge, as: :list
 
   @doc "Lists charges with scoped options, or an explicit account with default options."
   @spec list_billing_charges(Req.Request.t(), account_id() | binary() | keyword()) ::
-          {:ok, [ReqDnsimple.BillingCharge.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([ReqDnsimple.BillingCharge.t()])
   defdelegate list_billing_charges(req, account_or_opts), to: ReqDnsimple.BillingCharge, as: :list
 
   @doc "Lists billing charges using an explicit account and options."
   @spec list_billing_charges(Req.Request.t(), account_id(), keyword()) ::
-          {:ok, [ReqDnsimple.BillingCharge.t()]} | {:error, term()}
+          ReqDnsimple.Response.result([ReqDnsimple.BillingCharge.t()])
   defdelegate list_billing_charges(req, account_id, opts),
     to: ReqDnsimple.BillingCharge,
     as: :list
 
-  @doc "Lists one page of records and pagination using the client's configured account."
+  @doc "Lists one page of records with response metadata using the client's configured account."
   @spec list_zone_records(Req.Request.t(), zone_name()) ::
-          {:ok, {[ReqDnsimple.ZoneRecord.t()], map()}} | {:error, term()}
+          ReqDnsimple.Response.result([ReqDnsimple.ZoneRecord.t()])
   defdelegate list_zone_records(req, zone_id), to: ReqDnsimple.ZoneRecord, as: :list
 
   @doc """
@@ -289,43 +298,44 @@ defmodule ReqDnsimple do
   See `ReqDnsimple.ZoneRecord.list/4` for filters, sorting, and pagination.
   """
   @spec list_zone_records(Req.Request.t(), zone_name(), keyword()) ::
-          {:ok, {[ReqDnsimple.ZoneRecord.t()], map()}} | {:error, term()}
+          ReqDnsimple.Response.result([ReqDnsimple.ZoneRecord.t()])
   @spec list_zone_records(Req.Request.t(), account_id(), zone_name()) ::
-          {:ok, {[ReqDnsimple.ZoneRecord.t()], map()}} | {:error, term()}
+          ReqDnsimple.Response.result([ReqDnsimple.ZoneRecord.t()])
   defdelegate list_zone_records(req, account_or_zone, zone_or_opts),
     to: ReqDnsimple.ZoneRecord,
     as: :list
 
-  @doc "Lists records and pagination using an explicit account and options."
+  @doc "Lists one page of records with response metadata using an explicit account and options."
   @spec list_zone_records(Req.Request.t(), account_id(), zone_name(), keyword()) ::
-          {:ok, {[ReqDnsimple.ZoneRecord.t()], map()}} | {:error, term()}
+          ReqDnsimple.Response.result([ReqDnsimple.ZoneRecord.t()])
   defdelegate list_zone_records(req, account_id, zone_id, opts),
     to: ReqDnsimple.ZoneRecord,
     as: :list
 
   @doc "Gets a zone record using the client's configured account."
   @spec get_zone_record(Req.Request.t(), zone_name(), record_id()) ::
-          {:ok, ReqDnsimple.ZoneRecord.t()} | {:error, term()}
+          ReqDnsimple.Response.result(ReqDnsimple.ZoneRecord.t())
   defdelegate get_zone_record(req, zone_name, record_id),
     to: ReqDnsimple.ZoneRecord,
     as: :get
 
   @doc "Gets a zone record using an explicit account for this call."
   @spec get_zone_record(Req.Request.t(), account_id(), zone_name(), record_id()) ::
-          {:ok, ReqDnsimple.ZoneRecord.t()} | {:error, term()}
+          ReqDnsimple.Response.result(ReqDnsimple.ZoneRecord.t())
   defdelegate get_zone_record(req, account_id, zone_name, record_id),
     to: ReqDnsimple.ZoneRecord,
     as: :get
 
   @doc "Deletes a zone record using the client's configured account."
-  @spec delete_zone_record(Req.Request.t(), zone_name(), record_id()) :: :ok | {:error, term()}
+  @spec delete_zone_record(Req.Request.t(), zone_name(), record_id()) ::
+          ReqDnsimple.Response.result(nil)
   defdelegate delete_zone_record(req, zone_id, record_id),
     to: ReqDnsimple.ZoneRecord,
     as: :delete
 
   @doc "Deletes a zone record using an explicit account for this call."
   @spec delete_zone_record(Req.Request.t(), account_id(), zone_name(), record_id()) ::
-          :ok | {:error, term()}
+          ReqDnsimple.Response.result(nil)
   defdelegate delete_zone_record(req, account_id, zone_id, record_id),
     to: ReqDnsimple.ZoneRecord,
     as: :delete
@@ -346,50 +356,51 @@ defmodule ReqDnsimple do
   Optional attributes are:
 
     * `:ttl` - Non-negative integer time-to-live in seconds.
-    * `:priority` - Non-negative integer record priority.
+    * `:priority` - Non-negative integer record priority, or `nil` to send JSON `null`.
     * `:regions` - List of region strings, such as `["global"]`.
     * `:integrated_zones` - List of integer integrated-zone IDs and/or `"dnsimple"`.
 
   Optional attributes are omitted from the request unless supplied. Returns
-  `{:ok, %ReqDnsimple.ZoneRecord{}}` or `{:error, reason}`.
+  `{:ok, {%ReqDnsimple.ZoneRecord{}, %ReqDnsimple.Metadata{}}}` or
+  `{:error, %ReqDnsimple.Error{}}`.
 
   See `ReqDnsimple.ZoneRecord.create/3` for the complete option schema and an example.
   """
   @doc @create_zone_record_doc
   @spec create_zone_record(Req.Request.t(), zone_name(), keyword()) ::
-          {:ok, ReqDnsimple.ZoneRecord.t()} | {:error, term()}
+          ReqDnsimple.Response.result(ReqDnsimple.ZoneRecord.t())
   defdelegate create_zone_record(req, zone_id, attrs),
     to: ReqDnsimple.ZoneRecord,
     as: :create
 
   @doc @create_zone_record_doc
   @spec create_zone_record(Req.Request.t(), account_id(), zone_name(), keyword()) ::
-          {:ok, ReqDnsimple.ZoneRecord.t()} | {:error, term()}
+          ReqDnsimple.Response.result(ReqDnsimple.ZoneRecord.t())
   defdelegate create_zone_record(req, account_id, zone_id, attrs),
     to: ReqDnsimple.ZoneRecord,
     as: :create
 
   @doc "Gets the zone file using the client's configured account."
-  @spec get_zone_file(Req.Request.t(), zone_name()) :: {:ok, binary()} | {:error, term()}
+  @spec get_zone_file(Req.Request.t(), zone_name()) :: ReqDnsimple.Response.result(binary())
   defdelegate get_zone_file(req, zone_name), to: ReqDnsimple.Zone, as: :get_zone_file
 
   @doc "Gets the zone file using an explicit account for this call."
   @spec get_zone_file(Req.Request.t(), account_id(), zone_name()) ::
-          {:ok, binary()} | {:error, term()}
+          ReqDnsimple.Response.result(binary())
   defdelegate get_zone_file(req, account_id, zone_name),
     to: ReqDnsimple.Zone,
     as: :get_zone_file
 
   @doc "Checks zone distribution using the client's configured account."
   @spec check_zone_distribution(Req.Request.t(), zone_name()) ::
-          {:ok, boolean()} | {:error, term()}
+          ReqDnsimple.Response.result(boolean())
   defdelegate check_zone_distribution(req, zone_name),
     to: ReqDnsimple.Zone,
     as: :check_zone_distribution
 
   @doc "Checks zone distribution using an explicit account for this call."
   @spec check_zone_distribution(Req.Request.t(), account_id(), zone_name()) ::
-          {:ok, boolean()} | {:error, term()}
+          ReqDnsimple.Response.result(boolean())
   defdelegate check_zone_distribution(req, account_id, zone_name),
     to: ReqDnsimple.Zone,
     as: :check_zone_distribution
@@ -397,15 +408,16 @@ defmodule ReqDnsimple do
   @doc """
   Unwraps a successful result or raises its error.
 
-  Returns the value inside `{:ok, value}` unchanged, including pagination tuples,
-  `nil`, and `false`. A bodyless `:ok` result remains `:ok`.
+  Returns the value inside `{:ok, value}` unchanged. HTTP operations therefore
+  unwrap to `{data, metadata}`, including `{nil, metadata}` for bodyless success.
+  Pure-helper values, `nil`, and `false` remain unchanged; a standalone `:ok`
+  remains `:ok`.
 
   Raises an existing exception from `{:error, exception}` unchanged. Other
   `{:error, reason}` results raise `ReqDnsimple.Error`, preserving the original
   reason in its `:reason` field.
 
-  Raises `ArgumentError` for unsupported result shapes. Bare lists and the
-  tagged identity results from `whoami/1` are not accepted.
+  Raises `ArgumentError` for unsupported result shapes.
   """
   @spec unwrap!({:ok, value} | :ok | {:error, term()}) :: value | :ok when value: term()
   def unwrap!({:ok, value}), do: value
@@ -417,14 +429,9 @@ defmodule ReqDnsimple do
     do: raise(ArgumentError, "expected {:ok, value}, :ok, or {:error, reason}")
 
   @doc false
-  @spec response_error(Req.Response.t()) :: {:error, http_error()}
+  @spec response_error(Req.Response.t()) :: {:error, ReqDnsimple.Error.t()}
   def response_error(%Req.Response{status: status, body: body} = response) do
-    error = %{status: status, response: body}
-
-    case Req.Response.get_header(response, "retry-after") do
-      [retry_after | _] -> {:error, Map.put(error, :retry_after, retry_after)}
-      [] -> {:error, error}
-    end
+    ReqDnsimple.Response.error(%{status: status, response: body}, response)
   end
 
   @doc false

@@ -26,7 +26,8 @@ defmodule ReqDnsimple.Account do
     )
   end
 
-  @spec list(Req.Request.t()) :: [ReqDnsimple.Account.t()] | {:error, any()}
+  @doc "Lists accessible accounts with HTTP response metadata."
+  @spec list(Req.Request.t()) :: ReqDnsimple.Response.result([t()])
   def list(req) do
     # https://developer.dnsimple.com/v2/accounts/
 
@@ -37,14 +38,14 @@ defmodule ReqDnsimple.Account do
       )
 
     case Req.request(req) do
-      {:ok, %Req.Response{status: 200, body: %{"data" => accounts}}} ->
-        accounts |> Enum.map(&ReqDnsimple.Account.from_json/1)
+      {:ok, %Req.Response{status: 200, body: %{"data" => accounts}} = response} ->
+        ReqDnsimple.Response.ok(Enum.map(accounts, &from_json/1), response)
 
       {:ok, response} ->
         ReqDnsimple.response_error(response)
 
       {:error, e} ->
-        {:error, e}
+        ReqDnsimple.Response.error(e)
     end
   end
 end

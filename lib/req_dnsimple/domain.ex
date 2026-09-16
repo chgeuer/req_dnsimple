@@ -2,13 +2,23 @@ defmodule ReqDnsimple.Domain do
   @moduledoc """
   DNSimple Domain API functionality.
 
+  Successful HTTP operations return `{:ok, {data, %ReqDnsimple.Metadata{}}}`.
+  Failures return `{:error, %ReqDnsimple.Error{}}`, with metadata when an
+  HTTP response was received.
+  Bodyless HTTP 204 responses use `nil` data.
+
+  Page pagination is nested under `metadata.pagination`. `list_all` retains
+  ordered page metadata in `metadata.pages` and the latest rate-limit budget.
+  Missing or malformed metadata does not invalidate resource data; diagnostics
+  are in `metadata.parse_errors`. Enumeration requires usable pagination.
+
   ## Example
 
       ReqDnsimple.Domain.create(req, 1010, name: "example.test")
-      #=> {:ok, %ReqDnsimple.Domain{}}
+      #=> {:ok, {%ReqDnsimple.Domain{}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Domain.get(req, 1010, "example.test")
-      #=> {:ok, %ReqDnsimple.Domain{}}
+      #=> {:ok, {%ReqDnsimple.Domain{}, %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Domain.list_page(req, 1010,
         name_like: "example",
@@ -16,13 +26,13 @@ defmodule ReqDnsimple.Domain do
         page: 1,
         per_page: 30
       )
-      #=> {:ok, {[%ReqDnsimple.Domain{}], %{"current_page" => 1}}}
+      #=> {:ok, {[%ReqDnsimple.Domain{}], %ReqDnsimple.Metadata{pagination: %{"current_page" => 1}}}}
 
       ReqDnsimple.Domain.list_all(req, 1010, registrant_id: 42)
-      #=> {:ok, [%ReqDnsimple.Domain{}]}
+      #=> {:ok, {[%ReqDnsimple.Domain{}], %ReqDnsimple.Metadata{}}}
 
       ReqDnsimple.Domain.delete(req, 1010, "example.test")
-      #=> :ok
+      #=> {:ok, {nil, %ReqDnsimple.Metadata{}}}
   """
 
   # https://developer.dnsimple.com/v2/domains/#createDomain
@@ -75,11 +85,11 @@ defmodule ReqDnsimple.Domain do
 
   @doc """
   Uses the client's configured account. See `create/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
-  @spec create(Req.Request.t(), keyword()) ::
-          {:ok, t()} | {:error, term()}
+  @spec create(Req.Request.t(), keyword()) :: ReqDnsimple.Response.result(t())
   def create(req, attrs) do
     ReqDnsimple.Client.with_account(req, &create(req, &1, attrs))
   end
@@ -94,10 +104,10 @@ defmodule ReqDnsimple.Domain do
   ## Example
 
       ReqDnsimple.Domain.create(req, 1010, name: "example.test")
-      #=> {:ok, %ReqDnsimple.Domain{}}
+      #=> {:ok, {%ReqDnsimple.Domain{}, %ReqDnsimple.Metadata{}}}
   """
   @spec create(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def create(req, account_id, attrs) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate([account_id: account_id], @create_path_schema),
@@ -114,7 +124,7 @@ defmodule ReqDnsimple.Domain do
       case Req.request(req) do
         {:ok, %Req.Response{status: 201, body: %{"data" => data}} = response} ->
           case decode(data) do
-            {:ok, domain} -> {:ok, domain}
+            {:ok, domain} -> ReqDnsimple.Response.ok(domain, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -122,18 +132,20 @@ defmodule ReqDnsimple.Domain do
           ReqDnsimple.response_error(response)
 
         {:error, error} ->
-          {:error, error}
+          ReqDnsimple.Response.error(error)
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account with default options.
   See `list_page/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
-  @spec list_page(Req.Request.t()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec list_page(Req.Request.t()) :: ReqDnsimple.Response.result([t()])
   def list_page(req) do
     list_page(req, [])
   end
@@ -141,15 +153,15 @@ defmodule ReqDnsimple.Domain do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list_page/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
-  @spec list_page(Req.Request.t(), keyword()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
-  @spec list_page(Req.Request.t(), ReqDnsimple.account_id()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec list_page(Req.Request.t(), keyword()) :: ReqDnsimple.Response.result([t()])
+  @spec list_page(Req.Request.t(), ReqDnsimple.account_id()) :: ReqDnsimple.Response.result([t()])
   def list_page(req, account_id)
       when is_integer(account_id) or is_binary(account_id) do
     list_page(req, account_id, [])
@@ -167,7 +179,7 @@ defmodule ReqDnsimple.Domain do
   metadata retains its string keys.
   """
   @spec list_page(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_page(req, account_id, opts) do
     with {:ok, _validated_path} <-
            NimbleOptions.validate([account_id: account_id], @create_path_schema),
@@ -176,10 +188,11 @@ defmodule ReqDnsimple.Domain do
         {:ok,
          %Req.Response{
            status: 200,
-           body: %{"data" => data, "pagination" => pagination}
-         } = response} ->
-          case decode_page(data, pagination) do
-            {:ok, result} -> {:ok, result}
+           body: %{"data" => data}
+         } = response}
+        when is_list(data) ->
+          case decode_many(data) do
+            {:ok, result} -> ReqDnsimple.Response.ok(result, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -187,18 +200,20 @@ defmodule ReqDnsimple.Domain do
           ReqDnsimple.response_error(response)
 
         {:error, error} ->
-          {:error, error}
+          ReqDnsimple.Response.error(error)
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account with default options.
   See `list/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
-  @spec list(Req.Request.t()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec list(Req.Request.t()) :: ReqDnsimple.Response.result([t()])
   def list(req) do
     list(req, [])
   end
@@ -206,15 +221,15 @@ defmodule ReqDnsimple.Domain do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
-  @spec list(Req.Request.t(), keyword()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
-  @spec list(Req.Request.t(), ReqDnsimple.account_id()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+  @spec list(Req.Request.t(), keyword()) :: ReqDnsimple.Response.result([t()])
+  @spec list(Req.Request.t(), ReqDnsimple.account_id()) :: ReqDnsimple.Response.result([t()])
   def list(req, account_id)
       when is_integer(account_id) or is_binary(account_id) do
     list(req, account_id, [])
@@ -231,16 +246,17 @@ defmodule ReqDnsimple.Domain do
   pages implicitly.
   """
   @spec list(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, {[t()], ReqDnsimple.Pagination.metadata()}} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list(req, account_id, opts), do: list_page(req, account_id, opts)
 
   @doc """
   Uses the client's configured account with default options.
   See `list_all/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
-  @spec list_all(Req.Request.t()) ::
-          {:ok, [t()]} | {:error, term()}
+  @spec list_all(Req.Request.t()) :: ReqDnsimple.Response.result([t()])
   def list_all(req) do
     list_all(req, [])
   end
@@ -248,15 +264,15 @@ defmodule ReqDnsimple.Domain do
   @doc """
   Uses the client's configured account and the supplied options.
   See `list_all/3` for operation options and return values.
-  Returns `{:error, :missing_account_id}` without making a request when the client is unscoped.
+  An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
 
   An integer or string final argument selects the legacy explicit-account
   form with default options instead; it overrides the scope for that call only.
   """
-  @spec list_all(Req.Request.t(), keyword()) ::
-          {:ok, [t()]} | {:error, term()}
-  @spec list_all(Req.Request.t(), ReqDnsimple.account_id()) ::
-          {:ok, [t()]} | {:error, term()}
+  @spec list_all(Req.Request.t(), keyword()) :: ReqDnsimple.Response.result([t()])
+  @spec list_all(Req.Request.t(), ReqDnsimple.account_id()) :: ReqDnsimple.Response.result([t()])
   def list_all(req, account_id)
       when is_integer(account_id) or is_binary(account_id) do
     list_all(req, account_id, [])
@@ -273,18 +289,18 @@ defmodule ReqDnsimple.Domain do
   rejected. Filters, sorting, and `:per_page` are retained for every request.
   """
   @spec list_all(Req.Request.t(), ReqDnsimple.account_id(), keyword()) ::
-          {:ok, [t()]} | {:error, term()}
+          ReqDnsimple.Response.result([t()])
   def list_all(req, account_id, opts) do
     ReqDnsimple.Pagination.all(opts, &list_page(req, account_id, &1))
   end
 
   @doc """
   Uses the client's configured account. See `get/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
-  @spec get(Req.Request.t(), binary() | integer()) ::
-          {:ok, t()} | {:error, term()}
+  @spec get(Req.Request.t(), binary() | integer()) :: ReqDnsimple.Response.result(t())
   def get(req, domain) do
     ReqDnsimple.Client.with_account(req, &get(req, &1, domain))
   end
@@ -297,7 +313,7 @@ defmodule ReqDnsimple.Domain do
   `expires_on` fields are `nil` when omitted by older API responses.
   """
   @spec get(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer()) ::
-          {:ok, t()} | {:error, term()}
+          ReqDnsimple.Response.result(t())
   def get(req, account_id, domain) do
     with {:ok, _validated_params} <-
            NimbleOptions.validate([account_id: account_id, domain: domain], @path_schema) do
@@ -312,7 +328,7 @@ defmodule ReqDnsimple.Domain do
       case Req.request(req) do
         {:ok, %Req.Response{status: 200, body: %{"data" => data}} = response} ->
           case decode(data) do
-            {:ok, domain} -> {:ok, domain}
+            {:ok, domain} -> ReqDnsimple.Response.ok(domain, response)
             :error -> ReqDnsimple.response_error(response)
           end
 
@@ -320,18 +336,19 @@ defmodule ReqDnsimple.Domain do
           ReqDnsimple.response_error(response)
 
         {:error, error} ->
-          {:error, error}
+          ReqDnsimple.Response.error(error)
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   @doc """
   Uses the client's configured account. See `delete/3` for
-  operation options and return values. Returns `{:error, :missing_account_id}`
-  without making a request when the client is unscoped.
+  operation options and return values. An unscoped client returns
+  `{:error, %ReqDnsimple.Error{reason: :missing_account_id, metadata: nil}}`
+  without making a request.
   """
-  @spec delete(Req.Request.t(), binary() | integer()) ::
-          :ok | {:error, term()}
+  @spec delete(Req.Request.t(), binary() | integer()) :: ReqDnsimple.Response.result(nil)
   def delete(req, domain) do
     ReqDnsimple.Client.with_account(req, &delete(req, &1, domain))
   end
@@ -343,7 +360,7 @@ defmodule ReqDnsimple.Domain do
   registry or produce a refund.
   """
   @spec delete(Req.Request.t(), ReqDnsimple.account_id(), binary() | integer()) ::
-          :ok | {:error, term()}
+          ReqDnsimple.Response.result(nil)
   def delete(req, account_id, domain) do
     with {:ok, _validated_params} <-
            NimbleOptions.validate(
@@ -359,16 +376,17 @@ defmodule ReqDnsimple.Domain do
         )
 
       case Req.request(req) do
-        {:ok, %Req.Response{status: 204}} ->
-          :ok
+        {:ok, %Req.Response{status: 204} = response} ->
+          ReqDnsimple.Response.ok(nil, response)
 
         {:ok, response} ->
           ReqDnsimple.response_error(response)
 
         {:error, error} ->
-          {:error, error}
+          ReqDnsimple.Response.error(error)
       end
     end
+    |> ReqDnsimple.Response.normalize_error()
   end
 
   defp decode(
@@ -381,7 +399,6 @@ defmodule ReqDnsimple.Domain do
            "state" => state,
            "auto_renew" => auto_renew,
            "private_whois" => private_whois,
-           "expires_at" => expires_at,
            "created_at" => created_at,
            "updated_at" => updated_at
          } = data
@@ -390,6 +407,7 @@ defmodule ReqDnsimple.Domain do
               (is_integer(registrant_id) or is_nil(registrant_id)) and is_binary(name) and
               is_binary(unicode_name) and state in ["hosted", "registered", "expired"] and
               is_boolean(auto_renew) and is_boolean(private_whois) do
+    expires_at = Map.get(data, "expires_at")
     expires_on = Map.get(data, "expires_on")
 
     with {:ok, trustee} <- decode_optional_boolean(data, "trustee"),
@@ -420,17 +438,6 @@ defmodule ReqDnsimple.Domain do
 
   defp decode(_data), do: :error
 
-  defp decode_page(data, pagination) when is_list(data) do
-    with {:ok, domains} <- decode_many(data),
-         true <- valid_pagination?(pagination) do
-      {:ok, {domains, pagination}}
-    else
-      _error -> :error
-    end
-  end
-
-  defp decode_page(_data, _pagination), do: :error
-
   defp decode_many(data) do
     Enum.reduce_while(data, {:ok, []}, fn item, {:ok, domains} ->
       case decode(item) do
@@ -444,19 +451,6 @@ defmodule ReqDnsimple.Domain do
     end
   end
 
-  defp valid_pagination?(%{
-         "current_page" => current_page,
-         "per_page" => per_page,
-         "total_entries" => total_entries,
-         "total_pages" => total_pages
-       })
-       when is_integer(current_page) and current_page >= 0 and is_integer(per_page) and
-              per_page > 0 and is_integer(total_entries) and total_entries >= 0 and
-              is_integer(total_pages) and total_pages >= 0,
-       do: true
-
-  defp valid_pagination?(_pagination), do: false
-
   defp request_list(req, account_id, opts) do
     params =
       opts
@@ -464,7 +458,7 @@ defmodule ReqDnsimple.Domain do
       |> Map.new()
 
     req
-    |> Req.merge(
+    |> ReqDnsimple.Helper.merge(
       method: :get,
       url: "/:account_id/domains",
       path_params_style: :colon,

@@ -1,36 +1,49 @@
 defmodule ReqDnsimple.Pagination do
   @moduledoc false
 
-  @type metadata :: %{binary() => non_neg_integer()}
+  alias ReqDnsimple.{Error, Metadata, Response}
 
-  @spec all(keyword(), (keyword() -> {:ok, {[term()], metadata()}} | {:error, term()})) ::
-          {:ok, [term()]} | {:error, term()}
+  @type metadata :: Metadata.pagination()
+
+  @spec all(keyword(), (keyword() -> Response.result([term()]))) :: Response.result([term()])
   def all(opts, fetch_page) when is_function(fetch_page, 1) do
     with {:ok, opts} <- ReqDnsimple.validate_keyword_list(opts) do
       if Keyword.has_key?(opts, :page) do
-        {:error, {:invalid_option, :page}}
+        Response.error({:invalid_option, :page})
       else
-        fetch_all(opts, fetch_page, 1, nil, [])
+        fetch_all(opts, fetch_page, 1, nil, [], [])
       end
     end
+    |> Response.normalize_error()
   end
 
-  defp fetch_all(opts, fetch_page, page, expected_total_pages, items) do
+  defp fetch_all(opts, fetch_page, page, expected_total_pages, items, prior_pages) do
     case fetch_page.(Keyword.put(opts, :page, page)) do
-      {:ok, {page_items, pagination}} ->
+      {:ok, {page_items, %Metadata{} = metadata}} ->
+        pagination =
+          case metadata.parse_errors[:pagination] do
+            {:invalid_pagination, value} -> value
+            nil -> metadata.pagination
+          end
+
         with {:ok, total_pages} <-
                validate(pagination, page, expected_total_pages) do
           accumulated = Enum.reverse(page_items, items)
+          pages = [metadata | prior_pages]
 
           if page >= total_pages do
-            {:ok, Enum.reverse(accumulated)}
+            Response.ok(Enum.reverse(accumulated), Metadata.aggregate(Enum.reverse(pages)))
           else
-            fetch_all(opts, fetch_page, page + 1, total_pages, accumulated)
+            fetch_all(opts, fetch_page, page + 1, total_pages, accumulated, pages)
           end
+        else
+          {:error, reason} ->
+            {:error, error} = Response.error(reason, metadata)
+            Response.error_after_pages(error, Enum.reverse(prior_pages))
         end
 
-      {:error, reason} ->
-        {:error, reason}
+      {:error, %Error{} = error} ->
+        Response.error_after_pages(error, Enum.reverse(prior_pages))
     end
   end
 
