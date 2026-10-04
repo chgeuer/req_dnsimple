@@ -165,7 +165,7 @@ defmodule ReqDnsimple.DomainResearchTest do
 
       request =
         ReqDnsimple.new_client("dnsimple_u_fake-token")
-        |> Req.merge(adapter: adapter)
+        |> ReqDnsimple.TestAdapter.merge(adapter: adapter)
 
       assert {:error,
               %ReqDnsimple.Error{
@@ -245,6 +245,6 @@ defmodule ReqDnsimple.DomainResearchTest do
     end
 
     ReqDnsimple.new_client("dnsimple_u_fake-token")
-    |> Req.merge(adapter: adapter, retry: false)
+    |> ReqDnsimple.TestAdapter.merge(adapter: adapter, retry: false)
   end
 end

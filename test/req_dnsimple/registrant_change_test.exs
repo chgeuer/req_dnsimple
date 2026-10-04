@@ -504,7 +504,7 @@ defmodule ReqDnsimple.RegistrantChangeTest do
 
     test "checkRegistrantChange rejects missing scope before validation, authentication and HTTP" do
       req =
-        Req.new(
+        ReqDnsimple.TestAdapter.new(
           auth: fn -> flunk("missing scope must be rejected before authentication") end,
           adapter: fn _request -> flunk("missing scope must be rejected before HTTP") end
         )
@@ -1425,6 +1425,6 @@ defmodule ReqDnsimple.RegistrantChangeTest do
     end
 
     ReqDnsimple.new_client("dnsimple_u_fake-token")
-    |> Req.merge(adapter: adapter, retry: false)
+    |> ReqDnsimple.TestAdapter.merge(adapter: adapter, retry: false)
   end
 end

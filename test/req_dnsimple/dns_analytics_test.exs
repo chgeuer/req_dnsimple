@@ -454,6 +454,6 @@ defmodule ReqDnsimple.DnsAnalyticsTest do
     end
 
     ReqDnsimple.new_client("dnsimple_u_fake-token")
-    |> Req.merge(adapter: adapter, retry: false)
+    |> ReqDnsimple.TestAdapter.merge(adapter: adapter, retry: false)
   end
 end

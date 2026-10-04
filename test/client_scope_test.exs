@@ -25,9 +25,9 @@ defmodule ReqDnsimple.ClientScopeTest do
     for token <- @tokens, account_id <- [1010, "1010", "001010"] do
       req =
         ReqDnsimple.new_client(token,
-          account_id: account_id,
-          adapter: empty_zone_adapter(self())
+          account_id: account_id
         )
+        |> ReqDnsimple.TestAdapter.merge(adapter: empty_zone_adapter(self()))
 
       assert %Req.Request{} = req
       assert {:ok, {[], %Metadata{status: 200}}} = ReqDnsimple.Zone.list(req)
@@ -93,7 +93,7 @@ defmodule ReqDnsimple.ClientScopeTest do
     for token <- @tokens do
       req =
         ReqDnsimple.new_client(token)
-        |> Req.merge(adapter: empty_zone_adapter(self()))
+        |> ReqDnsimple.TestAdapter.merge(adapter: empty_zone_adapter(self()))
 
       assert {:error, %Error{reason: :missing_account_id, metadata: nil}} =
                ReqDnsimple.Zone.list(req)
@@ -127,9 +127,9 @@ defmodule ReqDnsimple.ClientScopeTest do
     req =
       ReqDnsimple.new_client(
         fn -> Agent.get_and_update(agent, fn [token | rest] -> {token, rest} end) end,
-        account_id: 1010,
-        adapter: empty_zone_adapter(self())
+        account_id: 1010
       )
+      |> ReqDnsimple.TestAdapter.merge(adapter: empty_zone_adapter(self()))
 
     other = ReqDnsimple.for_account(req, 2020)
     assert Agent.get(agent, & &1) == tokens
@@ -153,9 +153,9 @@ defmodule ReqDnsimple.ClientScopeTest do
         base_url: "https://proxy.example/gateway/v2",
         headers: [{"x-original", "preserved"}],
         receive_timeout: 4321,
-        retry: false,
-        adapter: empty_zone_adapter(self())
+        retry: false
       )
+      |> ReqDnsimple.TestAdapter.merge(adapter: empty_zone_adapter(self()))
       |> Req.Request.put_private(:sample_context, :preserved)
       |> Req.merge(headers: [{"x-added", "preserved"}])
 
@@ -251,7 +251,9 @@ defmodule ReqDnsimple.ClientScopeTest do
   test "scoped record mutations retain typed successes, explicit zeroes, and bodyless deletion" do
     req =
       ReqDnsimple.new_client("dnsimple_a_fake-token",
-        account_id: 1010,
+        account_id: 1010
+      )
+      |> ReqDnsimple.TestAdapter.merge(
         adapter: fn request ->
           send(self(), {:request, request})
 
@@ -348,7 +350,7 @@ defmodule ReqDnsimple.ClientScopeTest do
     selected =
       discovery
       |> ReqDnsimple.for_account(id)
-      |> Req.merge(adapter: empty_zone_adapter(self()))
+      |> ReqDnsimple.TestAdapter.merge(adapter: empty_zone_adapter(self()))
 
     assert {:ok, {[], %Metadata{status: 200}}} = ReqDnsimple.Zone.list(selected)
     assert_request(:get, "/v2/1010/zones")
@@ -396,7 +398,9 @@ defmodule ReqDnsimple.ClientScopeTest do
     req =
       ReqDnsimple.new_client(
         fn -> flunk("OAuth exchange must not resolve the bearer callback") end,
-        account_id: 1010,
+        account_id: 1010
+      )
+      |> ReqDnsimple.TestAdapter.merge(
         adapter: fn request ->
           send(self(), {:request, request})
 
@@ -429,7 +433,9 @@ defmodule ReqDnsimple.ClientScopeTest do
   test "scoped complete enumeration retains account, filters, ordering, and typed records" do
     req =
       ReqDnsimple.new_client("dnsimple_a_fake-token",
-        account_id: "1010",
+        account_id: "1010"
+      )
+      |> ReqDnsimple.TestAdapter.merge(
         adapter: fn request ->
           send(self(), {:request, request})
 

@@ -687,35 +687,41 @@ defmodule ReqDnsimple.SampleContractTest do
   defp install_adapter(responder) do
     test_pid = self()
 
+    # Samples build their own clients from Req's default options, in this process.
     Req.default_options(
-      adapter: fn request ->
-        observation = %{
-          method: request.method,
-          host: request.url.host,
-          path: request.url.path,
-          query: URI.decode_query(request.url.query || ""),
-          body: if(request.body in [nil, ""], do: nil, else: Jason.decode!(request.body)),
-          authorized?:
-            Req.Request.get_header(request, "authorization") ==
-              ["Bearer " <> System.fetch_env!("DNSIMPLE_TOKEN")],
-          receive_timeout: request.options[:receive_timeout],
-          example_header: Req.Request.get_header(request, "x-example-client")
-        }
+      adapter:
+        ReqDnsimple.TestAdapter.local(fn request ->
+          observation = %{
+            method: request.method,
+            host: request.url.host,
+            path: request.url.path,
+            query: URI.decode_query(request.url.query || ""),
+            body: if(request.body in [nil, ""], do: nil, else: Jason.decode!(request.body)),
+            authorized?:
+              Req.Request.get_header(request, "authorization") ==
+                ["Bearer " <> System.fetch_env!("DNSIMPLE_TOKEN")],
+            receive_timeout: request.options[:receive_timeout],
+            example_header: Req.Request.get_header(request, "x-example-client")
+          }
 
-        send(test_pid, {:sample_request, observation})
+          send(test_pid, {:sample_request, observation})
 
-        case responder.(observation) do
-          {:error, error} ->
-            {request, error}
+          case responder.(observation) do
+            {:error, error} ->
+              {request, error}
 
-          {status, body} ->
-            {request,
-             Req.Response.new(status: status, body: body, headers: response_headers(observation))}
+            {status, body} ->
+              {request,
+               Req.Response.new(
+                 status: status,
+                 body: body,
+                 headers: response_headers(observation)
+               )}
 
-          {status, body, headers} ->
-            {request, Req.Response.new(status: status, body: body, headers: headers)}
-        end
-      end,
+            {status, body, headers} ->
+              {request, Req.Response.new(status: status, body: body, headers: headers)}
+          end
+        end),
       retry: false
     )
   end

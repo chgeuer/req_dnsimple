@@ -98,7 +98,7 @@ defmodule ReqDnsimpleTest do
     test "returns transport errors without exposing authentication" do
       client =
         ReqDnsimple.new_client("opaque-secret")
-        |> Req.merge(
+        |> ReqDnsimple.TestAdapter.merge(
           adapter: fn request ->
             {request, %Req.TransportError{reason: :econnrefused}}
           end,
@@ -130,7 +130,9 @@ defmodule ReqDnsimpleTest do
     end
 
     assert {:ok, %Req.Response{status: 200}} =
-             Req.get(client, url: "/whoami", adapter: adapter)
+             client
+             |> ReqDnsimple.TestAdapter.merge(adapter: adapter)
+             |> Req.get(url: "/whoami")
 
     assert_receive {:request, :get, "https://api.dnsimple.com/v2/whoami",
                     [^expected_authorization]}
@@ -146,7 +148,7 @@ defmodule ReqDnsimpleTest do
     test_pid = self()
     body = body || %{"data" => data}
 
-    Req.merge(client,
+    ReqDnsimple.TestAdapter.merge(client,
       adapter: fn request ->
         send(test_pid, {:request, request})
         {request, %Req.Response{status: 200, body: body}}

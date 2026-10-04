@@ -1,10 +1,56 @@
 ExUnit.start()
 
-Req.default_options(
-  adapter: fn request ->
-    raise "unexpected unmocked HTTP request: #{request.method} #{request.url}"
+defmodule ReqDnsimple.TestAdapter do
+  @moduledoc false
+
+  # Req 0.7 deprecates function adapters and warns on every request that uses
+  # one, so tests give their adapter functions to this module adapter instead.
+  # A function the request carries answers it, then one installed for the
+  # sending process; any other request is unexpected and unmocked.
+
+  @private_key :req_dnsimple_test_adapter
+  @process_key {__MODULE__, :local}
+
+  @doc "Req.new/1, except that a function `:adapter` runs through this module."
+  def new(options), do: merge(Req.new(), options)
+
+  @doc "Req.merge/2, except that a function `:adapter` runs through this module."
+  def merge(request, options) do
+    {adapter, options} = Keyword.pop!(options, :adapter)
+
+    request
+    |> Req.merge(options)
+    |> put(adapter)
   end
-)
+
+  defp put(request, adapter) when is_function(adapter, 1) do
+    request
+    |> Req.merge(adapter: __MODULE__)
+    |> Req.Request.put_private(@private_key, adapter)
+  end
+
+  @doc """
+  Answers the requests the calling process sends without an adapter function
+  of their own with `adapter`. Returns this module, for Req.default_options/1.
+  """
+  def local(adapter) when is_function(adapter, 1) do
+    Process.put(@process_key, adapter)
+    __MODULE__
+  end
+
+  @doc false
+  def run(request) do
+    case Req.Request.get_private(request, @private_key) || Process.get(@process_key) do
+      adapter when is_function(adapter, 1) ->
+        adapter.(request)
+
+      nil ->
+        raise "unexpected unmocked HTTP request: #{request.method} #{request.url}"
+    end
+  end
+end
+
+Req.default_options(adapter: ReqDnsimple.TestAdapter)
 
 defmodule ReqDnsimple.TestSupport do
   import ExUnit.Assertions
@@ -16,7 +62,7 @@ defmodule ReqDnsimple.TestSupport do
     end
 
     ReqDnsimple.new_client("dnsimple_u_fake-token")
-    |> Req.merge(adapter: adapter, retry: false)
+    |> ReqDnsimple.TestAdapter.merge(adapter: adapter, retry: false)
   end
 
   def transport_error_client(reason) do
@@ -25,7 +71,7 @@ defmodule ReqDnsimple.TestSupport do
     end
 
     ReqDnsimple.new_client("dnsimple_u_fake-token")
-    |> Req.merge(adapter: adapter, retry: false)
+    |> ReqDnsimple.TestAdapter.merge(adapter: adapter, retry: false)
   end
 
   def assert_request(method, path, query \\ %{}, body \\ nil) do

@@ -924,7 +924,7 @@ defmodule ReqDnsimple.RegistrarTest do
   end
 
   defp unreachable_unscoped_client do
-    Req.new(
+    ReqDnsimple.TestAdapter.new(
       auth: fn -> flunk("missing scope must be rejected before authentication") end,
       adapter: fn _request -> flunk("missing scope must be rejected before HTTP") end
     )
@@ -1036,7 +1036,7 @@ defmodule ReqDnsimple.RegistrarTest do
 
       request =
         ReqDnsimple.new_client("dnsimple_u_fake-token")
-        |> Req.merge(adapter: adapter, retry: :transient)
+        |> ReqDnsimple.TestAdapter.merge(adapter: adapter, retry: :transient)
 
       assert {:error,
               %ReqDnsimple.Error{

@@ -84,7 +84,9 @@ defmodule ReqDnsimple.QueryParamsTest do
       ReqDnsimple.new_client("fake-offline-token",
         account_id: 1010,
         params: [per_page: 10],
-        retry: false,
+        retry: false
+      )
+      |> ReqDnsimple.TestAdapter.merge(
         adapter: fn request ->
           send(test_pid, {:request, request})
 
@@ -128,7 +130,9 @@ defmodule ReqDnsimple.QueryParamsTest do
       ReqDnsimple.new_client("fake-offline-token",
         account_id: 1010,
         params: %{"page" => 99, "per_page" => 1, "start_date" => "2026-09-01"},
-        retry: false,
+        retry: false
+      )
+      |> ReqDnsimple.TestAdapter.merge(
         adapter: fn request ->
           send(test_pid, {:request, request})
 

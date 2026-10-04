@@ -157,11 +157,11 @@ defmodule ReqDnsimple.OAuthTest do
       test_pid = self()
 
       request =
-        ReqDnsimple.new_unscoped_client(
-          fn ->
-            send(test_pid, :auth_callback_evaluated)
-            "must-not-be-used"
-          end,
+        ReqDnsimple.new_unscoped_client(fn ->
+          send(test_pid, :auth_callback_evaluated)
+          "must-not-be-used"
+        end)
+        |> ReqDnsimple.TestAdapter.merge(
           adapter: fn _request -> flunk("authorization URL construction must not send HTTP") end
         )
         |> Req.Request.put_header("authorization", "Basic must-not-be-used")
@@ -383,7 +383,7 @@ defmodule ReqDnsimple.OAuthTest do
           "must-not-be-used"
         end)
         |> Req.Request.put_header("authorization", "Basic must-not-be-used")
-        |> Req.merge(
+        |> ReqDnsimple.TestAdapter.merge(
           adapter: fn request ->
             send(test_pid, {:oauth_request, request})
             {request, %Req.Response{status: 200, body: @token_data}}

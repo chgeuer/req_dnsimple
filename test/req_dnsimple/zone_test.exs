@@ -187,7 +187,7 @@ defmodule ReqDnsimple.ZoneTest do
     test_pid = self()
 
     req =
-      Req.merge(req,
+      ReqDnsimple.TestAdapter.merge(req,
         adapter: fn request ->
           send(test_pid, {:request, request})
           {request, %Req.TransportError{reason: :timeout}}

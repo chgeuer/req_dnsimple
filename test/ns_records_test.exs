@@ -43,7 +43,7 @@ defmodule ReqDnsimple.NsRecordsTest do
 
     client =
       ReqDnsimple.new_client("dnsimple_u_fake-token")
-      |> Req.merge(adapter: adapter, retry: false)
+      |> ReqDnsimple.TestAdapter.merge(adapter: adapter, retry: false)
 
     assert {:ok,
             {[
@@ -146,7 +146,7 @@ defmodule ReqDnsimple.NsRecordsTest do
     for failure <- [:http, :transport] do
       req =
         ReqDnsimple.new_client("dnsimple_u_fake-token")
-        |> Req.merge(
+        |> ReqDnsimple.TestAdapter.merge(
           retry: false,
           adapter: fn request ->
             send(test_pid, {:request, request})
